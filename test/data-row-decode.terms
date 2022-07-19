@@ -1,0 +1,380 @@
+%% -*- mode: erlang -*-
+%% Copyright (c) 2022 Peter Morgan <peter.james.morgan@gmail.com>
+%%
+%% Licensed under the Apache License, Version 2.0 (the "License");
+%% you may not use this file except in compliance with the License.
+%% You may obtain a copy of the License at
+%%
+%% http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS,
+%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%% See the License for the specific language governing permissions and
+%% limitations under the License.
+
+
+%%
+%% int{2,4}
+%%
+
+{1,
+ [ignored,
+  text,
+  #{<<"typname">> => <<"int2">>},
+  <<"1">>]}.
+
+{1,
+ [ignored,
+  text,
+  #{<<"typname">> => <<"int4">>},
+  <<"1">>]}.
+
+{1,
+ [ignored,
+  binary,
+  #{<<"typname">> => <<"int2">>},
+  <<0, 1>>]}.
+
+{1,
+ [ignored,
+  binary,
+  #{<<"typname">> => <<"int4">>},
+  <<0, 0, 0, 1>>]}.
+
+
+%%
+%% bpchar
+%%
+
+{<<"a    ">>,
+ [ignored,
+  text,
+  #{<<"typname">> => <<"bpchar">>},
+  <<"a    ">>]}.
+
+{<<"a    ">>,
+ [ignored,
+  binary,
+  #{<<"typname">> => <<"bpchar">>},
+  <<"a    ">>]}.
+
+
+%%
+%% varchar
+%%
+
+{<<"c">>,
+ [#{<<"client_encoding">> => <<"UTF8">>},
+  text,
+  #{<<"typname">> => <<"varchar">>},
+  <<"c">>]}.
+
+{<<"c">>,
+ [#{<<"client_encoding">> => <<"UTF8">>},
+  binary,
+  #{<<"typname">> => <<"varchar">>},
+  <<"c">>]}.
+
+
+%%
+%% text
+%%
+
+{<<"c">>,
+ [#{<<"client_encoding">> => <<"UTF8">>},
+  text,
+  #{<<"typname">> => <<"text">>},
+  <<"c">>]}.
+
+{<<"c">>,
+ [#{<<"client_encoding">> => <<"UTF8">>},
+  binary,
+  #{<<"typname">> => <<"text">>},
+  <<"c">>]}.
+
+
+%%
+%% bytea
+%%
+
+{<<0, 1, 2>>,
+ [ignored,
+  text,
+  #{<<"typname">> => <<"bytea">>},
+  <<"\\x000102">>]}.
+
+{<<0, 1, 2, 255, 10>>,
+ [ignored,
+  text,
+  #{<<"typname">> => <<"bytea">>},
+  <<"\\x000102ff0a">>]}.
+
+{<<0, 1, 2>>,
+ [ignored,
+  binary,
+  #{<<"typname">> => <<"bytea">>},
+  <<0, 1, 2>>]}.
+
+{null,
+ [ignored,
+  binary,
+  #{<<"typname">> => <<"bytea">>},
+  null]}.
+
+%%
+%% timestamp
+%%
+
+{{{2022, 07, 12}, {00, 00, 00}},
+ [#{<<"integer_datetimes">> => <<"on">>},
+  text,
+  #{<<"typname">> => <<"timestamp">>},
+  <<"2022-07-12 00:00:00">>]}.
+
+{{{2022, 07, 15}, {18, 32, 31}},
+ [#{<<"integer_datetimes">> => <<"on">>},
+  text,
+  #{<<"typname">> => <<"timestamp">>},
+  <<"2022-07-15 18:32:31.53846">>]}.
+
+{{{2022, 7, 13}, {17, 45, 6}},
+ [#{<<"integer_datetimes">> => <<"on">>},
+  binary,
+  #{<<"typname">> => <<"timestamp">>},
+  <<0, 2, 134, 178, 29, 71, 47, 128>>]}.
+
+
+%%
+%% date
+%%
+
+{{2022, 07, 12},
+ [#{<<"integer_datetimes">> => <<"on">>},
+  text,
+  #{<<"typname">> => <<"date">>}, <<"2022-07-12">>]}.
+
+{{2022, 07, 13},
+ [#{<<"integer_datetimes">> => <<"on">>},
+  binary,
+  #{<<"typname">> => <<"date">>},
+  <<0, 0, 32, 37>>]}.
+
+
+%%
+%% time
+%%
+
+{{18, 18, 24},
+ [#{<<"integer_datetimes">> => <<"on">>},
+  text,
+  #{<<"typname">> => <<"time">>},
+  <<"18:18:24">>]}.
+
+{{18, 18, 24},
+ [#{<<"integer_datetimes">> => <<"on">>},
+  binary,
+  #{<<"typname">> => <<"time">>},
+  <<0, 0, 0, 15, 88, 56, 83, 73>>]}.
+
+
+%%
+%% float4
+%%
+
+{1,
+ [ignored,
+  text,
+  #{<<"typname">> => <<"float4">>},
+  <<"1">>]}.
+
+{'-Infinity',
+ [ignored,
+  text,
+  #{<<"typname">> => <<"float4">>},
+  <<"-Infinity">>]}.
+
+{'Infinity',
+ [ignored,
+  text,
+  #{<<"typname">> => <<"float4">>},
+  <<"Infinity">>]}.
+
+{'NaN',
+ [ignored,
+  text,
+  #{<<"typname">> => <<"float4">>},
+  <<"NaN">>]}.
+
+{'-Infinity',
+ [ignored,
+  binary,
+  #{<<"typname">> => <<"float4">>},
+  <<255,128,0,0>>]}.
+
+{'Infinity',
+ [ignored,
+  binary,
+  #{<<"typname">> => <<"float4">>},
+  <<127,128,0,0>>]}.
+
+
+%%
+%% bool
+%%
+
+{true,
+ [ignored,
+  binary,
+  #{<<"typname">> => <<"bool">>},
+  <<1>>]}.
+
+{false,
+ [ignored,
+  binary,
+  #{<<"typname">> => <<"bool">>},
+  <<0>>]}.
+
+{true,
+ [ignored,
+  text,
+  #{<<"typname">> => <<"bool">>},
+  <<"t">>]}.
+
+{true,
+ [ignored,
+  text,
+  #{<<"typname">> => <<"bool">>},
+  <<"f">>]}.
+
+
+%%
+%% bit
+%%
+
+{<<101:3>>,
+ [ignored,
+  binary,
+  #{<<"typname">> => <<"bit">>},
+  <<0,0,0,3,160>>]}.
+
+{<<101:3>>,
+ [ignored,
+  text,
+  #{<<"typname">> => <<"bit">>},
+  <<"101">>]}.
+
+
+%%
+%% oid
+%%
+
+{2837,
+ [ignored,
+  binary,
+  #{<<"typname">> => <<"oid">>},
+  <<0,0,11,21>>]}.
+
+{33121,
+ [ignored,
+  text,
+  #{<<"typname">> => <<"oid">>},
+  <<"33121">>]}.
+
+
+%%
+%%% xml
+%%
+
+{<<"<book><title>Manual</title><chapter>...</chapter></book>">>,
+ [ignored,
+  text,
+  #{<<"typname">> => <<"xml">>},
+  <<"<book><title>Manual</title><chapter>...</chapter></book>">>]}.
+
+{<<"<book><title>Manual</title><chapter>...</chapter></book>">>,
+ [ignored,
+  binary,
+  #{<<"typname">> => <<"xml">>},
+  <<"<book><title>Manual</title><chapter>...</chapter></book>">>]}.
+
+
+%%
+%% json
+%%
+
+{<<"5">>,
+ [ignored,
+  text,
+  #{<<"typname">> => <<"json">>},
+  <<"5">>]}.
+
+{<<"5">>,
+ [ignored,
+  binary,
+  #{<<"typname">> => <<"json">>},
+  <<"5">>]}.
+
+{<<"[1, 2, \"foo\", null]">>,
+ [ignored,
+  text,
+  #{<<"typname">> => <<"json">>},
+  <<"[1, 2, \"foo\", null]">>]}.
+
+{<<"[1, 2, \"foo\", null]">>,
+ [ignored,
+  binary,
+  #{<<"typname">> => <<"json">>},
+  <<"[1, 2, \"foo\", null]">>]}.
+
+
+%%
+%% uuid
+%%
+
+{<<"28b302a4-28a7-47b3-9eac-9cc67e78b0e1">>,
+ [ignored,
+  binary,
+  #{<<"typname">> => <<"uuid">>},
+  <<40, 179, 2, 164, 40, 167, 71, 179, 158, 172, 156, 198, 126, 120, 176, 225>>]}.
+
+{<<"28b302a4-28a7-47b3-9eac-9cc67e78b0e1">>,
+ [ignored,
+  text,
+  #{<<"typname">> => <<"uuid">>},
+  <<"28b302a4-28a7-47b3-9eac-9cc67e78b0e1">>]}.
+
+
+%%
+%% array_recv
+%%
+
+{[1, 2, -1],
+ [ignored,
+  binary,
+  #{<<"typname">> => <<"_int4">>,
+    <<"typreceive">> => <<"array_recv">>},
+  <<0,0,0,1,0,0,0,0,0,0,0,23,0,0,0,3,0,
+    0,0,1,0,0,0,4,0,0,0,1,0,0,0,4,0,0,
+    0,2,0,0,0,4,255,255,255,255>>]}.
+
+{[1, 2, null, -1],
+ [ignored,
+  binary,
+  #{<<"typname">> => <<"_int4">>,
+    <<"typreceive">> => <<"array_recv">>},
+  <<0,0,0,1,0,0,0,1,0,0,0,23,0,0,0,4,0,
+    0,0,1,0,0,0,4,0,0,0,1,0,0,0,4,0,0,
+    0,2,255,255,255,255,0,0,0,4,255,
+    255,255,255>>]}.
+
+{[0,0],
+ [ignored,
+  binary,
+  #{<<"typreceive">> => <<"oidvectorrecv">>},
+  <<0,0,0,1,0,0,0,0,0,0,0,26,0,0,0,2,0,
+    0,0,0,0,0,0,4,0,0,0,0,0,0,0,4,0,0,
+    0,0>>]}.
+
+%% {[1, 2, -1], [ignored, text, <<"_int4">>, <<"{1,2,-1}">>]}.
+%% {[1, 2, null, -1], [ignored, text, <<"_int4">>, <<"{1,2,NULL,-1}">>]}.

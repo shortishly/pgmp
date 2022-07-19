@@ -1,0 +1,138 @@
+%% -*- mode: erlang -*-
+%% Copyright (c) 2022 Peter Morgan <peter.james.morgan@gmail.com>
+%%
+%% Licensed under the Apache License, Version 2.0 (the "License");
+%% you may not use this file except in compliance with the License.
+%% You may obtain a copy of the License at
+%%
+%% http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS,
+%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%% See the License for the specific language governing permissions and
+%% limitations under the License.
+
+{{[], <<>>}, {empty_query_response, <<>>}}.
+
+{{[], <<>>}, {parse_complete,<<>>}}.
+
+{{[], <<>>}, {bind_complete,<<>>}}.
+
+{{[], <<>>}, {portal_suspended,<<>>}}.
+
+{{[], <<>>}, {no_data, <<>>}}.
+
+
+{{[#{column_number => 1,
+     field_name => <<"id">>,
+     format => text,
+     table_oid => 33010,
+     type_modifier => -1,
+     type_oid => 23,
+     type_size => 4}],
+  <<>>},
+ {row_description,
+  <<0,1,105,100,0,0,0,128,242,0,1,0,0,0,23,0,4,255,255,255,255,0,0>>}}.
+
+{{[#{column_number => 0,
+     field_name => <<"QUERY PLAN">>,
+     format => text,
+     table_oid => 0,
+     type_modifier => -1,
+     type_oid => 25,
+     type_size => -1}],
+  <<>>},
+ {row_description,
+  <<0,1,81,85,69,82,89,32,80,76,65,78,0,0,0,0,0,0,0,0,
+    0,0,25,255,255,255,255,255,255,0,0>>}}.
+
+{{[<<"Seq Scan on mytable  (cost=0.00..35.50 rows=2550 width=4)">>],
+  <<>>},
+ {data_row,
+  <<0,1,0,0,0,57,83,101,113,32,83,99,97,110,32,111,
+    110,32,109,121,116,97,98,108,101,32,32,40,99,111,
+    115,116,61,48,46,48,48,46,46,51,53,46,53,48,32,
+    114,111,119,115,61,50,53,53,48,32,119,105,100,116,
+    104,61,52,41>>}}.
+
+{{[<<"4">>], <<>>}, {data_row,<<0,1,0,0,0,1,52>>}}.
+
+{{[{<<"S">>,<<"ERROR">>},
+   {<<"V">>,<<"ERROR">>},
+   {<<"C">>,<<"42P01">>},
+   {<<"M">>,
+    <<"relation \"pg_catalog.pg_clazz\" does not exist">>},
+   {<<"P">>,<<"15">>},
+   {<<"F">>,<<"parse_relation.c">>},
+   {<<"L">>,<<"1363">>},
+   {<<"R">>,<<"parserOpenTable">>}],
+  <<>>},
+ {error_response,
+  <<83,69,82,82,79,82,0,86,69,82,82,79,
+    82,0,67,52,50,80,48,49,0,77,114,101,
+    108,97,116,105,111,110,32,34,112,103,
+    95,99,97,116,97,108,111,103,46,112,
+    103,95,99,108,97,122,122,34,32,100,
+    111,101,115,32,110,111,116,32,101,
+    120,105,115,116,0,80,49,53,0,70,112,
+    97,114,115,101,95,114,101,108,97,116,
+    105,111,110,46,99,0,76,49,51,54,51,0,
+    82,112,97,114,115,101,114,79,112,101,
+    110,84,97,98,108,101,0,0>>}}.
+
+
+{{'begin', <<>>},
+ {command_complete, <<66,69,71,73,78,0>>}}.
+
+{{declare_cursor,<<>>},
+ {command_complete,<<68,69,67,76,65,82,69,32,67,85,82,83,79,82,0>>}}.
+
+{{drop_table, <<>>}, {command_complete,<<68,82,79,80,32,84,65,66,76,69,0>>}}.
+
+{{commit, <<>>},
+ {command_complete, <<67,79,77,77,73,84,0>>}}.
+
+{{explain, <<>>},
+ {command_complete, <<69,88,80,76,65,73,78,0>>}}.
+
+{{rollback, <<>>},
+ {command_complete, <<82,79,76,76,66,65,67,75,0>>}}.
+
+{{{select, 0}, <<>>},
+ {command_complete, <<83,69,76,69,67,84,32,48,0>>}}.
+
+{{{select, 1}, <<>>},
+ {command_complete, <<83,69,76,69,67,84,32,49,0>>}}.
+
+{{{select, 603}, <<>>},
+ {command_complete, <<83,69,76,69,67,84,32,54,48,51,0>>}}.
+
+{{{delete, 1}, <<>>},
+ {command_complete, <<68,69,76,69,84,69,32,49,0>>}}.
+
+{{{<<"TimeZone">>, <<"Europe/London">>}, <<>>},
+ {parameter_status,
+  <<84,105,109,101,90,111,110,101,0,69,117,114,
+    111,112,101,47,76,111,110,100,111,110,0>>}}.
+
+{{[23], <<>>}, {parameter_description, <<0,1,0,0,0,23>>}}.
+{{[], <<>>}, {parameter_description, <<0,0>>}}.
+
+{{[{<<"S">>, <<"WARNING">>},
+   {<<"V">>, <<"WARNING">>},
+   {<<"C">>, <<"25P01">>},
+   {<<"M">>, <<"there is no transaction in progress">>},
+   {<<"F">>, <<"xact.c">>},
+   {<<"L">>, <<"4011">>},
+   {<<"R">>, <<"UserAbortTransactionBlock">>}],
+  <<>>},
+ {notice_response,
+  <<83,87,65,82,78,73,78,71,0,86,87,65,82,78,73,78,71,
+    0,67,50,53,80,48,49,0,77,116,104,101,114,101,32,
+    105,115,32,110,111,32,116,114,97,110,115,97,99,
+    116,105,111,110,32,105,110,32,112,114,111,103,114,
+    101,115,115,0,70,120,97,99,116,46,99,0,76,52,48,
+    49,49,0,82,85,115,101,114,65,98,111,114,116,84,
+    114,97,110,115,97,99,116,105,111,110,66,108,111,
+    99,107,0,0>>}}.

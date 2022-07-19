@@ -1,0 +1,54 @@
+%% -*- mode: erlang -*-
+%% Copyright (c) 2022 Peter Morgan <peter.james.morgan@gmail.com>
+%%
+%% Licensed under the Apache License, Version 2.0 (the "License");
+%% you may not use this file except in compliance with the License.
+%% You may obtain a copy of the License at
+%%
+%% http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS,
+%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%% See the License for the specific language governing permissions and
+%% limitations under the License.
+
+{authentication, {backend, <<$R>>}}.
+{backend_key_data, {backend, <<$K>>}}.
+{bind, {frontend, <<$B>>}}.
+{bind_complete, {backend, <<$2>>}}.
+{close, {frontend, <<$C>>}}.
+{close_complete, {backend, <<$3>>}}.
+{command_complete, {backend, <<$C>>}}.
+{copy_data, {both, <<$d>>}}.
+{copy_done, {both, <<$c>>}}.
+{copy_fail, {frontend, <<$f>>}}.
+{copy_in_response, {backend, <<$G>>}}.
+{copy_out_response, {backend, <<$H>>}}.
+{copy_both_response, {backend, <<$W>>}}.
+{data_row, {backend, <<$D>>}}.
+{describe, {frontend, <<$D>>}}.
+{empty_query_response, {backend, <<$I>>}}.
+{error_response, {backend, <<$E>>}}.
+{execute, {frontend, <<$E>>}}.
+{flush, {frontend, <<$H>>}}.
+{function_call, {frontend, <<$F>>}}.
+{function_call_response, {backend, <<$V>>}}.
+{gss_response, {frontend, <<$p>>}}.
+{negotiate_protocol_version, {backend, <<$v>>}}.
+{no_data, {backend, <<$n>>}}.
+{notice_response, {backend, <<$N>>}}.
+{notification_response, {backend, <<$A>>}}.
+{parameter_description, {backend, <<$t>>}}.
+{parameter_status, {backend, <<$S>>}}.
+{parse, {frontend, <<$P>>}}.
+{parse_complete, {backend, <<$1>>}}.
+{password_message, {frontend, <<$p>>}}.
+{portal_suspended, {backend, <<$s>>}}.
+{query, {frontend, <<$Q>>}}.
+{ready_for_query, {backend, <<$Z>>}}.
+{row_description, {backend, <<$T>>}}.
+{sasl_initial_response, {frontend, <<$p>>}}.
+%% {sasl_response, {frontend, <<$p>>}}.
+{sync, {frontend, <<$S>>}}.
+{terminate, {frontend, <<$X>>}}.
