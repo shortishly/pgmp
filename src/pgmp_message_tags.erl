@@ -19,6 +19,7 @@
 -export([callback_mode/0]).
 -export([init/1]).
 -export([name/2]).
+-export([start/0]).
 -export([start_link/0]).
 -import(pgmp_statem, [nei/1]).
 -include_lib("stdlib/include/ms_transform.hrl").
@@ -26,6 +27,10 @@
 
 start_link() ->
     gen_statem:start_link(?MODULE, [], []).
+
+
+start() ->
+    gen_statem:start(?MODULE, [], []).
 
 name(Role, Tag) ->
     case ets:lookup(?MODULE, {Role, Tag}) of
@@ -43,14 +48,12 @@ init([]) ->
        ets:new(?MODULE, [named_table]),
        lists:flatmap(
          fun
-             ({Name, {Tag, both}}) ->
-                 [{Name, {Tag, frontend}},
-                  {{Tag, frontend}, Name},
-                  {Name, {Tag, backend}},
-                  {{Tag, backend}, Name}];
+             ({Name, {both, Tag}}) ->
+                 [{{frontend, Tag}, Name},
+                  {{backend, Tag}, Name}];
 
-             ({Name, {_Tag, _Role} = TagRole}) ->
-                 [{Name, TagRole}, {TagRole, Name}]
+             ({Name, {_Role, _Tag} = RoleTag}) ->
+                 [{RoleTag, Name}]
          end,
          pgmp:priv_consult("message-tags.terms"))),
     {ok, ready, #{}}.

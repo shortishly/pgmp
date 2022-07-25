@@ -40,7 +40,31 @@ children() ->
     [worker(#{m => pg, args => [pgmp_config:pg(scope)]}),
      worker(pgmp_message_tags),
      worker(pgmp_error_notice_fields),
-     supervisor(#{m => pgmp_interactive_sup, args => [#{}]})].
+     supervisor(#{m => pgmp_interactive_sup, args => [config()]}),
+     supervisor(#{m => pgmp_replication_sup, args => [config()]})].
+
+
+config() ->
+    #{config => #{identity => identity(), database => database()}}.
+
+
+database() ->
+    config_database(name).
+
+identity() ->
+    lists:foldl(
+      fun
+          (Key, A) ->
+              A#{Key => config_database(Key)}
+      end,
+      #{},
+      [user, password]).
+
+config_database(Key) ->
+    fun
+        () ->
+            pgmp_config:database(Key)
+    end.
 
 
 worker(Arg) ->

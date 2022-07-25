@@ -41,32 +41,8 @@
 
 
 callback_mode() ->
-    handle_event_function.
+    [handle_event_function, state_enter].
 
-
-handle_event(info, Msg, _, #{requests := Existing} = Data) ->
-    case gen_statem:check_response(Msg, Existing, true) of
-        {{reply, ok}, _, Updated} ->
-            {keep_state, Data#{requests := Updated}};
-
-        {{error, {Reason, _}}, _From, UpdatedRequests} ->
-                {stop, Reason, Data#{requests := UpdatedRequests}}
-    end;
-
-handle_event({call, From}, {recv, {Tag, _} = TM}, _, _) ->
-    {Decoded, <<>>} = demarshal(TM),
-    {keep_state_and_data, [{reply, From, ok}, nei({recv, {Tag, Decoded}})]};
-
-handle_event(internal,
-             {send, _} = Request,
-             _,
-             #{requests := Requests, socket := Socket} = Data) ->
-    {keep_state,
-     Data#{requests := gen_statem:send_request(
-                         Socket,
-                         Request,
-                         make_ref(),
-                         Requests)}};
 
 handle_event(internal, {recv, {authentication, authenticated}}, _, Data) ->
     {next_state, authenticated, Data, pop_callback_module};
@@ -119,14 +95,15 @@ handle_event(
    ServerFirstMessage,
    #{r := R, s := Salt, i := I} = Server},
   _,
-  #{sasl := #{client := #{header := Header,
+  #{config := #{identity := #{password := Password}},
+    sasl := #{client := #{header := Header,
                           nonce := Nonce},
               mechanism := <<"SCRAM-SHA-256">> = Mechanism} = SASL} = Data) ->
 
     %% SaltedPassword  := Hi(Normalize(password), salt, i)
     SaltedPassword = salted_password(
                        Mechanism,
-                       normalize(pgmp_config:database(password)),
+                       normalize(Password()),
                        Salt,
                        I),
 
@@ -194,7 +171,13 @@ handle_event(internal,
                 byte,
                 io_lib:fwrite(
                   "~sn=~s,r=~s",
-                  [Header, <<>>, Nonce]))])]})}.
+                  [Header, <<>>, Nonce]))])]})};
+
+handle_event(EventType, EventContent, State, Data) ->
+    pgmp_mm_common:handle_event(EventType,
+                                EventContent,
+                                State,
+                                Data).
 
 
 %% SaltedPassword := Hi(Normalize(password), salt, i)

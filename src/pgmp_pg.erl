@@ -13,19 +13,26 @@
 %% limitations under the License.
 
 
--module(pgmp_statem).
+-module(pgmp_pg).
 
 
--export([nei/1]).
--export([send_request/1]).
+-export([get_members/1]).
+-export([join/1]).
+-export([leave/1]).
+-export([which_groups/0]).
 
 
-send_request(#{server_ref := ServerRef,
-               request := Request,
-               label := Label,
-               requests := Requests}) ->
-    gen_statem:send_request(ServerRef, Request, Label, Requests).
+leave(Group) ->
+    pg:leave(pgmp_config:pg(scope), Group, self()).
 
 
-nei(Event) ->
-    {next_event, internal, Event}.
+join(Group) ->
+    pg:join(pgmp_config:pg(scope), Group, self()).
+
+
+get_members(Group) ->
+    pg:get_members(pgmp_config:pg(scope), Group).
+
+
+which_groups() ->
+    pg:which_groups(pgmp_config:pg(scope)).

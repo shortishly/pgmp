@@ -16,12 +16,13 @@
 -module(pgmp_types).
 
 
+-export([cache/0]).
 -export([callback_mode/0]).
 -export([handle_event/4]).
 -export([init/1]).
--export([cache/0]).
 -export([start_link/0]).
 -export([start_link/1]).
+-export([when_ready/1]).
 -export([write_file/1]).
 -import(pgmp_statem, [nei/1]).
 
@@ -34,6 +35,19 @@ start_link(Arg) ->
                           ?MODULE,
                           [Arg],
                           pgmp_config:options(?MODULE)).
+
+when_ready(Arg) ->
+    send_request(
+      maps:merge(
+        Arg,
+        #{server_ref => ?MODULE,
+          request => ?FUNCTION_NAME})).
+
+send_request(#{label := _} = Arg) ->
+    pgmp_statem:send_request(Arg);
+
+send_request(Arg) ->
+    pgmp_statem:send_request(Arg#{label => ?MODULE}).
 
 write_file(Filename) ->
     {ok, Header} = file:read_file("HEADER.txt"),
@@ -57,7 +71,11 @@ cache() ->
 init([Arg]) ->
     case pgmp_config:enabled(?MODULE) of
         true ->
-            {ok, unready, Arg#{cache => ets:new(?MODULE, [])}, nei(refresh)};
+            {ok,
+             unready,
+             Arg#{cache => ets:new(?MODULE, []),
+                  requests => gen_statem:reqids_new()},
+             nei(refresh)};
 
         false ->
             ignore
@@ -68,17 +86,54 @@ callback_mode() ->
     handle_event_function.
 
 
+handle_event({call, _}, when_ready, unready, _) ->
+    {keep_state_and_data, postpone};
+
+handle_event({call, From}, when_ready, ready, _) ->
+    {keep_state_and_data, {reply, From, ready}};
+
+handle_event({timeout, refresh}, refresh, _, _) ->
+    {keep_state_and_data, nei(refresh)};
+
 handle_event(internal, refresh, _, _) ->
-    {keep_state_and_data, nei({types, hd(pg:get_members(pgmp, pgmp_mm))})};
+    {keep_state_and_data, nei({types, pgmp_pg:get_members(interactive)})};
 
-handle_event(internal, {types, MM}, _, _) ->
-    ok = pgmp_mm:request(MM,
-           #{action => query,
-             args => [<<"select * from pg_catalog.pg_type">>],
-             stream => self()}),
-    keep_state_and_data;
+handle_event(internal, {types, []}, _, _) ->
+    {keep_state_and_data,
+     {{timeout, refresh}, timer:seconds(5), refresh}};
 
-handle_event(info, {command_complete, {select, _}}, _, #{cache := Cache} = Data) ->
+handle_event(internal, {types, [MM | _]}, _, #{requests := Requests} = Data) ->
+    {keep_state,
+     Data#{requests := pgmp_mm:query(
+                         #{server_ref => MM,
+                           sql=> <<"select * from pg_catalog.pg_type">>,
+                           requests => Requests})}};
+
+handle_event(info, Msg, _, #{requests := Existing} = Data) ->
+    case gen_statem:check_response(Msg, Existing, true) of
+        {{reply, Reply}, Label, Updated} ->
+            {keep_state,
+             Data#{requests := Updated},
+             nei({response, #{label => Label, reply => Reply}})};
+
+        {{error, {Reason, ServerRef}}, Label, UpdatedRequests} ->
+                {stop,
+                 #{reason => Reason,
+                   server_ref => ServerRef,
+                   label => Label},
+                 Data#{requests := UpdatedRequests}}
+    end;
+
+handle_event(internal,
+             {response, #{label := pgmp_mm, reply := Replies}},
+             _,
+             _) ->
+    {keep_state_and_data, [nei(Reply) || Reply <- Replies]};
+
+handle_event(internal,
+             {command_complete, {select, _}},
+             _,
+             #{cache := Cache} = Data) ->
     persistent_term:put(
       ?MODULE,
       ets:foldl(
@@ -91,31 +146,32 @@ handle_event(info, {command_complete, {select, _}}, _, #{cache := Cache} = Data)
 
     {next_state, ready, maps:without([columns], Data), hibernate};
 
-handle_event(info,
+handle_event(internal,
              {data_row, Columns},
              _,
              #{cache := Cache, columns := Names}) ->
     #{<<"oid">> := OID} = Row = maps:map(
-                                  fun
-                                      (Column, Value) when Column == <<"oid">>;
-                                                           Column == <<"typnamespace">>;
-                                                           Column == <<"typowner">>;
-                                                           Column == <<"typlen">>;
-                                                           Column == <<"typrelid">>;
-                                                           Column == <<"typelem">>;
-                                                           Column == <<"typarray">>;
-                                                           Column == <<"typbasetype">>;
-                                                           Column == <<"typtypmod">>;
-                                                           Column == <<"typndims">>;
-                                                           Column == <<"typcollation">> ->
-                                          binary_to_integer(Value);
-
-                                      (_, Value) ->
-                                          Value
-                                  end,
+                                  fun data_row/2,
                                   maps:from_list(lists:zip(Names, Columns))),
     ets:insert(Cache, {{type, OID}, maps:without([oid], Row)}),
     keep_state_and_data;
 
-handle_event(info, {row_description, Columns}, _, Data) ->
+handle_event(internal, {row_description, Columns}, _, Data) ->
     {keep_state, Data#{columns => Columns}}.
+
+
+data_row(Column, Value) when Column == <<"oid">>;
+                             Column == <<"typnamespace">>;
+                             Column == <<"typowner">>;
+                             Column == <<"typlen">>;
+                             Column == <<"typrelid">>;
+                             Column == <<"typelem">>;
+                             Column == <<"typarray">>;
+                             Column == <<"typbasetype">>;
+                             Column == <<"typtypmod">>;
+                             Column == <<"typndims">>;
+                             Column == <<"typcollation">> ->
+    binary_to_integer(Value);
+
+data_row(_, Value) ->
+    Value.

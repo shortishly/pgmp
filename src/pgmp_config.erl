@@ -22,10 +22,14 @@
 -export([options/1]).
 -export([pg/1]).
 -export([protocol/1]).
+-export([replication/2]).
 
+
+enabled(pgmp_types = Name) ->
+    envy(to_boolean, [Name, ?FUNCTION_NAME], true);
 
 enabled(Name) ->
-    envy(to_boolean, [?FUNCTION_NAME, Name], false).
+    envy(to_boolean, [Name, ?FUNCTION_NAME], false).
 
 
 decode(Type) ->
@@ -33,7 +37,10 @@ decode(Type) ->
 
 
 pg(scope = Name) ->
-    envy(to_atom, [?FUNCTION_NAME, Name], pgmp).
+    envy(to_atom, [?FUNCTION_NAME, Name], pgmp);
+
+pg(group = Name) ->
+    envy(to_atom, [?FUNCTION_NAME, Name], mm).
 
 
 protocol(major = Name) ->
@@ -41,6 +48,16 @@ protocol(major = Name) ->
 
 protocol(minor = Name) ->
     envy(to_integer, [?FUNCTION_NAME, Name], 0).
+
+
+replication(logical = Type, slot_name = Name) ->
+    envy(to_binary, [?FUNCTION_NAME, Type, Name], <<"slot">>);
+
+replication(logical = Type, proto_version = Name) ->
+    envy(to_integer, [?FUNCTION_NAME, Type, Name], 2);
+
+replication(logical = Type, publication_names = Name) ->
+    envy(to_list, [?FUNCTION_NAME, Type, Name], "pub").
 
 
 database(options = Name) ->

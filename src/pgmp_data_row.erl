@@ -17,18 +17,15 @@
 
 
 -export([decode/2]).
+-export([decode/3]).
 -export([decode/5]).
 
 
 decode(Parameters, TypeValue) ->
-    try
-        ?FUNCTION_NAME(Parameters, TypeValue, pgmp_types:cache(), [])
+    ?FUNCTION_NAME(Parameters, TypeValue, pgmp_types:cache()).
 
-    catch
-        error:badarg ->
-            ?FUNCTION_NAME(Parameters, TypeValue, #{}, [])
-    end.
-
+decode(Parameters, TypeValue, Types) ->
+    ?FUNCTION_NAME(Parameters, TypeValue, Types, []).
 
 decode(Parameters,
        [{#{format := Format, type_oid := OID}, Value} | T],
@@ -266,8 +263,18 @@ decode(#{<<"client_encoding">> := <<"UTF8">>},
        _,
        #{<<"typname">> := Type},
        <<Encoded/bytes>>) when Type == <<"varchar">>;
+                               Type == <<"name">>;
                                Type == <<"text">> ->
     unicode:characters_to_binary(Encoded);
+
+decode(#{<<"client_encoding">> := <<"SQL_ASCII">>},
+       _,
+       _,
+       #{<<"typname">> := Type},
+       <<Encoded/bytes>>) when Type == <<"varchar">>;
+                               Type == <<"name">>;
+                               Type == <<"text">> ->
+    unicode:characters_to_binary(Encoded, latin1);
 
 decode(_,
        text,
@@ -319,7 +326,6 @@ epoch_date(pg) ->
 
 epoch_date(posix) ->
     {1970, 1, 1}.
-
 
 
 array_recv(Parameters, binary = Format, Types, _Type, <<_NDim:32, 0:32, OID:32, _Dimensions:32, _LowerBnds:32, Data/bytes>>) ->

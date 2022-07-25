@@ -15,11 +15,40 @@
 -module(pgmp_calendar).
 
 
--export([from/1]).
+-export([decode/1]).
+-export([encode/1]).
+-export([epoch/1]).
+-export([epoch_date/1]).
 
-epoch(pg) ->
-    calendar:datetime_to_gregorian_seconds({{2000, 1, 1}, {0, 0, 0}}).
+
+%% As microseconds since midnight on 2000-01-01
+decode(<<Encoded:64>>) ->
+    ?FUNCTION_NAME(Encoded);
+
+decode(MicroSincePGEpoch) ->
+      epoch(pg) + MicroSincePGEpoch - epoch(posix).
+
+encode(MicroSystemTime) ->
+    epoch(posix) + MicroSystemTime - epoch(pg).
 
 
-from(<<PG:64>>) ->
-    calendar:gregorian_seconds_to_datetime((PG div 1_000_000) + epoch(pg)).
+epoch(System) ->
+    erlang:convert_time_unit(
+      calendar:datetime_to_gregorian_seconds(epoch_datetime(System)),
+      second,
+      microsecond).
+
+
+epoch_datetime(System) ->
+    {epoch_date(System), midnight()}.
+
+
+midnight() ->
+    {0, 0, 0}.
+
+
+epoch_date(pg) ->
+    {2000, 1, 1};
+
+epoch_date(posix) ->
+    {1970, 1, 1}.

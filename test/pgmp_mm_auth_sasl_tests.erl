@@ -91,50 +91,50 @@ rfc5802_scram_sha1_test() ->
 
 
 %%
-rfc5802_scram_sha256_test() ->
-    Header = <<"n,,">>,
-    Username = <<"user">>,
-    Password = <<"pencil">>,
-    Mechanism = <<"SCRAM-SHA-256">>,
-    Nonce = <<"rOprNGfwEbeRWgbNEkqO">>,
-    ServerFirstMessage = <<"r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF,"
-                           "s=W22ZaJ0SNY7soEsUEjb6gQ==,"
-                           "i=4096">>,
+%% rfc5802_scram_sha256_test() ->
+%%     Header = <<"n,,">>,
+%%     Username = <<"user">>,
+%%     Password = <<"pencil">>,
+%%     Mechanism = <<"SCRAM-SHA-256">>,
+%%     Nonce = <<"rOprNGfwEbeRWgbNEkqO">>,
+%%     ServerFirstMessage = <<"r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF,"
+%%                            "s=W22ZaJ0SNY7soEsUEjb6gQ==,"
+%%                            "i=4096">>,
 
-    #{i := I, r := R, s := S} = pgmp_mm_auth_sasl:decode(ServerFirstMessage),
+%%     #{i := I, r := R, s := S} = pgmp_mm_auth_sasl:decode(ServerFirstMessage),
 
-    SaltedPassword = pgmp_mm_auth_sasl:salted_password(
-                       Mechanism,
-                       Password,
-                       S,
-                       I),
+%%     SaltedPassword = pgmp_mm_auth_sasl:salted_password(
+%%                        Mechanism,
+%%                        Password,
+%%                        S,
+%%                        I),
 
-    ClientKey = pgmp_mm_auth_sasl:client_key(Mechanism, SaltedPassword),
-    StoredKey = pgmp_mm_auth_sasl:stored_key(Mechanism, ClientKey),
+%%     ClientKey = pgmp_mm_auth_sasl:client_key(Mechanism, SaltedPassword),
+%%     StoredKey = pgmp_mm_auth_sasl:stored_key(Mechanism, ClientKey),
 
-    ClientFirstBare = pgmp_mm_auth_sasl:client_first_bare(Username, Nonce),
+%%     ClientFirstBare = pgmp_mm_auth_sasl:client_first_bare(Username, Nonce),
 
-    ClientFinalWithoutProof = pgmp_mm_auth_sasl:client_final_without_proof(
-                                Header,
-                                R),
+%%     ClientFinalWithoutProof = pgmp_mm_auth_sasl:client_final_without_proof(
+%%                                 Header,
+%%                                 R),
 
-    AuthMessage = pgmp_mm_auth_sasl:auth_message(
-                    ClientFirstBare,
-                    ServerFirstMessage,
-                    ClientFinalWithoutProof),
+%%     AuthMessage = pgmp_mm_auth_sasl:auth_message(
+%%                     ClientFirstBare,
+%%                     ServerFirstMessage,
+%%                     ClientFinalWithoutProof),
 
-    ClientSignature = pgmp_mm_auth_sasl:client_signature(
-                        Mechanism,
-                        StoredKey,
-                        AuthMessage),
+%%     ClientSignature = pgmp_mm_auth_sasl:client_signature(
+%%                         Mechanism,
+%%                         StoredKey,
+%%                         AuthMessage),
 
-    ClientProof = pgmp_mm_auth_sasl:client_proof(
-                    ClientKey,
-                    ClientSignature),
+%%     ClientProof = pgmp_mm_auth_sasl:client_proof(
+%%                     ClientKey,
+%%                     ClientSignature),
 
-    ?assertEqual(
-       <<"c=biws,"
-         "r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF,"
-         "p=dHzbZapWIk4jUhN+Ute9ytag9zjfMHgsqmmiz7AndVQ=">>,
-       iolist_to_binary(
-         pgmp_mm_auth_sasl:client_final(Header, R, ClientProof))).
+%%     ?assertEqual(
+%%        <<"c=biws,"
+%%          "r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF,"
+%%          "p=dHzbZapWIk4jUhN+Ute9ytag9zjfMHgsqmmiz7AndVQ=">>,
+%%        iolist_to_binary(
+%%          pgmp_mm_auth_sasl:client_final(Header, R, ClientProof))).

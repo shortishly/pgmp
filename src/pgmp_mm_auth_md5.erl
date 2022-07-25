@@ -25,32 +25,11 @@
 
 
 callback_mode() ->
-    handle_event_function.
+    [handle_event_function, state_enter].
 
 
-handle_event(info, Msg, _, #{requests := Existing} = Data) ->
-    case gen_statem:check_response(Msg, Existing, true) of
-        {{reply, ok}, _, Updated} ->
-            {keep_state, Data#{requests := Updated}};
-
-        {{error, {Reason, _}}, _From, UpdatedRequests} ->
-                {stop, Reason, Data#{requests := UpdatedRequests}}
-    end;
-
-handle_event({call, From}, {recv, {Tag, _} = TM}, _, _) ->
-    {Decoded, <<>>} = demarshal(TM),
-    {keep_state_and_data, [{reply, From, ok}, nei({recv, {Tag, Decoded}})]};
-
-handle_event(internal,
-             {send, _} = Request,
-             _,
-             #{requests := Requests, socket := Socket} = Data) ->
-    {keep_state,
-     Data#{requests := gen_statem:send_request(
-                         Socket,
-                         Request,
-                         make_ref(),
-                         Requests)}};
+handle_event({call, _}, {request, _}, _, _) ->
+    {keep_state_and_data, postpone};
 
 handle_event(internal, {recv, {authentication, authenticated}}, _, Data) ->
     {next_state, authenticated, Data, pop_callback_module};
@@ -61,18 +40,26 @@ handle_event(internal, {recv, {error_response, Errors}}, _, Data) ->
      Data#{errors => Errors},
      pop_callback_module};
 
-handle_event(internal, {md5_password, <<Salt:4/bytes>>}, _, _) ->
+handle_event(internal,
+             {md5_password, <<Salt:4/bytes>>},
+             _,
+             #{config := #{identity := #{user := User,
+                                         password := Password}}}) ->
     %% src/common/md5_common.c
     %% src/interfaces/libpq/fe-auth.c
     {keep_state_and_data,
      nei({send,
           [<<$p>>,
            prefix_with_size(
-             marshal(string,
-                     ["md5",
-                      md5([md5([pgmp_config:database(password),
-                                pgmp_config:database(user)]),
-                           Salt])]))]})}.
+             marshal(
+               string,
+               ["md5", md5([md5([Password(), User()]), Salt])]))]})};
+
+handle_event(EventType, EventContent, State, Data) ->
+    pgmp_mm_common:handle_event(EventType,
+                                EventContent,
+                                State,
+                                Data).
 
 
 md5(Data) ->

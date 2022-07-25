@@ -13,19 +13,26 @@
 %% limitations under the License.
 
 
--module(pgmp_statem).
+-module(pgmp_replication_sup).
 
 
--export([nei/1]).
--export([send_request/1]).
+-behaviour(supervisor).
+-export([init/1]).
+-export([start_link/1]).
+-import(pgmp_sup, [supervisor/1]).
+-import(pgmp_sup, [worker/1]).
 
 
-send_request(#{server_ref := ServerRef,
-               request := Request,
-               label := Label,
-               requests := Requests}) ->
-    gen_statem:send_request(ServerRef, Request, Label, Requests).
+start_link(#{} = Arg) ->
+    supervisor:start_link(?MODULE, [Arg]).
+
+init([Arg]) ->
+    {ok, configuration(children(Arg))}.
 
 
-nei(Event) ->
-    {next_event, internal, Event}.
+configuration(Children) ->
+    {#{intensity => length(Children)}, Children}.
+
+
+children(Arg) ->
+    [supervisor(#{m => pgmp_replication_logical_sup, args => [Arg]})].

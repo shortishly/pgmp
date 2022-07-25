@@ -13,19 +13,24 @@
 %% limitations under the License.
 
 
--module(pgmp_statem).
+-module(pgmp_calendar_tests).
 
 
--export([nei/1]).
--export([send_request/1]).
+-include_lib("eunit/include/eunit.hrl").
 
 
-send_request(#{server_ref := ServerRef,
-               request := Request,
-               label := Label,
-               requests := Requests}) ->
-    gen_statem:send_request(ServerRef, Request, Label, Requests).
+decode_test() ->
+    MicroSincePGEpoch = 711904983599074,
+    ?assertEqual(
+       {{2022, 7, 23}, {15, 23, 3}},
+       calendar:system_time_to_universal_time(
+         pgmp_calendar:decode(MicroSincePGEpoch),
+         microsecond)).
 
 
-nei(Event) ->
-    {next_event, internal, Event}.
+encode_decode_test() ->
+    MicroSincePGEpoch = 711904983599074,
+    ?assertEqual(
+       MicroSincePGEpoch,
+       pgmp_calendar:encode(
+         pgmp_calendar:decode(MicroSincePGEpoch))).

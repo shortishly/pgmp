@@ -19,6 +19,7 @@
 -export([callback_mode/0]).
 -export([handle_event/4]).
 -export([init/1]).
+-export([send/1]).
 -export([start_link/1]).
 -import(pgmp_statem, [nei/1]).
 -include_lib("kernel/include/inet.hrl").
@@ -29,6 +30,19 @@ start_link(Arg) ->
     gen_statem:start_link(?MODULE, [Arg], pgmp_config:options(?MODULE)).
 
 
+send(#{data := Data} = Arg) ->
+    send_request(
+      maps:without(
+        [data],
+        Arg#{request => {?FUNCTION_NAME, Data}})).
+
+send_request(#{label := _} = Arg) ->
+    pgmp_statem:send_request(Arg);
+
+send_request(Arg) ->
+    pgmp_statem:send_request(Arg#{label => ?MODULE}).
+
+
 init([Arg]) ->
     process_flag(trap_exit, true),
     {ok, disconnected, Arg#{requests => gen_statem:reqids_new()}}.
@@ -37,16 +51,17 @@ init([Arg]) ->
 callback_mode() ->
     handle_event_function.
 
-handle_event({call, {Peer, _} = From}, {send, Message}, connected, #{peer := Peer}) ->
-    {keep_state_and_data, [nei({send, Message}), nei({reply, From, ok})]};
+handle_event({call, {Peer, _} = From},
+             {send, Message},
+             connected,
+             #{peer := Peer}) ->
+    {keep_state_and_data,
+     [nei({send, Message}), {reply, From, ok}]};
 
 handle_event({call, {Peer, _}}, {send, _}, _, Data) ->
     {keep_state,
      Data#{peer => Peer},
      [postpone, nei(open)]};
-
-handle_event(internal, {reply, _, _} = Reply, _, _) ->
-    {keep_state_and_data, Reply};
 
 handle_event(internal, open, _, Data) ->
     case socket:open(inet, stream, default) of
@@ -104,12 +119,21 @@ handle_event(info,
 
 handle_event(info, Msg, _, #{requests := Existing} = Data) ->
     case gen_statem:check_response(Msg, Existing, true) of
-        {{reply, ok}, _, Updated} ->
-            {keep_state, Data#{requests := Updated}};
+        {{reply, Reply}, Label, Updated} ->
+            {keep_state,
+             Data#{requests := Updated},
+             nei({response, #{label => Label, reply => Reply}})};
 
-        {{error, {Reason, _}}, _From, UpdatedRequests} ->
-                {stop, Reason, Data#{requests := UpdatedRequests}}
+        {{error, {Reason, ServerRef}}, Label, UpdatedRequests} ->
+                {stop,
+                 #{reason => Reason,
+                   server_ref => ServerRef,
+                   label => Label},
+                 Data#{requests := UpdatedRequests}}
     end;
+
+handle_event(internal, {response, #{label := pgmp_mm, reply :=  ok}}, _, _) ->
+    keep_state_and_data;
 
 handle_event(internal,
              {recv,
@@ -132,11 +156,11 @@ handle_event(internal,
              _,
              #{peer := Peer, requests := Requests} = Data) ->
     {keep_state,
-     Data#{requests := gen_statem:send_request(
-                         Peer,
-                         recv(Tag, Message),
-                         make_ref(),
-                         Requests)}};
+     Data#{requests := pgmp_mm:recv(
+                         #{server_ref => Peer,
+                           tag => pgmp_message_tags:name(backend, Tag),
+                           message => Message,
+                           requests => Requests})}};
 
 handle_event(internal, connect, _, #{socket := Socket} = Data) ->
     case socket:connect(
@@ -154,7 +178,3 @@ handle_event(internal, connect, _, #{socket := Socket} = Data) ->
         {error, Reason} ->
             {stop, Reason}
     end.
-
-
-recv(Tag, Message) ->
-    {?FUNCTION_NAME, {pgmp_message_tags:name(backend, Tag), Message}}.

@@ -13,7 +13,7 @@
 %% limitations under the License.
 
 
--module(pgmp_interactive_sup).
+-module(pgmp_replication_logical_sup).
 
 
 -behaviour(supervisor).
@@ -28,13 +28,16 @@ start_link(#{} = Arg) ->
 
 
 init([Arg]) ->
-    {ok, configuration(children(Arg))}.
+    {ok, configuration(children(Arg#{ancestors => [self()]}))}.
 
 
 configuration(Children) ->
-    {#{intensity => length(Children), strategy => one_for_all}, Children}.
-
+    {#{intensity => length(Children),
+       strategy => one_for_all},
+     Children}.
 
 children(Arg) ->
-    [supervisor(#{m => pgmp_interactive_connection_sup, args => [Arg]}),
-     worker(pgmp_types)].
+    [supervisor(#{m => pgmp_replication_logical_stream_sup,
+                 args => [Arg]}),
+     supervisor(#{m => pgmp_replication_logical_snapshot_sup,
+                 args => [Arg]})].

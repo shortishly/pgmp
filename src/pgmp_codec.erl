@@ -1,4 +1,4 @@
-%% Copyright (c) 2022 Peter Morgan <peter.james.morgan@gmail.com>
+% Copyright (c) 2022 Peter Morgan <peter.james.morgan@gmail.com>
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -33,7 +33,24 @@ demarshal({byte, N}, Encoded) ->
     <<Decoded:N/bytes, Remainder/bytes>> = Encoded,
     {Decoded, Remainder};
 
-demarshal({int, Bits}, Encoded) ->
+demarshal(int8, Encoded) ->
+    ?FUNCTION_NAME({int, 8}, Encoded);
+
+demarshal(int16, Encoded) ->
+    ?FUNCTION_NAME({int, 16}, Encoded);
+
+demarshal(int32, Encoded) ->
+    ?FUNCTION_NAME({int, 32}, Encoded);
+
+demarshal(int64, Encoded) ->
+    ?FUNCTION_NAME({int, 64}, Encoded);
+
+demarshal(clock, Encoded) ->
+    {Clock, Remainder} = ?FUNCTION_NAME({int, 64}, Encoded),
+    {pgmp_calendar:decode(Clock), Remainder};
+
+demarshal({int, Bits}, Encoded)
+  when Bits == 8; Bits == 16; Bits == 32; Bits == 64 ->
     <<Decoded:Bits/signed, Remainder/bytes>> = Encoded,
     {Decoded, Remainder};
 
@@ -52,19 +69,138 @@ demarshal(Type, Encoded) when Type == notice_response; Type == error_response ->
     ?FUNCTION_NAME(Type, Encoded, []);
 
 demarshal(authentication, Encoded) ->
-    {Code, R} = ?FUNCTION_NAME({int, 32}, Encoded),
+    {Code, R} = ?FUNCTION_NAME(int32, Encoded),
     ?FUNCTION_NAME(authentication, Code, R);
 
 demarshal(parameter_description, Encoded) ->
-    {N, R0} = ?FUNCTION_NAME({int, 16}, Encoded),
-    ?FUNCTION_NAME(lists:duplicate(N, {int, 32}), R0);
+    {N, R0} = ?FUNCTION_NAME(int16, Encoded),
+    ?FUNCTION_NAME(lists:duplicate(N, int32), R0);
+
+demarshal(x_log_data, <<"B", BeginMessage/bytes>>) ->
+    {Decoded, Remainder} =  ?FUNCTION_NAME(
+                               [final_lsn, commit_timestamp, xid],
+                               [int64, int64, int32],
+                               BeginMessage),
+    {{begin_message, Decoded}, Remainder};
+
+demarshal(x_log_data, <<"M", LogicalDecoding/bytes>>) ->
+    {Decoded, Remainder} =  ?FUNCTION_NAME(
+                               [xid, flags, lsn, prefix, content],
+                               [int32, int8, int64, string, int32],
+                               LogicalDecoding),
+    {{logical_decoding, Decoded}, Remainder};
+
+demarshal(x_log_data, <<"C", CommitMessage/bytes>>) ->
+    {Decoded, Remainder} =  ?FUNCTION_NAME(
+                               [flags, commit_lsn, end_lsn, commit_timestamp],
+                               [int8, int64, int64, int64],
+                               CommitMessage),
+    {{commit, Decoded}, Remainder};
+
+demarshal(x_log_data, <<"O", OriginMessage/bytes>>) ->
+    {Decoded, Remainder} = ?FUNCTION_NAME(
+                              [commit_lsn, name],
+                              [int64, string],
+                              OriginMessage),
+    {{origin, Decoded}, Remainder};
+
+demarshal(x_log_data, <<"R", RelationMessage/bytes>>) ->
+    {Relation, R0} = ?FUNCTION_NAME(
+                        [xid, id, namespace, name, replica_identity, ncols],
+                        [int32, int32, string, string, int8, int16],
+                        RelationMessage),
+    Columns = lists:reverse(
+                pgmp_binary:foldl(
+                  fun
+                      (EncodedColumn, A) ->
+                          {Column, Remainder} = ?FUNCTION_NAME(
+                                                   [flags, name, type, modifier],
+                                                   [int8, string, int32, int32],
+                                                   EncodedColumn),
+                          {Remainder, [Column | A]}
+                  end,
+                  [],
+                  R0)),
+    {{relation, Relation#{columns => Columns}}, <<>>};
+
+demarshal(x_log_data, <<"Y", TypeMessage/bytes>>) ->
+    {Decoded, Remainder} = ?FUNCTION_NAME([xid, type, namespace, name],
+                                          [in32, int32, string, string],
+                                          TypeMessage),
+    {{type, Decoded}, Remainder};
+
+demarshal(x_log_data, <<"I", Id:32, "N", TupleData/bytes>>) ->
+    {Tuple, Remainder} = ?FUNCTION_NAME(tuple_data, TupleData),
+    {{insert, #{relation => Id, tuple => Tuple}}, Remainder};
+
+demarshal(x_log_data, <<"U", Relation:32, "K", KeyData/bytes>>) ->
+    {Key, <<"N", NewData/bytes>>} = ?FUNCTION_NAME(tuple_data, KeyData),
+    {New, Remainder} = ?FUNCTION_NAME(tuple_data, NewData),
+    {{update, #{key => Key, relation => Relation, new => New}}, Remainder};
+
+demarshal(x_log_data, <<"U", Relation:32, "N", NewData/bytes>>) ->
+    {New, Remainder} = ?FUNCTION_NAME(tuple_data, NewData),
+    {{update, #{relation => Relation, new => New}}, Remainder};
+
+demarshal(x_log_data, <<"D", Relation:32, "K", KeyData/bytes>>) ->
+    {Key, Remainder} = ?FUNCTION_NAME(tuple_data, KeyData),
+    {{delete, #{key => Key, relation => Relation}}, Remainder};
+
+demarshal(x_log_data, <<"T", N:32, Options:8, Data/bytes>>) ->
+    {Relations, Remainder} = ?FUNCTION_NAME(
+                                lists:duplicate(N, int32),
+                                Data),
+    {{truncate, #{options => Options, relations => Relations}}, Remainder};
+
+demarshal(tuple_data, <<Columns:16, TupleData/bytes>>) ->
+    ?FUNCTION_NAME(tuple_data, Columns, TupleData, []);
+
+demarshal(copy_data, <<"w", XLogData/bytes>>) ->
+    {Decoded, Stream} = ?FUNCTION_NAME(
+                           [start_wal, end_wal, clock],
+                           [int64, int64, int64],
+                           XLogData),
+    {WAL, Remainder} = ?FUNCTION_NAME(x_log_data, Stream),
+    {{x_log_data, Decoded#{stream => WAL}}, Remainder};
+
+demarshal(copy_data, <<"k", PrimaryKeepalive/bytes>>) ->
+    {Decoded, Remainder} = ?FUNCTION_NAME(
+                              [end_wal, clock, reply],
+                              [int64, int64, {byte, 1}],
+                              PrimaryKeepalive),
+    {{keepalive,
+      maps:map(
+        fun
+            (reply, <<0:8>>) ->
+                false;
+
+            (reply, <<1:8>>) ->
+                true;
+
+            (_, V) ->
+                V
+        end,
+        Decoded)},
+     Remainder};
+
+demarshal(copy_data, Encoded) ->
+    {Encoded, <<>>};
+
+demarshal(copy_both_response, Encoded) ->
+    case ?FUNCTION_NAME([int8, int16], Encoded) of
+        {[0, N], <<>>} ->
+            {#{format => text, n_of_cols => N}, <<>>};
+
+        {[1, N], <<>>} ->
+            {#{format => binary, n_of_cols => N}, <<>>}
+    end;
 
 demarshal(parameter_status, Encoded) ->
     {[K, V], R0} = ?FUNCTION_NAME([string, string], Encoded),
     {{K, V}, R0};
 
 demarshal(backend_key_data, Encoded) ->
-    ?FUNCTION_NAME([{int, 32}, {int, 32}], Encoded);
+    ?FUNCTION_NAME([int32, int32], Encoded);
 
 demarshal(command_complete = Tag, Encoded) ->
     {Decoded, Remainder} = demarshal(string, Encoded),
@@ -81,11 +217,11 @@ demarshal(ready_for_query, <<"E">>) ->
     {in_failed_tx_block, <<>>};
 
 demarshal(row_description = Type, Encoded) ->
-    {Columns, Remainder} = demarshal({int, 16}, Encoded),
+    {Columns, Remainder} = demarshal(int16, Encoded),
     ?FUNCTION_NAME(Type, Columns, Remainder, []);
 
 demarshal(data_row = Type, Encoded) ->
-    {Columns, Remainder} = demarshal({int, 16}, Encoded),
+    {Columns, Remainder} = demarshal(int16, Encoded),
     ?FUNCTION_NAME(Type, Columns, Remainder, []).
 
 
@@ -178,7 +314,7 @@ demarshal(row_description, 0, Remainder, A) ->
 
 demarshal(row_description = Type, Columns, D0, A) ->
     Keys = [field_name, table_oid, column_number, type_oid, type_size, type_modifier, format],
-    Types = [string, {int, 32}, {int, 16}, {int, 32}, {int, 16}, {int, 32}, {int, 16}],
+    Types = [string, int32, int16, int32, int16, int32, int16],
 
     {KV, D1} = ?FUNCTION_NAME(Keys, Types, D0),
     ?FUNCTION_NAME(Type,
@@ -196,7 +332,7 @@ demarshal(data_row, 0, Remainder, A) ->
     {lists:reverse(A), Remainder};
 
 demarshal(data_row = Type, Column, D0, A) ->
-    case demarshal({int, 32}, D0) of
+    case demarshal(int32, D0) of
         {0, D1} ->
             ?FUNCTION_NAME(Type, Column - 1, D1, [<<>> | A]);
 
@@ -206,17 +342,48 @@ demarshal(data_row = Type, Column, D0, A) ->
         {Size, D1} ->
             <<Data:Size/bytes, D2/bytes>> = D1,
             ?FUNCTION_NAME(Type, Column - 1, D2, [Data | A])
-    end.
+    end;
+
+demarshal(tuple_data, 0, Remainder, A) ->
+    {lists:reverse(A), Remainder};
+
+
+demarshal(tuple_data, Columns, <<"n", Remainder/bytes>>, A) ->
+    ?FUNCTION_NAME(tuple_data,
+                   Columns - 1,
+                   Remainder,
+                   [null | A]);
+
+demarshal(tuple_data,
+          Columns,
+          <<"t", Length:32, Value:Length/bytes, Remainder/bytes>>,
+          A) ->
+    ?FUNCTION_NAME(tuple_data,
+                   Columns - 1,
+                   Remainder,
+                   [#{format => text, value => Value} | A]).
 
 
 prefix_with_size(Data) ->
-    [marshal({int, 32}, iolist_size(Data) + 4), Data].
+    [marshal(int32, iolist_size(Data) + 4), Data].
 
 marshal(string, Value) ->
     [Value, <<0:8>>];
 
 marshal(byte, Value) ->
     Value;
+
+marshal(int8, Value) ->
+    ?FUNCTION_NAME({int, 8}, Value);
+
+marshal(int16, Value) ->
+    ?FUNCTION_NAME({int, 16}, Value);
+
+marshal(int32, Value) ->
+    ?FUNCTION_NAME({int, 32}, Value);
+
+marshal(int64, Value) ->
+    ?FUNCTION_NAME({int, 64}, Value);
 
 marshal({int, Size}, Value) when is_integer(Value)->
     <<Value:Size>>.

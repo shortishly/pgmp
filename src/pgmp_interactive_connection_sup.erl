@@ -22,8 +22,15 @@
 -import(pgmp_sup, [worker/1]).
 
 
-start_link(Arg) ->
-    supervisor:start_link(?MODULE, [Arg]).
+start_link(#{config := Config} = Arg) ->
+    supervisor:start_link(
+      ?MODULE,
+      [Arg#{config := Config#{replication => fun replication/0,
+                              group => interactive}}]).
+
+
+replication() ->
+    <<"false">>.
 
 
 init([Arg]) ->
