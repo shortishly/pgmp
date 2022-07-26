@@ -145,7 +145,7 @@
 
 {{#{format => text, n_of_cols => 0}, <<>>}, {copy_both_response, <<0,0,0>>}}.
 
-{{{begin_message,
+{{{begin_transaction,
    #{commit_timestamp => 711912977890394,
      final_lsn => 694956110568,
      xid => 533287174}},
@@ -162,12 +162,11 @@
             modifier => -1,
             name => <<"id">>,
             type => 23}],
-     namespace => <<"ic">>,
-     id => 1886741100,
+     id => 33162,
      name => <<"demo_table">>,
+     namespace => <<"public">>,
      ncols => 1,
-     replica_identity => 100,
-     xid => 33162}},
+     replica_identity => 100}},
   <<>>},
  {x_log_data,
   <<82,0,0,129,138,112,117,98,108,105,99,0,100,101,

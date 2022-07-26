@@ -54,8 +54,43 @@ handle_event(internal, {recv, {copy_data, {Tag, _} = TM}}, _, _)
   when Tag == keepalive; Tag == x_log_data ->
     {keep_state_and_data, nei(TM)};
 
-handle_event(internal, {x_log_data, _}, _, _) ->
+handle_event(internal, {x_log_data, #{stream := Stream}}, _, _) ->
+    {keep_state_and_data, nei(Stream)};
+
+handle_event(internal, {begin_transaction, _}, _, _) ->
     keep_state_and_data;
+
+handle_event(internal,
+             {insert, #{relation := Relation, tuple := Values}},
+             _,
+             #{relations := Relations, parameters := Parameters}) ->
+    #{Relation := #{columns := Columns, name := Table}} = Relations,
+    ets:insert_new(
+      binary_to_atom(Table),
+      list_to_tuple(
+        pgmp_data_row:decode(
+          Parameters,
+          lists:map(
+            fun
+                ({#{type := Type}, null = Value}) ->
+                    {#{format => text, type_oid => Type}, Value};
+
+                ({#{type := Type}, #{format := Format, value := Value}}) ->
+                    {#{format => Format, type_oid => Type}, Value}
+            end,
+            lists:zip(Columns, Values))))),
+    keep_state_and_data;
+
+handle_event(internal,
+             {relation, #{id := Id} = Relation},
+             _,
+             #{relations := Relations} = Data) ->
+    {keep_state,
+     Data#{relations := Relations#{Id => maps:without([id], Relation)}}};
+
+handle_event(internal, {commit, _}, _, _) ->
+    keep_state_and_data;
+
 
 handle_event(internal,
              {keepalive,
@@ -165,7 +200,7 @@ handle_event(internal, {create_replication_slot, SlotName}, _, _) ->
                <<"CREATE_REPLICATION_SLOT ~s TEMPORARY LOGICAL pgoutput">>,
                [SlotName]))]})};
 
-handle_event(internal, start_replication, _, _) ->
+handle_event(internal, start_replication, _, _Data) ->
     {keep_state_and_data,
      nei({start_replication,
           pgmp_config:replication(logical, proto_version),
@@ -175,8 +210,9 @@ handle_event(internal,
              {start_replication, ProtoVersion, PublicationNames},
              _,
              #{identify_system := #{<<"xlogpos">> := _Location},
-               replication_slot := #{<<"slot_name">> := SlotName}}) ->
-    {keep_state_and_data,
+               replication_slot := #{<<"slot_name">> := SlotName}} = Data) ->
+    {keep_state,
+     Data#{relations => #{}},
      nei({query,
           [iolist_to_binary(
              io_lib:format(

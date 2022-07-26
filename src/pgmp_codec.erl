@@ -81,7 +81,7 @@ demarshal(x_log_data, <<"B", BeginMessage/bytes>>) ->
                                [final_lsn, commit_timestamp, xid],
                                [int64, int64, int32],
                                BeginMessage),
-    {{begin_message, Decoded}, Remainder};
+    {{begin_transaction, Decoded}, Remainder};
 
 demarshal(x_log_data, <<"M", LogicalDecoding/bytes>>) ->
     {Decoded, Remainder} =  ?FUNCTION_NAME(
@@ -106,8 +106,8 @@ demarshal(x_log_data, <<"O", OriginMessage/bytes>>) ->
 
 demarshal(x_log_data, <<"R", RelationMessage/bytes>>) ->
     {Relation, R0} = ?FUNCTION_NAME(
-                        [xid, id, namespace, name, replica_identity, ncols],
-                        [int32, int32, string, string, int8, int16],
+                        [id, namespace, name, replica_identity, ncols],
+                        [int32, string, string, int8, int16],
                         RelationMessage),
     Columns = lists:reverse(
                 pgmp_binary:foldl(

@@ -19,7 +19,6 @@ PROJECT_VERSION = 0.1.0
 
 DEPS = \
 	envy \
-	fast_scram \
 	phrase \
 	recon
 
@@ -53,7 +52,6 @@ PLT_APPS = \
 
 dep_envy = git https://github.com/shortishly/envy.git
 dep_phrase = git https://github.com/shortishly/phrase.git
-dep_fast_scram = git git@github.com:shortishly/fast_scram.git
 
 dep_phrase_commit = main
 
