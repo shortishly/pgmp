@@ -81,6 +81,62 @@ handle_event(internal,
             lists:zip(Columns, Values))))),
     keep_state_and_data;
 
+
+handle_event(internal,
+             {update, #{relation := Relation, new := Values}},
+             _,
+             #{relations := Relations, parameters := Parameters}) ->
+    #{Relation := #{columns := Columns, name := Table}} = Relations,
+    ets:insert(
+      binary_to_atom(Table),
+      list_to_tuple(
+        pgmp_data_row:decode(
+          Parameters,
+          lists:map(
+            fun
+                ({#{type := Type}, null = Value}) ->
+                    {#{format => text, type_oid => Type}, Value};
+
+                ({#{type := Type}, #{format := Format, value := Value}}) ->
+                    {#{format => Format, type_oid => Type}, Value}
+            end,
+            lists:zip(Columns, Values))))),
+    keep_state_and_data;
+
+
+handle_event(internal,
+             {delete, #{relation := Relation, key := Values}},
+             _,
+             #{relations := Relations, parameters := Parameters}) ->
+    #{Relation := #{columns := Columns, name := Table}} = Relations,
+    ets:delete(
+      binary_to_atom(Table),
+      hd(pgmp_data_row:decode(
+          Parameters,
+          lists:map(
+            fun
+                ({#{type := Type}, null = Value}) ->
+                    {#{format => text, type_oid => Type}, Value};
+
+                ({#{type := Type}, #{format := Format, value := Value}}) ->
+                    {#{format => Format, type_oid => Type}, Value}
+            end,
+            lists:zip([hd(Columns)], [hd(Values)]))))),
+    keep_state_and_data;
+
+handle_event(internal,
+             {truncate, #{relations := Truncates}},
+             _,
+             #{relations := Relations}) ->
+    lists:foreach(
+      fun
+          (Relation) ->
+              #{Relation := #{name := Table}} = Relations,
+              ets:delete_all_objects(binary_to_atom(Table))
+      end,
+      Truncates),
+    keep_state_and_data;
+
 handle_event(internal,
              {relation, #{id := Id} = Relation},
              _,
