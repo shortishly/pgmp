@@ -51,6 +51,7 @@ init([Arg]) ->
 callback_mode() ->
     handle_event_function.
 
+
 handle_event({call, {Peer, _} = From},
              {send, Message},
              connected,
@@ -66,11 +67,6 @@ handle_event({call, {Peer, _}}, {send, _}, _, Data) ->
 handle_event(internal, open, _, Data) ->
     case socket:open(inet, stream, default) of
         {ok, Socket} ->
-            ?LOG_DEBUG(
-               #{recvbuf => socket:getopt(Socket, {otp, rcvbuf}),
-                 rcvlowat => socket:getopt(Socket, {socket, rcvlowat}),
-                 recvctrlbuf => socket:getopt(Socket, {otp, rcvctrlbuf})}),
-
             {keep_state, Data#{socket => Socket}, nei(connect)};
 
         {error, Reason} ->

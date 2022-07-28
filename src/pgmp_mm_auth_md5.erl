@@ -20,7 +20,7 @@
 -export([handle_event/4]).
 -import(pgmp_codec, [demarshal/1]).
 -import(pgmp_codec, [marshal/2]).
--import(pgmp_codec, [prefix_with_size/1]).
+-import(pgmp_codec, [size_inclusive/1]).
 -import(pgmp_statem, [nei/1]).
 
 
@@ -50,7 +50,7 @@ handle_event(internal,
     {keep_state_and_data,
      nei({send,
           [<<$p>>,
-           prefix_with_size(
+           size_inclusive(
              marshal(
                string,
                ["md5", md5([md5([Password(), User()]), Salt])]))]})};

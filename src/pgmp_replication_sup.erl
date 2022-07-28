@@ -26,8 +26,15 @@
 start_link(#{} = Arg) ->
     supervisor:start_link(?MODULE, [Arg]).
 
+
 init([Arg]) ->
-    {ok, configuration(children(Arg))}.
+    case pgmp_config:enabled(pgmp_replication) of
+        true ->
+            {ok, configuration(children(Arg))};
+
+        false ->
+            ignore
+    end.
 
 
 configuration(Children) ->

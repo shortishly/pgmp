@@ -35,7 +35,7 @@
 -export([stored_key/2]).
 -import(pgmp_codec, [demarshal/1]).
 -import(pgmp_codec, [marshal/2]).
--import(pgmp_codec, [prefix_with_size/1]).
+-import(pgmp_codec, [size_inclusive/1]).
 -import(pgmp_statem, [nei/1]).
 -include_lib("kernel/include/logger.hrl").
 
@@ -65,7 +65,7 @@ handle_event(internal,
      Data#{sasl => #{mechanism => Mechanism}},
      nei({send,
           [<<$p>>,
-           prefix_with_size(
+           size_inclusive(
              [marshal(string, Mechanism), marshal({int, 32}, -1)])]})};
 
 handle_event(internal,
@@ -148,7 +148,7 @@ handle_event(
      Data#{sasl := SASL#{server => Server}},
      nei({send,
           [<<$p>>,
-           prefix_with_size(
+           size_inclusive(
              [marshal(
                 byte,
                 pgmp_mm_auth_sasl:client_final(
@@ -166,7 +166,7 @@ handle_event(internal,
      Data#{sasl := SASL#{client => #{header => Header, nonce => Nonce}}},
      nei({send,
           [<<$p>>,
-           prefix_with_size(
+           size_inclusive(
              [marshal(
                 byte,
                 io_lib:fwrite(

@@ -19,6 +19,10 @@
 -export([decode/2]).
 -export([decode/3]).
 -export([decode/5]).
+-export([encode/2]).
+-export([encode/5]).
+-import(pgmp_codec, [marshal/2]).
+-import(pgmp_codec, [size_exclusive/1]).
 
 
 decode(Parameters, TypeValue) ->
@@ -26,6 +30,9 @@ decode(Parameters, TypeValue) ->
 
 decode(Parameters, TypeValue, Types) ->
     ?FUNCTION_NAME(Parameters, TypeValue, Types, []).
+
+decode(Parameters, [{_, null} | T], Types, A) ->
+    ?FUNCTION_NAME(Parameters, T, Types, [null | A]);
 
 decode(Parameters,
        [{#{format := Format, type_oid := OID}, Value} | T],
@@ -54,9 +61,6 @@ decode(_, [], _, A) ->
     lists:reverse(A).
 
 
-decode(_, _, _, _, null) ->
-    null;
-
 decode(_, binary, _, #{<<"typname">> := <<"bool">>}, <<1>>) ->
     true;
 
@@ -67,7 +71,7 @@ decode(_, binary, _, #{<<"typname">> := <<"bool">>}, <<0>>) ->
     false;
 
 decode(_, text, _, #{<<"typname">> := <<"bool">>}, <<"f">>) ->
-    true;
+    false;
 
 decode(_, text, _, #{<<"typname">> := <<"oid">>}, Value) ->
     binary_to_integer(Value);
@@ -294,9 +298,13 @@ decode(Parameters, Format, _TypeCache,Type, Value) ->
     #{parameters => Parameters, format => Format, type => Type, value => Value}.
 
 
-numeric(Value) ->
+numeric(Value) when is_binary(Value)->
     ?FUNCTION_NAME(
-       [fun erlang:binary_to_float/1, fun erlang:binary_to_integer/1], Value).
+       [fun erlang:binary_to_float/1, fun erlang:binary_to_integer/1], Value);
+
+numeric(Value) when is_number(Value)->
+    ?FUNCTION_NAME(
+       [fun erlang:float_to_binary/1, fun erlang:integer_to_binary/1], Value).
 
 
 numeric([Conversion | Conversions], Value) ->
@@ -328,11 +336,252 @@ epoch_date(posix) ->
     {1970, 1, 1}.
 
 
-array_recv(Parameters, binary = Format, Types, _Type, <<_NDim:32, 0:32, OID:32, _Dimensions:32, _LowerBnds:32, Data/bytes>>) ->
-    {ok, Type} =  maps:find(OID, Types),
-    [decode(Parameters, Format, Types, Type, Value) || <<Length:32, Value:Length/bytes>> <= Data];
+encode(Parameters, TypeValue) ->
+    ?FUNCTION_NAME(Parameters, TypeValue, pgmp_types:cache()).
 
-array_recv(Parameters, binary = Format, Types, _Type, <<_NDim:32, 1:32, OID:32, _Dimensions:32, _LowerBnds:32, Data/bytes>>) ->
+encode(Parameters, TypeValue, Types) ->
+    ?FUNCTION_NAME(Parameters, TypeValue, Types, []).
+
+encode(Parameters, [{_, null} | T], Types, A) ->
+    ?FUNCTION_NAME(Parameters, T, Types, [<<-1:32/signed>> | A]);
+
+encode(Parameters,
+       [{#{format := Format, type_oid := OID}, Value} | T],
+       Types,
+       A) ->
+    case maps:find(OID, Types) of
+        {ok, Type} ->
+            ?FUNCTION_NAME(
+               Parameters,
+               T,
+               Types,
+               [?FUNCTION_NAME(Parameters,
+                               Format,
+                               Types,
+                               Type,
+                               Value) | A]);
+
+        error ->
+            ?FUNCTION_NAME(Parameters,
+                           T,
+                           Types,
+                           [Value | A])
+    end;
+
+encode(_, [], _, A) ->
+    lists:reverse(A).
+
+
+encode(Parameters,
+       binary = Format,
+       Types,
+       #{<<"typsend">> := <<"array_send">>, <<"typelem">> := OID},
+       L)
+  when is_list(L), OID /= 0 ->
+    case maps:find(OID, Types) of
+        {ok, Type} ->
+            array_send(Parameters, Format, Types, Type, L)
+    end;
+
+encode(Parameters,
+       binary = Format,
+       Types,
+       #{<<"typsend">> := <<"oidvectorsend">>, <<"typelem">> := OID},
+       L)
+  when is_list(L), OID /= 0 ->
+    case maps:find(OID, Types) of
+        {ok, Type} ->
+            vector_send(Parameters, Format, Types, Type, L)
+    end;
+
+encode(_, _, _, #{<<"typname">> := <<"bpchar">>}, Value) ->
+    Value;
+
+encode(_, text, _, #{<<"typname">> := <<"bytea">>}, Value) ->
+    ["\\x", string:lowercase(binary:encode_hex(Value))];
+
+encode(_, binary, _, #{<<"typname">> := <<"bool">>}, true) ->
+    <<1>>;
+
+encode(_, text, _, #{<<"typname">> := <<"bool">>}, true) ->
+    "t";
+
+encode(_, binary, _, #{<<"typname">> := <<"bool">>}, false) ->
+    <<0>>;
+
+encode(_, text, _, #{<<"typname">> := <<"bool">>}, false) ->
+    "f";
+
+encode(#{<<"integer_datetimes">> := <<"on">>},
+       text,
+       _,
+       #{<<"typname">> := <<"timestamp">>},
+       {{Ye, Mo, Da}, {Ho, Mi, Se}}) ->
+    io_lib:format(
+      "~4..0b-~2..0b-~2..0b ~2..0b:~2..0b:~2..0b",
+      [Ye, Mo, Da, Ho, Mi, Se]);
+
+encode(#{<<"integer_datetimes">> := <<"on">>},
+       text,
+       _,
+       #{<<"typname">> := <<"date">>},
+       {Ye, Mo, Da}) ->
+    io_lib:format(
+      "~4..0b-~2..0b-~2..0b",
+      [Ye, Mo, Da]);
+
+
+encode(#{<<"integer_datetimes">> := <<"on">>},
+       text,
+       _,
+       #{<<"typname">> := <<"time">>},
+       {Ho, Mi, Se}) ->
+    io_lib:format("~2..0b:~2..0b:~2..0b", [Ho, Mi, Se]);
+
+encode(#{<<"integer_datetimes">> := <<"on">>},
+       binary,
+       _,
+       #{<<"typname">> := <<"date">>},
+       {_Ye, _Mo, _Da} = Date) ->
+    marshal(
+      int32,
+      calendar:date_to_gregorian_days(Date) - calendar:date_to_gregorian_days(epoch_date(pg)));
+
+encode(_, _, _, #{<<"typname">> := Type}, Value)
+  when Type == <<"varchar">>;
+       Type == <<"name">>;
+       Type == <<"bytea">>;
+       Type == <<"json">>;
+       Type == <<"xml">>;
+       Type == <<"text">> ->
+    Value;
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"uuid">>},
+       <<TimeLow:8/bytes,
+         "-",
+         TimeMid:4/bytes,
+         "-",
+         TimeHi:4/bytes,
+         "-",
+         Clock:4/bytes,
+         "-",
+         Node:12/bytes>>) ->
+    lists:map(
+      fun binary:decode_hex/1,
+      [TimeLow, TimeMid, TimeHi, Clock, Node]);
+
+encode(_,
+       text,
+       _,
+       #{<<"typname">> := <<"uuid">>},
+       <<_:8/bytes, "-", _:4/bytes, "-", _:4/bytes, "-", _:4/bytes, "-", _:12/bytes>> = UUID) ->
+    UUID;
+
+encode(_, binary, _, #{<<"typname">> := <<"oid">>}, Value) ->
+    <<Value:32>>;
+
+encode(_, text, _, #{<<"typname">> := <<"oid">>}, Value) ->
+    integer_to_binary(Value);
+
+encode(_, binary, _, #{<<"typname">> := <<"bit">>}, <<Value/bits>>) ->
+    Length = bit_size(Value),
+    Padding = byte_size(Value) * 8 - Length,
+    <<Length:32, Value/bits, 0:Padding>>;
+
+encode(_, text, _, #{<<"typname">> := <<"bit">>}, <<Value/bits>>) ->
+    [integer_to_list(I) || <<I:1>> <= Value];
+
+encode(_, text, _, #{<<"typname">> := <<"float", _/bytes>>}, Value) ->
+    numeric(Value);
+
+encode(_, text, _, #{<<"typname">> := <<"int", _/bytes>>}, Value) ->
+    integer_to_binary(Value);
+
+encode(_, binary, _, #{<<"typname">> := <<"int", R/bytes>>}, Value) ->
+    marshal({int, binary_to_integer(R) * 8}, Value).
+
+
+vector_send(
+  Parameters,
+  binary = Format,
+  Types,
+  #{<<"oid">> := OID} = Type,
+  L) ->
+    [<<1:32,
+       0:32,
+       OID:32,
+       (length(L)):32,
+       0:32>>,
+     [size_exclusive(encode(Parameters, Format, Types, Type, V)) || V <- L]].
+
+
+array_send(
+  Parameters,
+  binary = Format,
+  Types,
+  #{<<"oid">> := OID} = Type,
+  L) ->
+    [<<1:32,
+       (null_bitmap(L)):32,
+       OID:32,
+       (length(L)):32,
+       1:32>>,
+     lists:map(
+       fun
+           (null) ->
+               marshal(int32, -1);
+
+           (V) ->
+               size_exclusive(encode(Parameters, Format, Types, Type, V))
+       end,
+       L)].
+
+
+null_bitmap(L) ->
+    case lists:any(
+           fun
+               (Value) ->
+                   Value == null
+           end,
+           L) of
+        false ->
+            0;
+
+        true ->
+            1
+    end.
+
+
+array_recv(Parameters,
+           binary = Format,
+           Types,
+           _,
+           <<1:32, %% NDim
+             0:32,
+             OID:32,
+             _Dimensions:32,
+             _LowerBnds:32,
+             Data/bytes>>) ->
+    {ok, Type} =  maps:find(OID, Types),
+    [decode(Parameters,
+            Format,
+            Types,
+            Type,
+            Value) || <<Length:32, Value:Length/bytes>> <= Data];
+
+array_recv(Parameters,
+           binary = Format,
+           Types,
+           _,
+           <<1:32, %% NDim
+             1:32,
+             OID:32,
+             _Dimensions:32,
+             _LowerBnds:32,
+             Data/bytes>>) ->
     {ok, Type} =  maps:find(OID, Types),
     lists:reverse(
       pgmp_binary:foldl(

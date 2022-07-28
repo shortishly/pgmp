@@ -13,25 +13,14 @@
 %% limitations under the License.
 
 
--module(pgmp_statem).
+-module(pgmp_replication_locical).
 
+-type result() :: ok | {error, term()}.
 
--export([nei/1]).
--export([send_request/1]).
-
-
-send_request(#{server_ref := ServerRef,
-               request := Request,
-               label := Label,
-               requests := Requests}) ->
-    gen_statem:send_request(ServerRef, Request, Label, Requests);
-
-send_request(#{requests := _} = Arg) ->
-    error(badarg, [Arg]);
-
-send_request(#{server_ref := ServerRef, request := Request}) ->
-    gen_statem:send_request(ServerRef, Request).
-
-
-nei(Event) ->
-    {next_event, internal, Event}.
+-callback snapshot(Id :: binary()) -> result().
+-callback begin_transaction() -> result().
+-callback insert(Table :: binary(), Row :: tuple()) -> result().
+-callback update(Table :: binary(), Row :: tuple()) -> result().
+-callback delete(Table :: binary(), Row :: tuple()) -> result().
+-callback truncate(Table :: [binary()]) -> result().
+-callback commit() -> result().

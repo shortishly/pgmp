@@ -16,8 +16,11 @@
 -module(pgmp_mm).
 
 
+-export([bind/1]).
 -export([callback_mode/0]).
+-export([execute/1]).
 -export([init/1]).
+-export([parse/1]).
 -export([query/1]).
 -export([recv/1]).
 -export([start_link/1]).
@@ -25,9 +28,9 @@
 -export([terminate/3]).
 -import(pgmp_codec, [demarshal/1]).
 -import(pgmp_codec, [marshal/2]).
--import(pgmp_codec, [prefix_with_size/1]).
 -import(pgmp_data_row, [decode/2]).
 -import(pgmp_statem, [nei/1]).
+-import(pgmp_statem, [send_request/1]).
 -include_lib("kernel/include/logger.hrl").
 
 
@@ -37,28 +40,79 @@ start_link(Arg) ->
 
 recv(#{tag := Tag, message := Message} = Arg) ->
     send_request(
-      maps:without([tag, message],
-                   Arg#{request => {?FUNCTION_NAME, {Tag, Message}}})).
+      maps:without(
+        [tag, message],
+        maybe_label(Arg#{request => {?FUNCTION_NAME, {Tag, Message}}}))).
+
 
 start_replication(Arg) ->
-    send_request(
-      Arg#{request => {request,
-                       #{action => ?FUNCTION_NAME,
-                         args => []}}}).
+    send_request(Arg, ?FUNCTION_NAME, []).
 
-query(#{sql := SQL} = Arg) ->
+
+query(Arg) ->
+    send_request(Arg, ?FUNCTION_NAME, [sql]).
+
+
+parse(Arg) ->
+    send_request(Arg, ?FUNCTION_NAME, [{name, <<>>}, sql]).
+
+
+bind(Arg) ->
+    send_request(
+      Arg,
+      ?FUNCTION_NAME,
+      [{name, <<>>}, {portal, <<>>}, {args, []}]).
+
+
+execute(Arg) ->
+    send_request(
+      Arg,
+      ?FUNCTION_NAME,
+      [{portal, <<>>}, {max_rows, 0}]).
+
+
+send_request(Arg, Action, Config) ->
     send_request(
       maps:without(
-        [sql],
-        Arg#{request => {request,
-                         #{action => ?FUNCTION_NAME,
-                           args => [SQL]}}})).
+        keys(Config),
+        maybe_label(
+          Arg#{request => {request,
+                           #{action => Action,
+                             args => args(Arg, Config)}}}))).
 
-send_request(#{label := _} = Arg) ->
-    pgmp_statem:send_request(Arg);
 
-send_request(Arg) ->
-    pgmp_statem:send_request(Arg#{label => ?MODULE}).
+maybe_label(#{requests := _, label := _} = Arg) ->
+    Arg;
+
+maybe_label(#{requests := _} = Arg) ->
+    Arg#{label => ?MODULE};
+
+maybe_label(Arg) ->
+    Arg.
+
+
+keys(Config) ->
+    lists:map(
+      fun
+          ({Key, _}) ->
+              Key;
+
+          (Key) ->
+              Key
+      end,
+      Config).
+
+
+args(Arg, Config) ->
+    lists:map(
+      fun
+          ({Parameter, Default}) ->
+              maps:get(Parameter, Arg, Default);
+
+          (Parameter) ->
+              maps:get(Parameter, Arg)
+      end,
+      Config).
 
 
 init([Arg]) ->

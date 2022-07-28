@@ -21,7 +21,7 @@
 -export([terminate/3]).
 -import(pgmp_codec, [demarshal/1]).
 -import(pgmp_codec, [marshal/2]).
--import(pgmp_codec, [prefix_with_size/1]).
+-import(pgmp_codec, [size_inclusive/1]).
 -import(pgmp_data_row, [decode/2]).
 -import(pgmp_data_row, [decode/3]).
 -import(pgmp_mm_common, [actions/3]).
@@ -72,7 +72,7 @@ handle_event({call, _}, {request, _}, _, _) ->
 
 handle_event(internal, {query, [SQL]}, _, _) ->
     {keep_state_and_data,
-     nei({send, [<<$Q>>, prefix_with_size([marshal(string, SQL)])]})};
+     nei({send, [<<$Q>>, size_inclusive([marshal(string, SQL)])]})};
 
 handle_event(internal, {recv, {Tag, _} = TM}, query, _)
   when Tag == empty_query_response;

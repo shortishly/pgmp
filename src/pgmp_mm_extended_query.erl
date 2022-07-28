@@ -21,7 +21,7 @@
 -export([terminate/3]).
 -import(pgmp_codec, [demarshal/1]).
 -import(pgmp_codec, [marshal/2]).
--import(pgmp_codec, [prefix_with_size/1]).
+-import(pgmp_codec, [size_inclusive/1]).
 -import(pgmp_data_row, [decode/2]).
 -import(pgmp_mm_common, [actions/3]).
 -import(pgmp_mm_common, [data/3]).
@@ -61,11 +61,11 @@ handle_event({call, _} = Call,
 
 handle_event(internal, flush, _, _) ->
     {keep_state_and_data,
-     nei({send, [<<$H>>, prefix_with_size([])]})};
+     nei({send, [<<$H>>, size_inclusive([])]})};
 
 handle_event(internal, sync, _, _) ->
     {keep_state_and_data,
-     [nei({send, [<<$S>>, prefix_with_size([])]}), nei(gc_unnamed_portal)]};
+     [nei({send, [<<$S>>, size_inclusive([])]}), nei(gc_unnamed_portal)]};
 
 handle_event(internal, gc_unnamed_portal, _, #{cache := Cache}) ->
     ets:delete(Cache, {parameter_description, <<>>}),
@@ -74,7 +74,14 @@ handle_event(internal, gc_unnamed_portal, _, #{cache := Cache}) ->
 
 handle_event(internal, {describe, [What, Name]}, _, _) ->
     {keep_state_and_data,
-     nei({send, [<<$D>>, prefix_with_size([What, marshal(string, Name)])]})};
+     nei({send, [<<$D>>, size_inclusive([What, marshal(string, Name)])]})};
+
+handle_event(internal, {describe_statement, Portal}, unsynchronized, Data) ->
+    Args = [$S, Portal],
+    {next_state,
+     describe_statement,
+     Data#{args => Args},
+     [nei({describe, Args}), nei(flush)]};
 
 handle_event(internal, {describe_portal, Portal}, unsynchronized, Data) ->
     Args = [$P, Portal],
@@ -87,28 +94,70 @@ handle_event(internal, {parse, [Name, SQL]}, _, _) ->
     {keep_state_and_data,
      nei({send,
           [<<$P>>,
-           prefix_with_size(
+           size_inclusive(
              [marshal(string, Name),
               marshal(string, SQL),
               marshal({int, 16}, 0)])]})};
 
-handle_event(internal, {bind, [Portal, Statement, Parameters]}, _, _) ->
-    {keep_state_and_data,
-     nei({send,
-          [<<$B>>,
-           prefix_with_size(
-             [marshal(string, Portal),
-              marshal(string, Statement),
-              marshal({int, 16}, 0),
-              marshal({int, 16}, length(Parameters)),
-              marshal({int, 16}, 1),
-              marshal({int, 16}, 1)])]})};
+handle_event(internal,
+             {bind, [Portal, Statement, Values]},
+             _,
+             #{cache := Cache, parameters := Parameters}) ->
+    case ets:lookup(Cache, {parameter_description, Statement}) of
+
+        [{_, Types}]
+          when length(Types) == length(Values),
+               length(Types) == 0 ->
+            {keep_state_and_data,
+             nei({send,
+                  [<<$B>>,
+                   size_inclusive(
+                     [marshal(string, Portal),
+                      marshal(string, Statement),
+                      marshal({int, 16}, 0),
+                      marshal({int, 16}, length(Values)),
+                      marshal({int, 16}, 1),
+                      marshal({int, 16}, 1)])]})};
+
+        [{_, Types}]
+          when length(Types) == length(Values),
+               length(Types) > 0 ->
+            {keep_state_and_data,
+             nei({send,
+                  [<<$B>>,
+                   size_inclusive(
+                     [marshal(string, Portal),
+                      marshal(string, Statement),
+                      marshal(int16, 1),
+                      marshal(int16, 1),
+
+                      marshal(int16, length(Values)),
+                      lists:foldl(
+                        fun
+                            ({_, null}, A) ->
+                                [A, marshal(int32, -1)];
+
+                            ({TypeOID, Value}, A) ->
+                                Encoded = pgmp_data_row:encode(
+                                            Parameters,
+                                            [{#{format => binary,
+                                                type_oid => TypeOID},
+                                              Value}]),
+                                [A,
+                                 marshal(int32, iolist_size(Encoded)),
+                                 Encoded]
+                        end,
+                        [],
+                        lists:zip(Types, Values)),
+                      marshal(int16, 1),
+                      marshal(int16, 1)])]})}
+    end;
 
 handle_event(internal, {execute, [Portal, MaxRows]}, _, _) ->
     {keep_state_and_data,
      nei({send,
           [<<$E>>,
-           prefix_with_size(
+           size_inclusive(
              [marshal(string, Portal),
               marshal({int, 32}, MaxRows)])]})};
 
@@ -129,7 +178,10 @@ handle_event(internal,
     {next_state,
      unsynchronized,
      Data,
-     [nei({process, TM}), nei(complete), nei({sync_when_named, Statement})]};
+     [nei({process, TM}),
+      nei(complete),
+      nei({describe_statement, Statement}),
+      nei({sync_when_named, Statement})]};
 
 handle_event(internal, {sync_when_named, <<>>}, _, _) ->
     keep_state_and_data;
@@ -146,15 +198,11 @@ handle_event(internal, {recv, {error_response, _} = TM}, parse, Data) ->
 handle_event(internal,
              {recv, {bind_complete, _} = Reply},
              bind,
-             #{args := [Portal, _, _], cache := Cache} = Data) ->
-    ets:delete(Cache, {parameter_description, Portal}),
-    ets:delete(Cache, {row_description, Portal}),
+             Data) ->
     {next_state,
      unsynchronized,
      Data,
-     [nei({process, Reply}),
-      nei(complete),
-      nei({describe_portal, Portal})]};
+     [nei({process, Reply}), nei(complete)]};
 
 handle_event(internal,
              {recv, {error_response, _} = Reply},
@@ -213,6 +261,28 @@ handle_event(internal, {recv, {Tag, _} = Reply}, describe, Data)
      unsynchronized,
      Data,
      [nei({process, Reply}), nei(complete)]};
+
+handle_event(internal,
+             {recv, {parameter_description = Tag, Decoded}},
+             describe_statement,
+             #{args := [$S, Statement],
+               cache := Cache}) ->
+    ets:insert(Cache, {{Tag, Statement}, Decoded}),
+    keep_state_and_data;
+
+handle_event(internal,
+             {recv, {row_description = Tag, Decoded}},
+             describe_statement,
+             #{args := [$S, Statement],
+               cache := Cache} = Data) ->
+    ets:insert(Cache, {{Tag, Statement}, Decoded}),
+    {next_state, unsynchronized, Data};
+
+handle_event(internal,
+             {recv, {no_data, _}},
+             describe_statement,
+             #{args := [$S, _]} = Data) ->
+    {next_state, unsynchronized, Data};
 
 handle_event(internal,
              {recv, {parameter_description = Tag, Decoded}},

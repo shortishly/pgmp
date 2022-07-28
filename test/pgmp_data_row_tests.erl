@@ -21,7 +21,9 @@
 
 decode_test_() ->
     lists:map(
-      t(decode(maps:from_list(phrase_file:consult("test/type.terms")))),
+      t_decode(
+        decode(
+          maps:from_list(phrase_file:consult("test/type.terms")))),
       phrase_file:consult("test/data-row-decode.terms")).
 
 decode(Types) ->
@@ -31,10 +33,39 @@ decode(Types) ->
     end.
 
 
-t(F) ->
+t_decode(F) ->
     fun
         ({Expected, Input} = Test) ->
             {nm(Test), ?_assertEqual(Expected, apply(F, Input))}
+    end.
+
+
+encode_test_() ->
+    lists:map(
+      t_encode(
+        encode(
+          maps:from_list(phrase_file:consult("test/type.terms")))),
+      phrase_file:consult("test/data-row-decode.terms")).
+
+
+encode(Types) ->
+    fun
+        (Parameters, Format, Type, Value) ->
+            pgmp_data_row:encode(Parameters,
+                                 Format,
+                                 Types,
+                                 Type,
+                                 Value)
+    end.
+
+
+t_encode(F) ->
+    fun
+        ({Value, [Parameters, Format, Type, Expected]} = Test) ->
+            {nm(Test),
+             ?_assertEqual(Expected,
+                           iolist_to_binary(
+                             apply(F, [Parameters, Format, Type, Value])))}
     end.
 
 

@@ -21,7 +21,7 @@
 -export([terminate/3]).
 -import(pgmp_codec, [demarshal/1]).
 -import(pgmp_codec, [marshal/2]).
--import(pgmp_codec, [prefix_with_size/1]).
+-import(pgmp_codec, [size_inclusive/1]).
 -import(pgmp_data_row, [decode/2]).
 -import(pgmp_statem, [nei/1]).
 -include_lib("kernel/include/logger.hrl").
@@ -64,9 +64,16 @@ handle_event(internal,
             {stop, peer_not_found}
     end;
 
-handle_event(internal, join, _, #{config := #{group := Group}}) ->
+handle_event(internal,
+             join,
+             _,
+             #{requests := Requests,
+               config := #{group := Group}} = Data) ->
     pgmp_pg:join(Group),
-    keep_state_and_data;
+    {keep_state,
+     Data#{requests := pgmp_connection_manager:join(
+                         #{group => Group,
+                           requests => Requests})}};
 
 handle_event(internal, join, _, #{config := #{}}) ->
     keep_state_and_data;
@@ -112,7 +119,7 @@ handle_event(internal,
                            replication := Replication}}) ->
     {keep_state_and_data,
      nei({send,
-          prefix_with_size(
+          size_inclusive(
             [marshal({int, 32}, version()),
              maps:fold(
                fun

@@ -22,7 +22,7 @@
 -export([handle_event/4]).
 -export([terminate/3]).
 -import(pgmp_codec, [demarshal/1]).
--import(pgmp_codec, [prefix_with_size/1]).
+-import(pgmp_codec, [size_inclusive/1]).
 -import(pgmp_statem, [nei/1]).
 
 
@@ -75,7 +75,17 @@ handle_event(info, Msg, _, #{requests := Existing} = Data) ->
                  Data#{requests := UpdatedRequests}}
     end;
 
-handle_event(internal, {response, #{label := pgmp_socket, reply := ok}}, _, _) ->
+handle_event(internal,
+             {response, #{label := pgmp_socket, reply := ok}},
+             _,
+             _) ->
+    keep_state_and_data;
+
+handle_event(internal,
+             {response, #{label := pgmp_connection_manager,
+                          reply := ok}},
+             _,
+             _) ->
     keep_state_and_data;
 
 handle_event(internal,
@@ -95,7 +105,7 @@ handle_event(internal,
 
 handle_event(internal, terminate, _, _) ->
     {keep_state_and_data,
-     nei({send, [<<$X>>, prefix_with_size([])]})};
+     nei({send, [<<$X>>, size_inclusive([])]})};
 
 handle_event(internal, {recv, {notice_response, _} = TM}, query, _) ->
     {keep_state_and_data, nei({process, TM})};
@@ -113,18 +123,42 @@ handle_event(internal, types_when_ready, _, Data) ->
     {keep_state, Data#{requests := pgmp_types:when_ready(
                                      maps:with([requests], Data))}};
 
-handle_event(enter, _, {ready_for_query, _}, Data) ->
+handle_event(enter,
+             _,
+             {ready_for_query, State},
+             #{requests := Requests,
+              config := #{group := _}} = Data) ->
     {keep_state,
-     maps:with([ancestors,
-                backend,
-                cache,
-                config,
-                parameters,
-                requests,
-                socket,
-                supervisor,
-                types_ready],
-               Data)};
+     maps:with(
+       [ancestors,
+        backend,
+        cache,
+        config,
+        parameters,
+        requests,
+        socket,
+        supervisor,
+        types_ready],
+       Data#{requests => pgmp_connection_manager:ready_for_query(
+                           #{state => State,
+                             requests => Requests})})};
+
+handle_event(enter,
+             _,
+             {ready_for_query, _},
+             Data) ->
+    {keep_state,
+     maps:with(
+       [ancestors,
+        backend,
+        cache,
+        config,
+        parameters,
+        requests,
+        socket,
+        supervisor,
+        types_ready],
+       Data)};
 
 handle_event(enter, _, _, _) ->
     keep_state_and_data.

@@ -19,7 +19,8 @@
 -export([demarshal/1]).
 -export([demarshal/2]).
 -export([marshal/2]).
--export([prefix_with_size/1]).
+-export([size_exclusive/1]).
+-export([size_inclusive/1]).
 
 
 demarshal({Type, Encoded}) ->
@@ -364,8 +365,11 @@ demarshal(tuple_data,
                    [#{format => text, value => Value} | A]).
 
 
-prefix_with_size(Data) ->
+size_inclusive(Data) ->
     [marshal(int32, iolist_size(Data) + 4), Data].
+
+size_exclusive(Data) ->
+    [marshal(int32, iolist_size(Data)), Data].
 
 marshal(string, Value) ->
     [Value, <<0:8>>];
