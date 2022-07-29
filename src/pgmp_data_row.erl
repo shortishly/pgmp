@@ -20,6 +20,7 @@
 -export([decode/3]).
 -export([decode/5]).
 -export([encode/2]).
+-export([encode/3]).
 -export([encode/5]).
 -import(pgmp_codec, [marshal/2]).
 -import(pgmp_codec, [size_exclusive/1]).

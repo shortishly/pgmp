@@ -21,52 +21,55 @@
 
 decode_test_() ->
     lists:map(
-      t_decode(
-        decode(
-          maps:from_list(phrase_file:consult("test/type.terms")))),
-      phrase_file:consult("test/data-row-decode.terms")).
+      test_decode(decode(types())),
+      phrase_file:consult("test/data-row.terms")).
 
 decode(Types) ->
     fun
-        (Parameters, Format, Type, Data) ->
-            pgmp_data_row:decode(Parameters, Format, Types, Type, Data)
+        (Parameters, TypeValue) ->
+            pgmp_data_row:decode(Parameters, TypeValue, Types)
     end.
 
 
-t_decode(F) ->
+test_decode(F) ->
     fun
-        ({Expected, Input} = Test) ->
-            {nm(Test), ?_assertEqual(Expected, apply(F, Input))}
+        ({Expected, Parameters, Format, Type, Value} = Test) ->
+            {nm(Test),
+             ?_assertEqual(
+                [Expected],
+                apply(F,
+                      [Parameters,
+                       [{#{format => Format, type_oid => Type}, Value}]]))}
     end.
 
 
 encode_test_() ->
     lists:map(
-      t_encode(
-        encode(
-          maps:from_list(phrase_file:consult("test/type.terms")))),
-      phrase_file:consult("test/data-row-decode.terms")).
-
+      test_encode(encode(types())),
+      phrase_file:consult("test/data-row.terms")).
 
 encode(Types) ->
     fun
-        (Parameters, Format, Type, Value) ->
-            pgmp_data_row:encode(Parameters,
-                                 Format,
-                                 Types,
-                                 Type,
-                                 Value)
+        (Parameters, TypeValue) ->
+            pgmp_data_row:encode(Parameters, TypeValue, Types)
     end.
 
 
-t_encode(F) ->
+test_encode(F) ->
     fun
-        ({Value, [Parameters, Format, Type, Expected]} = Test) ->
+        ({Value, Parameters, Format, Type, Expected} = Test) ->
             {nm(Test),
-             ?_assertEqual(Expected,
-                           iolist_to_binary(
-                             apply(F, [Parameters, Format, Type, Value])))}
+             ?_assertEqual(
+                Expected,
+                iolist_to_binary(
+                  apply(F,
+                        [Parameters,
+                         [{#{format => Format, type_oid => Type}, Value}]])))}
     end.
+
+
+types() ->
+    maps:from_list(phrase_file:consult("test/type.terms")).
 
 
 nm(Test) ->
