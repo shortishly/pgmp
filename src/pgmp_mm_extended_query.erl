@@ -76,8 +76,8 @@ handle_event(internal, {describe, [What, Name]}, _, _) ->
     {keep_state_and_data,
      nei({send, [<<$D>>, size_inclusive([What, marshal(string, Name)])]})};
 
-handle_event(internal, {describe_statement, Portal}, unsynchronized, Data) ->
-    Args = [$S, Portal],
+handle_event(internal, {describe_statement, Statement}, unsynchronized, Data) ->
+    Args = [$S, Statement],
     {next_state,
      describe_statement,
      Data#{args => Args},
@@ -198,11 +198,14 @@ handle_event(internal, {recv, {error_response, _} = TM}, parse, Data) ->
 handle_event(internal,
              {recv, {bind_complete, _} = Reply},
              bind,
-             Data) ->
+             #{args := [Portal, _, _]} = Data) ->
     {next_state,
      unsynchronized,
      Data,
-     [nei({process, Reply}), nei(complete)]};
+     [nei({process, Reply}),
+      nei(complete),
+      nei({describe_portal, Portal}),
+      nei({sync_when_named, Portal})]};
 
 handle_event(internal,
              {recv, {error_response, _} = Reply},

@@ -145,6 +145,7 @@ decode(Parameters,
        Types,
        #{<<"typreceive">> := TypeReceive} = Type,
        Data) when TypeReceive == <<"array_recv">>;
+                  TypeReceive == <<"int2vectorrecv">>;
                   TypeReceive == <<"oidvectorrecv">> ->
     array_recv(Parameters, Format, Types, Type, Data);
 

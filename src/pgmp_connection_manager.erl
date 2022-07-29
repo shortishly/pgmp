@@ -17,6 +17,7 @@
 
 
 -export([bind/1]).
+-export([describe/1]).
 -export([callback_mode/0]).
 -export([execute/1]).
 -export([handle_event/4]).
@@ -46,6 +47,10 @@ parse(Arg) ->
 
 
 bind(Arg) ->
+    pgmp_mm:?FUNCTION_NAME(Arg#{server_ref => ?MODULE}).
+
+
+describe(Arg) ->
     pgmp_mm:?FUNCTION_NAME(Arg#{server_ref => ?MODULE}).
 
 

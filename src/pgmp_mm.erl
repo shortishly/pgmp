@@ -18,6 +18,7 @@
 
 -export([bind/1]).
 -export([callback_mode/0]).
+-export([describe/1]).
 -export([execute/1]).
 -export([init/1]).
 -export([parse/1]).
@@ -62,6 +63,13 @@ bind(Arg) ->
       Arg,
       ?FUNCTION_NAME,
       [{name, <<>>}, {portal, <<>>}, {args, []}]).
+
+
+describe(Arg) ->
+    send_request(
+      Arg,
+      ?FUNCTION_NAME,
+      [type, name]).
 
 
 execute(Arg) ->
