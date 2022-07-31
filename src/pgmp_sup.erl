@@ -51,6 +51,7 @@ config() ->
 database() ->
     config_database(name).
 
+
 identity() ->
     lists:foldl(
       fun
@@ -59,6 +60,7 @@ identity() ->
       end,
       #{},
       [user, password]).
+
 
 config_database(Key) ->
     fun
@@ -82,6 +84,7 @@ child(#{m := M} = Arg) ->
 
 child(Arg) when is_atom(Arg) ->
     ?FUNCTION_NAME(#{m => Arg}).
+
 
 mfargs(#{m := M} = Arg) ->
     {M, maps:get(f, Arg, start_link), maps:get(args, Arg, [])}.

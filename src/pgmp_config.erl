@@ -25,11 +25,8 @@
 -export([replication/2]).
 
 
-enabled(pgmp_types = Name) ->
-    envy(to_boolean, [Name, ?FUNCTION_NAME], true);
-
 enabled(Name) ->
-    envy(to_boolean, [Name, ?FUNCTION_NAME], false).
+    envy(to_boolean, [Name, ?FUNCTION_NAME], true).
 
 
 decode(Type) ->

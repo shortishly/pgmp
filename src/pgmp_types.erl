@@ -30,11 +30,13 @@
 start_link() ->
     ?FUNCTION_NAME(#{}).
 
+
 start_link(Arg) ->
     gen_statem:start_link({local, ?MODULE},
                           ?MODULE,
                           [Arg],
                           pgmp_config:options(?MODULE)).
+
 
 when_ready(Arg) ->
     send_request(
@@ -43,11 +45,13 @@ when_ready(Arg) ->
         #{server_ref => ?MODULE,
           request => ?FUNCTION_NAME})).
 
+
 send_request(#{label := _} = Arg) ->
     pgmp_statem:send_request(Arg);
 
 send_request(Arg) ->
     pgmp_statem:send_request(Arg#{label => ?MODULE}).
+
 
 write_file(Filename) ->
     {ok, Header} = file:read_file("HEADER.txt"),
@@ -92,21 +96,11 @@ handle_event({call, _}, when_ready, unready, _) ->
 handle_event({call, From}, when_ready, ready, _) ->
     {keep_state_and_data, {reply, From, ready}};
 
-handle_event({timeout, refresh}, refresh, _, _) ->
-    {keep_state_and_data, nei(refresh)};
-
-handle_event(internal, refresh, _, _) ->
-    {keep_state_and_data, nei({types, pgmp_pg:get_members(interactive)})};
-
-handle_event(internal, {types, []}, _, _) ->
-    {keep_state_and_data,
-     {{timeout, refresh}, timer:seconds(5), refresh}};
-
-handle_event(internal, {types, [MM | _]}, _, #{requests := Requests} = Data) ->
+handle_event(internal, refresh, _, #{requests := Requests} = Data) ->
     {keep_state,
-     Data#{requests := pgmp_mm:query(
-                         #{server_ref => MM,
-                           sql=> <<"select * from pg_catalog.pg_type">>,
+     Data#{requests := pgmp_connection_manager:query(
+                         #{sql=> <<"select * from pg_catalog.pg_type">>,
+                           label => types,
                            requests => Requests})}};
 
 handle_event(info, Msg, _, #{requests := Existing} = Data) ->
@@ -125,7 +119,7 @@ handle_event(info, Msg, _, #{requests := Existing} = Data) ->
     end;
 
 handle_event(internal,
-             {response, #{label := pgmp_mm, reply := Replies}},
+             {response, #{label := types, reply := Replies}},
              _,
              _) ->
     {keep_state_and_data, [nei(Reply) || Reply <- Replies]};
@@ -152,7 +146,8 @@ handle_event(internal,
              #{cache := Cache, columns := Names}) ->
     #{<<"oid">> := OID} = Row = maps:map(
                                   fun data_row/2,
-                                  maps:from_list(lists:zip(Names, Columns))),
+                                  maps:from_list(
+                                    lists:zip(Names, Columns))),
     ets:insert(Cache, {{type, OID}, maps:without([oid], Row)}),
     keep_state_and_data;
 

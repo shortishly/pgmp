@@ -121,10 +121,6 @@ init([]) ->
        outstanding => #{},
        connections => #{}}}.
 
-
-handle_event({call, _}, take, drained, _) ->
-    {keep_state_and_data, postpone};
-
 handle_event({call, {Owner, _} = From},
              {request, _} = Request,
              _,
@@ -177,6 +173,9 @@ handle_event({call, {Owner, _} = From},
                            from => From},
                          Requests),
            owners := Owners#{Owner => Connection}}};
+
+handle_event({call, _}, {request, _}, drained, _) ->
+    {keep_state_and_data, postpone};
 
 handle_event({call, {Connection, _} = From},
              {join, [_Group]},
