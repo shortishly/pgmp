@@ -102,8 +102,11 @@ decode(_,
 decode(_,
        text,
        _,
-       #{<<"typname">> := <<"int", _/bytes>>},
-       Encoded) ->
+       #{<<"typname">> := Name},
+       Encoded)
+  when Name == <<"int2">>;
+       Name == <<"int4">>;
+       Name == <<"int8">> ->
     binary_to_integer(Encoded);
 
 decode(_,
@@ -142,7 +145,7 @@ decode(_,
 
 %% src/backend/utils/adt/arrayfuncs.c#array_recv
 decode(Parameters,
-       binary = Format,
+       Format,
        Types,
        #{<<"typreceive">> := TypeReceive} = Type,
        Data) when TypeReceive == <<"array_recv">>;
@@ -375,26 +378,28 @@ encode(_, [], _, A) ->
 
 
 encode(Parameters,
-       binary = Format,
+       Format,
        Types,
-       #{<<"typsend">> := <<"array_send">>, <<"typelem">> := OID},
+       #{<<"typsend">> := <<"array_send">>,
+         <<"typelem">> := OID},
        L)
-  when is_list(L), OID /= 0 ->
-    case maps:find(OID, Types) of
-        {ok, Type} ->
-            array_send(Parameters, Format, Types, Type, L)
-    end;
+  when is_list(L),
+       OID /= 0 ->
+    {ok, Type} = maps:find(OID, Types),
+    array_send(Parameters, Format, Types, Type, L);
 
 encode(Parameters,
-       binary = Format,
+       Format,
        Types,
-       #{<<"typsend">> := <<"oidvectorsend">>, <<"typelem">> := OID},
+       #{<<"typsend">> := Send,
+         <<"typelem">> := OID},
        L)
-  when is_list(L), OID /= 0 ->
-    case maps:find(OID, Types) of
-        {ok, Type} ->
-            vector_send(Parameters, Format, Types, Type, L)
-    end;
+  when is_list(L),
+       OID /= 0,
+       Send == <<"int2vectorsend">>;
+       Send == <<"oidvectorsend">> ->
+    {ok, Type} = maps:find(OID, Types),
+    vector_send(Parameters, Format, Types, Type, L);
 
 encode(_, _, _, #{<<"typname">> := <<"bpchar">>}, Value) ->
     Value;
@@ -438,7 +443,9 @@ encode(#{<<"integer_datetimes">> := <<"on">>},
        _,
        #{<<"typname">> := <<"time">>},
        {Ho, Mi, Se}) ->
-    io_lib:format("~2..0b:~2..0b:~2..0b", [Ho, Mi, Se]);
+    io_lib:format(
+      "~2..0b:~2..0b:~2..0b",
+      [Ho, Mi, Se]);
 
 encode(#{<<"integer_datetimes">> := <<"on">>},
        binary,
@@ -479,7 +486,15 @@ encode(_,
        text,
        _,
        #{<<"typname">> := <<"uuid">>},
-       <<_:8/bytes, "-", _:4/bytes, "-", _:4/bytes, "-", _:4/bytes, "-", _:12/bytes>> = UUID) ->
+       <<_:8/bytes,
+         "-",
+         _:4/bytes,
+         "-",
+         _:4/bytes,
+         "-",
+         _:4/bytes,
+         "-",
+         _:12/bytes>> = UUID) ->
     UUID;
 
 encode(_, binary, _, #{<<"typname">> := <<"oid">>}, Value) ->
@@ -499,13 +514,32 @@ encode(_, text, _, #{<<"typname">> := <<"bit">>}, <<Value/bits>>) ->
 encode(_, text, _, #{<<"typname">> := <<"float", _/bytes>>}, Value) ->
     numeric(Value);
 
-encode(_, text, _, #{<<"typname">> := <<"int", _/bytes>>}, Value) ->
+encode(_, text, _, #{<<"typname">> := Name}, Value)
+  when Name == <<"int2">>;
+       Name == <<"int4">>;
+       Name == <<"int8">> ->
     integer_to_binary(Value);
 
-encode(_, binary, _, #{<<"typname">> := <<"int", R/bytes>>}, Value) ->
+encode(_, binary, _, #{<<"typname">> := Name}, Value)
+  when Name == <<"int2">>;
+       Name == <<"int4">>;
+       Name == <<"int8">> ->
+    <<"int", R/bytes>> = Name,
     marshal({int, binary_to_integer(R) * 8}, Value).
 
 
+vector_send(
+  Parameters,
+  text = Format,
+  Types,
+  Type,
+  L) ->
+    lists:join(
+      " ",
+      [encode(Parameters, Format, Types, Type, V) || V <- L]);
+
+
+%% must be 1-D, 0-based with no nulls
 vector_send(
   Parameters,
   binary = Format,
@@ -558,6 +592,18 @@ null_bitmap(L) ->
 
 
 array_recv(Parameters,
+           text = Format,
+           Types,
+           #{<<"typelem">> := OID},
+           Values) ->
+    {ok, Type} =  maps:find(OID, Types),
+    [decode(Parameters,
+            Format,
+            Types,
+            Type,
+            Value) || Value <- binary:split(Values, <<" ">>, [global])];
+
+array_recv(Parameters,
            binary = Format,
            Types,
            _,
@@ -588,11 +634,11 @@ array_recv(Parameters,
     lists:reverse(
       pgmp_binary:foldl(
         fun
-            (<<Length:32, Value:Length/bytes, R/bytes>>, A) ->
-                {R, [decode(Parameters, Format, Types, Type, Value) | A]};
+            (<<-1:32/signed, R/bytes>>, A) ->
+                {R, [null | A]};
 
-            (<<16#ffffffff:32, R/bytes>>, A) ->
-                {R, [null | A]}
+            (<<Length:32, Value:Length/bytes, R/bytes>>, A) ->
+                {R, [decode(Parameters, Format, Types, Type, Value) | A]}
         end,
         [],
         Data)).
