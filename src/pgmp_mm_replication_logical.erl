@@ -22,6 +22,8 @@
 -import(pgmp_codec, [marshal/2]).
 -import(pgmp_codec, [size_inclusive/1]).
 -import(pgmp_data_row, [decode/2]).
+-import(pgmp_statem, [cancel_generic_timeout/1]).
+-import(pgmp_statem, [generic_timeout/1]).
 -import(pgmp_statem, [nei/1]).
 -include_lib("kernel/include/logger.hrl").
 
@@ -39,20 +41,24 @@ handle_event(internal, {recv, {copy_both_response, _}}, _, _) ->
 
 handle_event(internal, {recv, {copy_data, {Tag, _} = TM}}, _, _)
   when Tag == keepalive; Tag == x_log_data ->
-    {keep_state_and_data, nei(TM)};
+    {keep_state_and_data,
+     [nei(TM),
+      generic_timeout(replication_ping),
+      cancel_generic_timeout(replication_ping_no_reply)]};
 
 handle_event(internal,
              {x_log_data,
-              #{clock := _Clock,
+              #{clock := Clock,
                 end_wal := EndWAL,
                 start_wal := StartWAL,
                 stream := {Command, Arg}} = XLog},
              _,
-             Data) ->
+             #{wal := WAL} = Data) ->
     {keep_state,
-     Data#{recevied => EndWAL,
-           flushed => EndWAL,
-           applied => StartWAL},
+     Data#{wal := WAL#{received := EndWAL,
+                       flushed := EndWAL,
+                       clock := Clock,
+                       applied := StartWAL}},
      nei({Command,
           Arg#{x_log => maps:with(
                           [clock,
@@ -160,9 +166,25 @@ handle_event(internal,
              {keepalive,
               #{clock := Clock,
                 end_wal := _,
-                reply := true = Reply}},
+                reply := true}},
+             _,
+             #{wal := WAL} = Data) ->
+    {keep_state,
+     Data#{wal := WAL#{clock := Clock}},
+     nei(ping)};
+
+handle_event(internal, {keepalive, _}, _, _) ->
+    keep_state_and_data;
+
+handle_event({timeout, replication_ping}, _, replication, _) ->
+    {keep_state_and_data,
+     [nei(ping), generic_timeout(replication_ping_no_reply)]};
+
+handle_event(internal,
+             ping,
              _,
              #{wal := #{received := ReceivedWAL,
+                        clock := Clock,
                         flushed :=  FlushedWAL,
                         applied := AppliedWAL}}) ->
     {keep_state_and_data,
@@ -171,10 +193,7 @@ handle_event(internal,
             flushed_wal => FlushedWAL,
             applied_wal => AppliedWAL,
             clock => Clock,
-            reply => Reply}})};
-
-handle_event(internal, {keepalive, _}, _, _) ->
-    keep_state_and_data;
+            reply => true}})};
 
 handle_event(internal,
              {response, #{label := Modification, reply := ok}},
@@ -187,15 +206,24 @@ handle_event(internal,
        keep_state_and_data;
 
 handle_event(internal,
+             {response,
+              #{label := snapshot_complete,
+                reply :=  {error, no_tables}}},
+             waiting_for_snapshot_completion,
+             _) ->
+    stop;
+
+handle_event(internal,
              {response, #{label := snapshot_complete, reply :=  ok}},
              waiting_for_snapshot_completion,
              Data) ->
     {next_state,
      replication,
      Data#{wal => #{received => 0,
+                    clock => 0,
                     flushed => 0,
                     applied => 0}},
-     nei(start_replication)};
+     [nei(start_replication), generic_timeout(replication_ping)]};
 
 handle_event(internal,
              {response, #{label := pgmp_types, reply := ready}},

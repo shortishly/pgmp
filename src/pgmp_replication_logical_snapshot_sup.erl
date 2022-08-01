@@ -33,7 +33,9 @@ init([#{ancestors := Ancestors} = Arg]) ->
 
 
 configuration(Children) ->
-    {#{intensity => length(Children), strategy => one_for_all}, Children}.
+    {#{intensity => length(Children),
+       auto_shutdown => any_significant,
+       strategy => one_for_all}, Children}.
 
 
 replication() ->
@@ -41,7 +43,10 @@ replication() ->
 
 
 children(Arg) ->
-    [worker(#{m => M, args => [Arg#{supervisor => self()}]}) || M <- workers()].
+    [worker(#{m => M,
+              restart => transient,
+              significant => true,
+              args => [Arg#{supervisor => self()}]}) || M <- workers()].
 
 
 workers() ->

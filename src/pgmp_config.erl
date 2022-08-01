@@ -23,6 +23,11 @@
 -export([pg/1]).
 -export([protocol/1]).
 -export([replication/2]).
+-export([timeout/1]).
+
+
+timeout(Name) ->
+    envy(to_integer_or_atom, [Name, timeout], infinity).
 
 
 enabled(Name) ->

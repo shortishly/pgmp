@@ -32,11 +32,16 @@ init([Arg]) ->
 
 configuration(Children) ->
     {#{intensity => length(Children),
+       auto_shutdown => any_significant,
        strategy => one_for_all},
      Children}.
 
 children(Arg) ->
     [supervisor(#{m => pgmp_replication_logical_stream_sup,
-                 args => [Arg]}),
+                  restart => transient,
+                  significant => true,
+                  args => [Arg]}),
      supervisor(#{m => pgmp_replication_logical_snapshot_sup,
-                 args => [Arg]})].
+                  restart => transient,
+                  significant => true,
+                  args => [Arg]})].

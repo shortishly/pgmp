@@ -37,8 +37,13 @@ init([Arg]) ->
 
 
 configuration(Children) ->
-    {#{intensity => length(Children)}, Children}.
+    {#{intensity => length(Children),
+       auto_shutdown => all_significant},
+     Children}.
 
 
 children(Arg) ->
-    [supervisor(#{m => pgmp_replication_logical_sup, args => [Arg]})].
+    [supervisor(#{m => pgmp_replication_logical_sup,
+                  restart => transient,
+                  significant => true,
+                  args => [Arg]})].

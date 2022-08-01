@@ -16,6 +16,8 @@
 -module(pgmp_statem).
 
 
+-export([cancel_generic_timeout/1]).
+-export([generic_timeout/1]).
 -export([nei/1]).
 -export([send_request/1]).
 
@@ -50,3 +52,15 @@ send_request(#{server_ref := ServerRef, request := Request}) ->
 
 nei(Event) ->
     {next_event, internal, Event}.
+
+
+generic_timeout(Name) ->
+    ?FUNCTION_NAME(Name, pgmp_config:timeout(Name)).
+
+
+cancel_generic_timeout(Name) ->
+    generic_timeout(Name, infinity).
+
+
+generic_timeout(Name, Timeout) ->
+    {{timeout, Name}, Timeout, Name}.

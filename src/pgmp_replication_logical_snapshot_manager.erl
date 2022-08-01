@@ -160,6 +160,13 @@ handle_event(internal,
 
 handle_event(internal,
              {response, #{label := sync_publication_tables,
+                          reply := [{command_complete, {select, 0}}]}},
+             _,
+             #{stream := Stream}) ->
+    {stop_and_reply, normal, {reply, Stream, {error, no_tables}}};
+
+handle_event(internal,
+             {response, #{label := sync_publication_tables,
                           reply := [{row_description, Columns} | T]}},
              _,
              Data) ->
