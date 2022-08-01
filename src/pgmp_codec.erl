@@ -262,19 +262,26 @@ demarshal(command_complete, Decoded, Remainder) ->
 
 demarshal(authentication, 0, R) ->
     {authenticated, R};
+
 demarshal(authentication, 2, R) ->
     {kerberos, R};
+
 demarshal(authentication, 3, R) ->
     {clear_text_password, R};
+
 demarshal(authentication, 5, R0) ->
     {Salt, R1} = ?FUNCTION_NAME({byte, 4}, R0),
     {{md5_password, Salt}, R1};
+
 demarshal(authentication, 6, R) ->
     {scm_credentials, R};
+
 demarshal(authentication, 7, R) ->
     {gss, R};
+
 demarshal(authentication, 9, R) ->
     {sspi, R};
+
 demarshal(authentication, 10, R) ->
     {{sasl,
      lists:reverse(
@@ -370,6 +377,7 @@ size_inclusive(Data) ->
 
 size_exclusive(Data) ->
     [marshal(int32, iolist_size(Data)), Data].
+
 
 marshal(string, Value) ->
     [Value, <<0:8>>];

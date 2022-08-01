@@ -46,20 +46,28 @@ handle_event(internal,
               #{clock := _Clock,
                 end_wal := EndWAL,
                 start_wal := StartWAL,
-                stream := Stream}},
+                stream := {Command, Arg}} = XLog},
              _,
              Data) ->
     {keep_state,
      Data#{recevied => EndWAL,
            flushed => EndWAL,
            applied => StartWAL},
-     nei(Stream)};
+     nei({Command,
+          Arg#{x_log => maps:with(
+                          [clock,
+                           end_wal,
+                           start_wal],
+                          XLog)}})};
 
 handle_event(internal, {begin_transaction, _}, _, _) ->
     keep_state_and_data;
 
 handle_event(internal,
-             {insert = Modification, #{relation := Relation, tuple := Values}},
+             {insert = Modification,
+              #{relation := Relation,
+                x_log := XLog,
+                tuple := Values}},
              _,
              #{config := #{manager := Manager},
                requests := Requests,
@@ -71,11 +79,15 @@ handle_event(internal,
                          #{server_ref => Manager,
                            relation => Table,
                            requests => Requests,
+                           x_log => XLog,
                            label => Modification,
                            tuple => row_tuple(Parameters, Columns, Values)})}};
 
 handle_event(internal,
-             {update = Modification, #{relation := Relation, new := Values}},
+             {update = Modification,
+              #{relation := Relation,
+                x_log := XLog,
+                new := Values}},
              _,
              #{config := #{manager := Manager},
                requests := Requests,
@@ -87,11 +99,15 @@ handle_event(internal,
                          #{server_ref => Manager,
                            relation => Table,
                            requests => Requests,
+                           x_log => XLog,
                            label => Modification,
                            tuple => row_tuple(Parameters, Columns, Values)})}};
 
 handle_event(internal,
-             {delete = Modification, #{relation := Relation, key := Values}},
+             {delete = Modification,
+              #{relation := Relation,
+                x_log := XLog,
+                key := Values}},
              _,
              #{config := #{manager := Manager},
                requests := Requests,
@@ -103,11 +119,14 @@ handle_event(internal,
                          #{server_ref => Manager,
                            relation => Table,
                            requests => Requests,
+                           x_log => XLog,
                            label => Modification,
                            tuple => row_tuple(Parameters, Columns, Values)})}};
 
 handle_event(internal,
-             {truncate = Modification, #{relations := Truncates}},
+             {truncate = Modification,
+              #{x_log := XLog,
+                relations := Truncates}},
              _,
              #{config := #{manager := Manager},
                requests := Requests,
@@ -124,6 +143,7 @@ handle_event(internal,
                          #{server_ref => Manager,
                            relations => Names,
                            requests => Requests,
+                           x_log => XLog,
                            label => Modification})}};
 
 handle_event(internal,
@@ -135,7 +155,6 @@ handle_event(internal,
 
 handle_event(internal, {commit, _}, _, _) ->
     keep_state_and_data;
-
 
 handle_event(internal,
              {keepalive,
@@ -305,7 +324,7 @@ handle_event(internal,
 
 handle_event(internal, {query, [SQL]}, _, _) ->
     {keep_state_and_data,
-     nei({send, [<<$Q>>, size_inclusive([marshal(string, SQL)])]})};
+     nei({send, ["Q", size_inclusive([marshal(string, SQL)])]})};
 
 handle_event(internal,
              {standby_status_update,
@@ -318,7 +337,7 @@ handle_event(internal,
              _) ->
     {keep_state_and_data,
      nei({send,
-          [<<$d>>,
+          ["d",
            size_inclusive(
              ["r",
               <<ReceivedWAL:64,

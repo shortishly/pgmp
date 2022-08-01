@@ -33,7 +33,6 @@
 -export([server_key/2]).
 -export([server_signature/3]).
 -export([stored_key/2]).
--import(pgmp_codec, [demarshal/1]).
 -import(pgmp_codec, [marshal/2]).
 -import(pgmp_codec, [size_inclusive/1]).
 -import(pgmp_statem, [nei/1]).
@@ -64,9 +63,9 @@ handle_event(internal,
     {keep_state,
      Data#{sasl => #{mechanism => Mechanism}},
      nei({send,
-          [<<$p>>,
+          ["p",
            size_inclusive(
-             [marshal(string, Mechanism), marshal({int, 32}, -1)])]})};
+             [marshal(string, Mechanism), marshal(int32, -1)])]})};
 
 handle_event(internal,
              {recv, {authentication, {sasl_continue, Encoded}}},
@@ -147,7 +146,7 @@ handle_event(
     {keep_state,
      Data#{sasl := SASL#{server => Server}},
      nei({send,
-          [<<$p>>,
+          ["p",
            size_inclusive(
              [marshal(
                 byte,
@@ -165,7 +164,7 @@ handle_event(internal,
     {keep_state,
      Data#{sasl := SASL#{client => #{header => Header, nonce => Nonce}}},
      nei({send,
-          [<<$p>>,
+          ["p",
            size_inclusive(
              [marshal(
                 byte,

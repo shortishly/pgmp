@@ -19,7 +19,6 @@
 -export([callback_mode/0]).
 -export([handle_event/4]).
 -export([terminate/3]).
--import(pgmp_codec, [demarshal/1]).
 -import(pgmp_codec, [marshal/2]).
 -import(pgmp_codec, [size_inclusive/1]).
 -import(pgmp_data_row, [decode/2]).
@@ -28,6 +27,9 @@
 -import(pgmp_mm_common, [field_names/1]).
 -import(pgmp_statem, [nei/1]).
 -include_lib("kernel/include/logger.hrl").
+
+
+%% https://www.postgresql.org/docs/current/protocol-flow.html#PROTOCOL-FLOW-EXT-QUERY
 
 
 callback_mode() ->
@@ -64,11 +66,11 @@ handle_event({call, _}, {request, _}, _, _) ->
 
 handle_event(internal, flush, _, _) ->
     {keep_state_and_data,
-     nei({send, [<<$H>>, size_inclusive([])]})};
+     nei({send, ["H", size_inclusive([])]})};
 
 handle_event(internal, sync, _, _) ->
     {keep_state_and_data,
-     [nei({send, [<<$S>>, size_inclusive([])]}), nei(gc_unnamed_portal)]};
+     [nei({send, ["S", size_inclusive([])]}), nei(gc_unnamed_portal)]};
 
 handle_event(internal, gc_unnamed_portal, _, #{cache := Cache}) ->
     ets:delete(Cache, {parameter_description, <<>>}),
@@ -77,7 +79,7 @@ handle_event(internal, gc_unnamed_portal, _, #{cache := Cache}) ->
 
 handle_event(internal, {describe, [What, Name]}, _, _) ->
     {keep_state_and_data,
-     nei({send, [<<$D>>, size_inclusive([What, marshal(string, Name)])]})};
+     nei({send, ["D", size_inclusive([What, marshal(string, Name)])]})};
 
 handle_event(internal, {describe_statement, Statement}, unsynchronized, Data) ->
     Args = [$S, Statement],
@@ -96,11 +98,11 @@ handle_event(internal, {describe_portal, Portal}, unsynchronized, Data) ->
 handle_event(internal, {parse, [Name, SQL]}, _, _) ->
     {keep_state_and_data,
      nei({send,
-          [<<$P>>,
+          ["P",
            size_inclusive(
              [marshal(string, Name),
               marshal(string, SQL),
-              marshal({int, 16}, 0)])]})};
+              marshal(int16, 0)])]})};
 
 handle_event(internal,
              {bind, [Portal, Statement, Values]},
@@ -113,21 +115,21 @@ handle_event(internal,
                length(Types) == 0 ->
             {keep_state_and_data,
              nei({send,
-                  [<<$B>>,
+                  ["B",
                    size_inclusive(
                      [marshal(string, Portal),
                       marshal(string, Statement),
-                      marshal({int, 16}, 0),
-                      marshal({int, 16}, length(Values)),
-                      marshal({int, 16}, 1),
-                      marshal({int, 16}, 1)])]})};
+                      marshal(int16, 0),
+                      marshal(int16, length(Values)),
+                      marshal(int16, 1),
+                      marshal(int16, 1)])]})};
 
         [{_, Types}]
           when length(Types) == length(Values),
                length(Types) > 0 ->
             {keep_state_and_data,
              nei({send,
-                  [<<$B>>,
+                  ["B",
                    size_inclusive(
                      [marshal(string, Portal),
                       marshal(string, Statement),
@@ -159,10 +161,10 @@ handle_event(internal,
 handle_event(internal, {execute, [Portal, MaxRows]}, _, _) ->
     {keep_state_and_data,
      nei({send,
-          [<<$E>>,
+          ["E",
            size_inclusive(
              [marshal(string, Portal),
-              marshal({int, 32}, MaxRows)])]})};
+              marshal(int32, MaxRows)])]})};
 
 handle_event(internal, {recv, {ready_for_query, _} = TM}, unsynchronized, Data) ->
     {next_state, TM, Data, pop_callback_module};

@@ -25,11 +25,7 @@
 -export([query/1]).
 -export([recv/1]).
 -export([start_link/1]).
--export([start_replication/1]).
 -export([terminate/3]).
--import(pgmp_codec, [demarshal/1]).
--import(pgmp_codec, [marshal/2]).
--import(pgmp_data_row, [decode/2]).
 -import(pgmp_statem, [nei/1]).
 -import(pgmp_statem, [send_request/1]).
 -include_lib("kernel/include/logger.hrl").
@@ -44,10 +40,6 @@ recv(#{tag := Tag, message := Message} = Arg) ->
       maps:without(
         [tag, message],
         maybe_label(Arg#{request => {?FUNCTION_NAME, {Tag, Message}}}))).
-
-
-start_replication(Arg) ->
-    send_request(Arg, ?FUNCTION_NAME, []).
 
 
 query(Arg) ->

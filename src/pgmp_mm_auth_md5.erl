@@ -18,7 +18,6 @@
 
 -export([callback_mode/0]).
 -export([handle_event/4]).
--import(pgmp_codec, [demarshal/1]).
 -import(pgmp_codec, [marshal/2]).
 -import(pgmp_codec, [size_inclusive/1]).
 -import(pgmp_statem, [nei/1]).
@@ -49,7 +48,7 @@ handle_event(internal,
     %% src/interfaces/libpq/fe-auth.c
     {keep_state_and_data,
      nei({send,
-          [<<$p>>,
+          ["p",
            size_inclusive(
              marshal(
                string,

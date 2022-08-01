@@ -105,7 +105,7 @@ handle_event(internal,
 
 handle_event(internal, terminate, _, _) ->
     {keep_state_and_data,
-     nei({send, [<<$X>>, size_inclusive([])]})};
+     nei({send, ["X", size_inclusive([])]})};
 
 handle_event(internal, {recv, {notice_response, _} = TM}, query, _) ->
     {keep_state_and_data, nei({process, TM})};

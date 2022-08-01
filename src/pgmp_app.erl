@@ -22,11 +22,9 @@
 -include_lib("kernel/include/logger.hrl").
 
 
-start(Type, Args) ->
-    ?LOG_DEBUG(#{type => Type, args => Args}),
+start(_Type, _Args) ->
     pgmp_sup:start_link().
 
 
-stop(State) ->
-    ?LOG_DEBUG(#{state => State}),
+stop(_State) ->
     ok.

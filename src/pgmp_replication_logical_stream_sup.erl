@@ -19,7 +19,6 @@
 -behaviour(supervisor).
 -export([init/1]).
 -export([start_link/1]).
--import(pgmp_sup, [supervisor/1]).
 -import(pgmp_sup, [worker/1]).
 
 

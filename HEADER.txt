@@ -11,16 +11,3 @@
 %% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 %% See the License for the specific language governing permissions and
 %% limitations under the License.
-
-
--module(pgmp_replication_locical).
-
--type result() :: ok | {error, term()}.
-
--callback snapshot(Id :: binary()) -> result().
--callback begin_transaction() -> result().
--callback insert(Table :: binary(), Row :: tuple()) -> result().
--callback update(Table :: binary(), Row :: tuple()) -> result().
--callback delete(Table :: binary(), Row :: tuple()) -> result().
--callback truncate(Table :: [binary()]) -> result().
--callback commit() -> result().

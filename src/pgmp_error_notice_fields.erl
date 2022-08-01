@@ -20,7 +20,6 @@
 -export([init/1]).
 -export([name/1]).
 -export([start_link/0]).
--import(pgmp_statem, [nei/1]).
 -include_lib("stdlib/include/ms_transform.hrl").
 
 

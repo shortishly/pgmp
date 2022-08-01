@@ -19,10 +19,8 @@
 -export([callback_mode/0]).
 -export([handle_event/4]).
 -export([terminate/3]).
--import(pgmp_codec, [demarshal/1]).
 -import(pgmp_codec, [marshal/2]).
 -import(pgmp_codec, [size_inclusive/1]).
--import(pgmp_data_row, [decode/2]).
 -import(pgmp_statem, [nei/1]).
 -include_lib("kernel/include/logger.hrl").
 
@@ -120,7 +118,7 @@ handle_event(internal,
     {keep_state_and_data,
      nei({send,
           size_inclusive(
-            [marshal({int, 32}, version()),
+            [marshal(int32, version()),
              maps:fold(
                fun
                    (K, V, A) ->

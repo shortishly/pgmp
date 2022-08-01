@@ -43,28 +43,28 @@ snapshot(#{id := Id} = Arg) ->
 insert(#{relation := Relation, tuple := Tuple} = Arg) ->
     send_request(
       maps:without(
-        [table, tuple],
+        [table, tuple, x_log],
         Arg#{request => {?FUNCTION_NAME, Relation, Tuple}})).
 
 
 update(#{relation := Relation, tuple := Tuple} = Arg) ->
     send_request(
       maps:without(
-        [table, tuple],
+        [table, tuple, x_log],
         Arg#{request => {?FUNCTION_NAME, Relation, Tuple}})).
 
 
 delete(#{relation := Relation, tuple := Tuple} = Arg) ->
     send_request(
       maps:without(
-        [table, tuple],
+        [table, tuple, x_log],
         Arg#{request => {?FUNCTION_NAME, Relation, Tuple}})).
 
 
 truncate(#{relations := Relations} = Arg) ->
     send_request(
       maps:without(
-        [table, tuple],
+        [table, tuple, x_log],
         Arg#{request => {?FUNCTION_NAME, Relations}})).
 
 

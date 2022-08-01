@@ -21,7 +21,6 @@
 -export([name/2]).
 -export([start/0]).
 -export([start_link/0]).
--import(pgmp_statem, [nei/1]).
 -include_lib("stdlib/include/ms_transform.hrl").
 
 

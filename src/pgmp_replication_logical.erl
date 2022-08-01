@@ -13,26 +13,15 @@
 %% limitations under the License.
 
 
--module(pgmp_database_sup).
+-module(pgmp_replication_logical).
 
 
--behaviour(supervisor).
--export([init/1]).
--export([start_link/0]).
--import(pgmp_sup, [supervisor/1]).
+-type result() :: ok | {error, term()}.
 
-
-start_link() ->
-    supervisor:start_link(?MODULE, []).
-
-
-init([]) ->
-    {ok, configuration()}.
-
-
-configuration() ->
-    {#{intensity => 5}, children()}.
-
-
-children() ->
-    [supervisor(pgmp_connection_sup)].
+-callback snapshot(Id :: binary()) -> result().
+-callback begin_transaction() -> result().
+-callback insert(Table :: binary(), Row :: tuple()) -> result().
+-callback update(Table :: binary(), Row :: tuple()) -> result().
+-callback delete(Table :: binary(), Row :: tuple()) -> result().
+-callback truncate(Table :: [binary()]) -> result().
+-callback commit() -> result().
