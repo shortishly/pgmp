@@ -13,7 +13,7 @@
 %% limitations under the License.
 
 
--module(pgmp_replication_logical_snapshot_manager).
+-module(pgmp_rep_log_snapshot_manager).
 
 
 -export([callback_mode/0]).
@@ -133,7 +133,8 @@ handle_event(internal,
              {response, #{reply := [{command_complete, commit}]}},
              _,
              #{stream := Stream} = Data) ->
-    {keep_state,
+    {next_state,
+     ready,
      maps:without([stream], Data),
      {reply, Stream, ok}};
 
@@ -142,13 +143,9 @@ handle_event(internal,
               #{label := sync_publication_tables = Label,
                 reply := [{parse_complete, []}]}},
              _,
-             _) ->
+             #{config := #{publication := Publication}}) ->
     {keep_state_and_data,
-     nei({bind,
-          #{label => Label,
-            args => [pgmp_config:replication(
-                       logical,
-                       publication_names)]}})};
+     nei({bind, #{label => Label, args => [Publication]}})};
 
 handle_event(internal,
              {response,
@@ -179,7 +176,6 @@ handle_event(internal,
                nei({fetch, maps:from_list(lists:zip(Columns, Values))})
        end,
        lists:droplast(T))};
-%%       lists:droplast(T)) ++ [nei(commit)]};
 
 handle_event(internal,
              {fetch, #{<<"schemaname">> := Schema, <<"tablename">> := Table}},

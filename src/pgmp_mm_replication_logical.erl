@@ -81,7 +81,7 @@ handle_event(internal,
                parameters := Parameters} = Data) ->
     #{Relation := #{columns := Columns, name := Table}} = Relations,
     {keep_state,
-     Data#{requests => pgmp_replication_logical_snapshot_manager:insert(
+     Data#{requests => pgmp_rep_log_snapshot_manager:insert(
                          #{server_ref => Manager,
                            relation => Table,
                            requests => Requests,
@@ -101,7 +101,7 @@ handle_event(internal,
                parameters := Parameters} = Data) ->
     #{Relation := #{columns := Columns, name := Table}} = Relations,
     {keep_state,
-     Data#{requests => pgmp_replication_logical_snapshot_manager:update(
+     Data#{requests => pgmp_rep_log_snapshot_manager:update(
                          #{server_ref => Manager,
                            relation => Table,
                            requests => Requests,
@@ -121,7 +121,7 @@ handle_event(internal,
                parameters := Parameters} = Data) ->
     #{Relation := #{columns := Columns, name := Table}} = Relations,
     {keep_state,
-     Data#{requests => pgmp_replication_logical_snapshot_manager:delete(
+     Data#{requests => pgmp_rep_log_snapshot_manager:delete(
                          #{server_ref => Manager,
                            relation => Table,
                            requests => Requests,
@@ -145,7 +145,7 @@ handle_event(internal,
               end,
               Truncates),
     {keep_state,
-     Data#{requests => pgmp_replication_logical_snapshot_manager:truncate(
+     Data#{requests => pgmp_rep_log_snapshot_manager:truncate(
                          #{server_ref => Manager,
                            relations => Names,
                            requests => Requests,
@@ -254,14 +254,9 @@ handle_event(internal,
              snapshot_manager,
              _,
              #{config := Config, ancestors :=  [_, LogicalSup]} = Data) ->
-
-    {_, SnapSup, supervisor, _} =  pgmp_sup:get_child(
-                                     LogicalSup,
-                                     replication_logical_snapshot_sup),
-
     {_, SnapMan, worker, _} = pgmp_sup:get_child(
-                                SnapSup,
-                                replication_logical_snapshot_manager),
+                                LogicalSup,
+                                rep_log_snapshot_manager),
     {keep_state, Data#{config := Config#{manager => SnapMan}}};
 
 handle_event(internal, identify_system, _, _) ->
@@ -290,7 +285,7 @@ handle_event(
     replication_slot := #{<<"snapshot_name">> := Snapshot}} = Data) ->
     {next_state,
      waiting_for_snapshot_completion,
-     Data#{requests := pgmp_replication_logical_snapshot_manager:snapshot(
+     Data#{requests := pgmp_rep_log_snapshot_manager:snapshot(
                          #{server_ref => Manager,
                            label => snapshot_complete,
                            id => Snapshot,
@@ -300,19 +295,28 @@ handle_event(internal, create_replication_slot = Command, _, _) ->
     {keep_state_and_data,
      nei({Command, pgmp_config:replication(logical, slot_name)})};
 
-handle_event(internal, {create_replication_slot, SlotName}, _, _) ->
+handle_event(internal,
+             {create_replication_slot, SlotName},
+             _,
+             #{config := #{publication := Publication}}) ->
     {keep_state_and_data,
      nei({query,
           [iolist_to_binary(
              io_lib:format(
                <<"CREATE_REPLICATION_SLOT ~s TEMPORARY LOGICAL pgoutput">>,
-               [SlotName]))]})};
+               [iolist_to_binary(
+                  lists:join(
+                    "_",
+                    [SlotName, Publication]))]))]})};
 
-handle_event(internal, start_replication, _, _Data) ->
+handle_event(internal,
+             start_replication,
+             _,
+             #{config := #{publication := Publication}}) ->
     {keep_state_and_data,
      nei({start_replication,
           pgmp_config:replication(logical, proto_version),
-          pgmp_config:replication(logical, publication_names)})};
+          Publication})};
 
 handle_event(internal,
              {start_replication, ProtoVersion, PublicationNames},

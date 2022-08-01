@@ -13,7 +13,7 @@
 %% limitations under the License.
 
 
--module(pgmp_replication_logical_sup).
+-module(pgmp_rep_sup).
 
 
 -behaviour(supervisor).
@@ -27,21 +27,34 @@ start_link(#{} = Arg) ->
 
 
 init([Arg]) ->
-    {ok, configuration(children(Arg#{ancestors => [self()]}))}.
+    case pgmp_config:enabled(pgmp_replication) of
+        true ->
+            {ok, configuration(children(Arg))};
+
+        false ->
+            ignore
+    end.
 
 
 configuration(Children) ->
     {#{intensity => length(Children),
-       auto_shutdown => any_significant,
-       strategy => one_for_all},
+       auto_shutdown => all_significant},
      Children}.
 
-children(Arg) ->
-    [supervisor(#{m => pgmp_replication_logical_stream_sup,
+
+children(#{config := Config} = Arg) ->
+    lists:map(
+      fun
+          (Pub) ->
+              supervisor(
+                #{id => Pub,
+                  m => pgmp_rep_log_sup,
                   restart => transient,
                   significant => true,
-                  args => [Arg]}),
-     supervisor(#{m => pgmp_replication_logical_snapshot_sup,
-                  restart => transient,
-                  significant => true,
-                  args => [Arg]})].
+                  args => [Arg#{config := Config#{publication => Pub}}]})
+      end,
+      binary:split(
+        pgmp_config:replication(
+          logical, publication_names),
+        <<",">>,
+        [global, trim_all])).

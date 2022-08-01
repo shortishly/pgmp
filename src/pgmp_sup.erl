@@ -40,8 +40,8 @@ children() ->
     [worker(#{m => pg, args => [pgmp_config:pg(scope)]}),
      worker(pgmp_message_tags),
      worker(pgmp_error_notice_fields),
-     supervisor(#{m => pgmp_interactive_sup, args => [config()]}),
-     supervisor(#{m => pgmp_replication_sup,
+     supervisor(#{m => pgmp_int_sup, args => [config()]}),
+     supervisor(#{m => pgmp_rep_sup,
                   restart => transient,
                   args => [config()]})].
 

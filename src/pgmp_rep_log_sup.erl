@@ -13,40 +13,37 @@
 %% limitations under the License.
 
 
--module(pgmp_replication_logical_stream_sup).
+-module(pgmp_rep_log_sup).
 
 
 -behaviour(supervisor).
 -export([init/1]).
 -export([start_link/1]).
+-import(pgmp_sup, [supervisor/1]).
 -import(pgmp_sup, [worker/1]).
 
 
-start_link(#{config := Config} = Arg) ->
-    supervisor:start_link(
-      ?MODULE,
-      [Arg#{config := Config#{replication => fun replication/0}}]).
+start_link(#{} = Arg) ->
+    supervisor:start_link(?MODULE, [Arg]).
 
 
-init([#{ancestors := Ancestors} = Arg]) ->
-    {ok, configuration(children(Arg#{ancestors := [self() | Ancestors]}))}.
+init([Arg]) ->
+    {ok, configuration(children(Arg#{ancestors => [self()]}))}.
 
 
 configuration(Children) ->
     {#{intensity => length(Children),
        auto_shutdown => any_significant,
-       strategy => one_for_all}, Children}.
-
-
-replication() ->
-    <<"database">>.
+       strategy => one_for_all},
+     Children}.
 
 children(Arg) ->
-    [worker(#{m => M,
+    [supervisor(#{m => pgmp_rep_log_stream_sup,
+                  restart => transient,
+                  significant => true,
+                  args => [Arg]}),
+
+     worker(#{m => pgmp_rep_log_snapshot_manager,
               restart => transient,
               significant => true,
-              args => [Arg#{supervisor => self()}]}) || M <- workers()].
-
-
-workers() ->
-    [pgmp_socket, pgmp_mm].
+              args => [Arg]})].

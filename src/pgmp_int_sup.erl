@@ -13,13 +13,14 @@
 %% limitations under the License.
 
 
--module(pgmp_replication_sup).
+-module(pgmp_int_sup).
 
 
 -behaviour(supervisor).
 -export([init/1]).
 -export([start_link/1]).
 -import(pgmp_sup, [supervisor/1]).
+-import(pgmp_sup, [worker/1]).
 
 
 start_link(#{} = Arg) ->
@@ -27,23 +28,14 @@ start_link(#{} = Arg) ->
 
 
 init([Arg]) ->
-    case pgmp_config:enabled(pgmp_replication) of
-        true ->
-            {ok, configuration(children(Arg))};
-
-        false ->
-            ignore
-    end.
+    {ok, configuration(children(Arg))}.
 
 
 configuration(Children) ->
-    {#{intensity => length(Children),
-       auto_shutdown => all_significant},
-     Children}.
+    {#{intensity => length(Children), strategy => one_for_all}, Children}.
 
 
 children(Arg) ->
-    [supervisor(#{m => pgmp_replication_logical_sup,
-                  restart => transient,
-                  significant => true,
-                  args => [Arg]})].
+    [worker(pgmp_connection),
+     supervisor(#{m => pgmp_pool_sup, args => [Arg]}),
+     worker(pgmp_types)].

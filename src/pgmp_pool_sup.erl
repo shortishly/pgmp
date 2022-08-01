@@ -13,41 +13,28 @@
 %% limitations under the License.
 
 
--module(pgmp_replication_logical_snapshot_sup).
+-module(pgmp_pool_sup).
 
 
 -behaviour(supervisor).
 -export([init/1]).
 -export([start_link/1]).
--import(pgmp_sup, [worker/1]).
+-import(pgmp_sup, [supervisor/1]).
 
 
-start_link(#{config := Config} = Arg) ->
-    supervisor:start_link(
-      ?MODULE,
-      [Arg#{config := Config#{replication => fun replication/0}}]).
+start_link(Arg) ->
+    supervisor:start_link(?MODULE, [Arg]).
 
 
-init([#{ancestors := Ancestors} = Arg]) ->
-    {ok, configuration(children(Arg#{ancestors := [self() | Ancestors]}))}.
+init([Arg]) ->
+    {ok, configuration(children(Arg))}.
 
 
 configuration(Children) ->
-    {#{intensity => length(Children),
-       auto_shutdown => any_significant,
-       strategy => one_for_all}, Children}.
-
-
-replication() ->
-    <<"false">>.
+    {#{intensity => length(Children), strategy => one_for_all}, Children}.
 
 
 children(Arg) ->
-    [worker(#{m => M,
-              restart => transient,
-              significant => true,
-              args => [Arg#{supervisor => self()}]}) || M <- workers()].
-
-
-workers() ->
-    [pgmp_replication_logical_snapshot_manager].
+    [supervisor(#{id => Id,
+                  m => pgmp_pool_connection_sup,
+                  args => [Arg#{supervisor => self()}]}) || Id <- lists:seq(1, 5)].
