@@ -71,7 +71,7 @@ handle_event(internal,
                config := #{group := Group}} = Data) ->
     pgmp_pg:join(Group),
     {keep_state,
-     Data#{requests := pgmp_connection_manager:join(
+     Data#{requests := pgmp_connection:join(
                          #{group => Group,
                            requests => Requests})}};
 

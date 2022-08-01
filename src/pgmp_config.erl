@@ -54,7 +54,7 @@ replication(logical = Type, proto_version = Name) ->
     envy(to_integer, [?FUNCTION_NAME, Type, Name], 2);
 
 replication(logical = Type, publication_names = Name) ->
-    envy(to_list, [?FUNCTION_NAME, Type, Name], "pub").
+    envy(to_binary, [?FUNCTION_NAME, Type, Name], <<"pub">>).
 
 
 database(options = Name) ->

@@ -82,7 +82,7 @@ handle_event(internal,
     keep_state_and_data;
 
 handle_event(internal,
-             {response, #{label := pgmp_connection_manager,
+             {response, #{label := pgmp_connection,
                           reply := ok}},
              _,
              _) ->
@@ -139,7 +139,7 @@ handle_event(enter,
         socket,
         supervisor,
         types_ready],
-       Data#{requests => pgmp_connection_manager:ready_for_query(
+       Data#{requests => pgmp_connection:ready_for_query(
                            #{state => State,
                              requests => Requests})})};
 

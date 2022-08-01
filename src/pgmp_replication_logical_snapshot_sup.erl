@@ -46,4 +46,4 @@ children(Arg) ->
 
 
 workers() ->
-    [pgmp_socket, pgmp_mm, pgmp_replication_logical_snapshot_manager].
+    [pgmp_replication_logical_snapshot_manager].

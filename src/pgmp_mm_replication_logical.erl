@@ -19,11 +19,9 @@
 -export([callback_mode/0]).
 -export([handle_event/4]).
 -export([terminate/3]).
--import(pgmp_codec, [demarshal/1]).
 -import(pgmp_codec, [marshal/2]).
 -import(pgmp_codec, [size_inclusive/1]).
 -import(pgmp_data_row, [decode/2]).
--import(pgmp_mm_common, [field_names/1]).
 -import(pgmp_statem, [nei/1]).
 -include_lib("kernel/include/logger.hrl").
 
@@ -36,17 +34,6 @@ terminate(Reason, State, Data) ->
     pgmp_mm_common:terminate(Reason, State, Data).
 
 
-handle_event({call, From},
-             {request, #{action := start_replication}},
-             waiting_for_snapshot_completion,
-             Data) ->
-    {next_state,
-     replication,
-     Data#{wal => #{received => 0,
-                    flushed => 0,
-                    applied => 0}},
-     [nei(start_replication), {reply, From, ok}]};
-
 handle_event(internal, {recv, {copy_both_response, _}}, _, _) ->
     keep_state_and_data;
 
@@ -54,88 +41,90 @@ handle_event(internal, {recv, {copy_data, {Tag, _} = TM}}, _, _)
   when Tag == keepalive; Tag == x_log_data ->
     {keep_state_and_data, nei(TM)};
 
-handle_event(internal, {x_log_data, #{stream := Stream}}, _, _) ->
-    {keep_state_and_data, nei(Stream)};
+handle_event(internal,
+             {x_log_data,
+              #{clock := _Clock,
+                end_wal := EndWAL,
+                start_wal := StartWAL,
+                stream := Stream}},
+             _,
+             Data) ->
+    {keep_state,
+     Data#{recevied => EndWAL,
+           flushed => EndWAL,
+           applied => StartWAL},
+     nei(Stream)};
 
 handle_event(internal, {begin_transaction, _}, _, _) ->
     keep_state_and_data;
 
 handle_event(internal,
-             {insert, #{relation := Relation, tuple := Values}},
+             {insert = Modification, #{relation := Relation, tuple := Values}},
              _,
-             #{relations := Relations, parameters := Parameters}) ->
+             #{config := #{manager := Manager},
+               requests := Requests,
+               relations := Relations,
+               parameters := Parameters} = Data) ->
     #{Relation := #{columns := Columns, name := Table}} = Relations,
-    ets:insert_new(
-      binary_to_atom(Table),
-      list_to_tuple(
-        pgmp_data_row:decode(
-          Parameters,
-          lists:map(
-            fun
-                ({#{type := Type}, null = Value}) ->
-                    {#{format => text, type_oid => Type}, Value};
-
-                ({#{type := Type}, #{format := Format, value := Value}}) ->
-                    {#{format => Format, type_oid => Type}, Value}
-            end,
-            lists:zip(Columns, Values))))),
-    keep_state_and_data;
-
+    {keep_state,
+     Data#{requests => pgmp_replication_logical_snapshot_manager:insert(
+                         #{server_ref => Manager,
+                           relation => Table,
+                           requests => Requests,
+                           label => Modification,
+                           tuple => row_tuple(Parameters, Columns, Values)})}};
 
 handle_event(internal,
-             {update, #{relation := Relation, new := Values}},
+             {update = Modification, #{relation := Relation, new := Values}},
              _,
-             #{relations := Relations, parameters := Parameters}) ->
+             #{config := #{manager := Manager},
+               requests := Requests,
+               relations := Relations,
+               parameters := Parameters} = Data) ->
     #{Relation := #{columns := Columns, name := Table}} = Relations,
-    ets:insert(
-      binary_to_atom(Table),
-      list_to_tuple(
-        pgmp_data_row:decode(
-          Parameters,
-          lists:map(
-            fun
-                ({#{type := Type}, null = Value}) ->
-                    {#{format => text, type_oid => Type}, Value};
-
-                ({#{type := Type}, #{format := Format, value := Value}}) ->
-                    {#{format => Format, type_oid => Type}, Value}
-            end,
-            lists:zip(Columns, Values))))),
-    keep_state_and_data;
-
+    {keep_state,
+     Data#{requests => pgmp_replication_logical_snapshot_manager:update(
+                         #{server_ref => Manager,
+                           relation => Table,
+                           requests => Requests,
+                           label => Modification,
+                           tuple => row_tuple(Parameters, Columns, Values)})}};
 
 handle_event(internal,
-             {delete, #{relation := Relation, key := Values}},
+             {delete = Modification, #{relation := Relation, key := Values}},
              _,
-             #{relations := Relations, parameters := Parameters}) ->
+             #{config := #{manager := Manager},
+               requests := Requests,
+               relations := Relations,
+               parameters := Parameters} = Data) ->
     #{Relation := #{columns := Columns, name := Table}} = Relations,
-    ets:delete(
-      binary_to_atom(Table),
-      hd(pgmp_data_row:decode(
-          Parameters,
-          lists:map(
-            fun
-                ({#{type := Type}, null = Value}) ->
-                    {#{format => text, type_oid => Type}, Value};
-
-                ({#{type := Type}, #{format := Format, value := Value}}) ->
-                    {#{format => Format, type_oid => Type}, Value}
-            end,
-            lists:zip([hd(Columns)], [hd(Values)]))))),
-    keep_state_and_data;
+    {keep_state,
+     Data#{requests => pgmp_replication_logical_snapshot_manager:delete(
+                         #{server_ref => Manager,
+                           relation => Table,
+                           requests => Requests,
+                           label => Modification,
+                           tuple => row_tuple(Parameters, Columns, Values)})}};
 
 handle_event(internal,
-             {truncate, #{relations := Truncates}},
+             {truncate = Modification, #{relations := Truncates}},
              _,
-             #{relations := Relations}) ->
-    lists:foreach(
-      fun
-          (Relation) ->
-              #{Relation := #{name := Table}} = Relations,
-              ets:delete_all_objects(binary_to_atom(Table))
-      end,
-      Truncates),
-    keep_state_and_data;
+             #{config := #{manager := Manager},
+               requests := Requests,
+               relations := Relations} = Data) ->
+    Names = lists:map(
+              fun
+                  (Relation) ->
+                      #{Relation := #{name := Table}} = Relations,
+                      Table
+              end,
+              Truncates),
+    {keep_state,
+     Data#{requests => pgmp_replication_logical_snapshot_manager:truncate(
+                         #{server_ref => Manager,
+                           relations => Names,
+                           requests => Requests,
+                           label => Modification})}};
 
 handle_event(internal,
              {relation, #{id := Id} = Relation},
@@ -169,10 +158,25 @@ handle_event(internal, {keepalive, _}, _, _) ->
     keep_state_and_data;
 
 handle_event(internal,
-             {response, #{label := pgmp_replication_logical_snapshot_manager, reply :=  ok}},
+             {response, #{label := Modification, reply := ok}},
              _,
-             _) ->
-    keep_state_and_data;
+             _)
+  when Modification == insert;
+       Modification == update;
+       Modification == delete;
+       Modification == truncate ->
+       keep_state_and_data;
+
+handle_event(internal,
+             {response, #{label := snapshot_complete, reply :=  ok}},
+             waiting_for_snapshot_completion,
+             Data) ->
+    {next_state,
+     replication,
+     Data#{wal => #{received => 0,
+                    flushed => 0,
+                    applied => 0}},
+     nei(start_replication)};
 
 handle_event(internal,
              {response, #{label := pgmp_types, reply := ready}},
@@ -241,6 +245,7 @@ handle_event(
      waiting_for_snapshot_completion,
      Data#{requests := pgmp_replication_logical_snapshot_manager:snapshot(
                          #{server_ref => Manager,
+                           label => snapshot_complete,
                            id => Snapshot,
                            requests => Requests})}};
 
@@ -273,7 +278,7 @@ handle_event(internal,
           [iolist_to_binary(
              io_lib:format(
                <<"START_REPLICATION SLOT ~s LOGICAL ~s ",
-                 "(proto_version '~b', publication_names '~p')">>,
+                 "(proto_version '~b', publication_names '~s')">>,
                [SlotName, "0/0", ProtoVersion, PublicationNames]))]})};
 
 handle_event(internal, {recv, {row_description, Columns}}, _, Data) ->
@@ -327,6 +332,22 @@ handle_event(EventType, EventContent, State, Data) ->
                                 EventContent,
                                 State,
                                 Data).
+
+
+row_tuple(Parameters, Columns, Values) ->
+    list_to_tuple(
+      pgmp_data_row:decode(
+        Parameters,
+        lists:map(
+          fun
+              ({#{type := Type}, null = Value}) ->
+                  {#{format => text, type_oid => Type}, Value};
+
+              ({#{type := Type}, #{format := Format, value := Value}}) ->
+                  {#{format => Format, type_oid => Type}, Value}
+          end,
+          lists:zip(Columns, Values)))).
+
 
 b(false) -> 0;
 b(true) -> 1;

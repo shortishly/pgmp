@@ -98,7 +98,7 @@ handle_event({call, From}, when_ready, ready, _) ->
 
 handle_event(internal, refresh, _, #{requests := Requests} = Data) ->
     {keep_state,
-     Data#{requests := pgmp_connection_manager:query(
+     Data#{requests := pgmp_connection:query(
                          #{sql=> <<"select * from pg_catalog.pg_type">>,
                            label => types,
                            requests => Requests})}};

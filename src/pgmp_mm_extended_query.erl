@@ -59,6 +59,9 @@ handle_event({call, _} = Call,
      data(Call, Arg, Data),
      actions(Call, Arg, Data)};
 
+handle_event({call, _}, {request, _}, _, _) ->
+    {keep_state_and_data, postpone};
+
 handle_event(internal, flush, _, _) ->
     {keep_state_and_data,
      nei({send, [<<$H>>, size_inclusive([])]})};

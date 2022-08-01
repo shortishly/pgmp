@@ -13,7 +13,7 @@
 %% limitations under the License.
 
 
--module(pgmp_connection_manager).
+-module(pgmp_connection).
 
 
 -export([bind/1]).
