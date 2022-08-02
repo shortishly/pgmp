@@ -13,7 +13,7 @@
 %% limitations under the License.
 
 
--module(pgmp_mm_replication_logical).
+-module(pgmp_mm_rep_log).
 
 
 -export([callback_mode/0]).
@@ -75,13 +75,14 @@ handle_event(internal,
                 x_log := XLog,
                 tuple := Values}},
              _,
-             #{config := #{manager := Manager},
+             #{config := #{manager := Manager,
+                           module := M},
                requests := Requests,
                relations := Relations,
                parameters := Parameters} = Data) ->
     #{Relation := #{columns := Columns, name := Table}} = Relations,
     {keep_state,
-     Data#{requests => pgmp_rep_log_snapshot_manager:insert(
+     Data#{requests => M:insert(
                          #{server_ref => Manager,
                            relation => Table,
                            requests => Requests,
@@ -95,13 +96,14 @@ handle_event(internal,
                 x_log := XLog,
                 new := Values}},
              _,
-             #{config := #{manager := Manager},
+             #{config := #{manager := Manager,
+                           module := M},
                requests := Requests,
                relations := Relations,
                parameters := Parameters} = Data) ->
     #{Relation := #{columns := Columns, name := Table}} = Relations,
     {keep_state,
-     Data#{requests => pgmp_rep_log_snapshot_manager:update(
+     Data#{requests => M:update(
                          #{server_ref => Manager,
                            relation => Table,
                            requests => Requests,
@@ -115,13 +117,14 @@ handle_event(internal,
                 x_log := XLog,
                 key := Values}},
              _,
-             #{config := #{manager := Manager},
+             #{config := #{manager := Manager,
+                           module := M},
                requests := Requests,
                relations := Relations,
                parameters := Parameters} = Data) ->
     #{Relation := #{columns := Columns, name := Table}} = Relations,
     {keep_state,
-     Data#{requests => pgmp_rep_log_snapshot_manager:delete(
+     Data#{requests => M:delete(
                          #{server_ref => Manager,
                            relation => Table,
                            requests => Requests,
@@ -134,7 +137,8 @@ handle_event(internal,
               #{x_log := XLog,
                 relations := Truncates}},
              _,
-             #{config := #{manager := Manager},
+             #{config := #{manager := Manager,
+                           module := M},
                requests := Requests,
                relations := Relations} = Data) ->
     Names = lists:map(
@@ -145,7 +149,7 @@ handle_event(internal,
               end,
               Truncates),
     {keep_state,
-     Data#{requests => pgmp_rep_log_snapshot_manager:truncate(
+     Data#{requests => M:truncate(
                          #{server_ref => Manager,
                            relations => Names,
                            requests => Requests,
@@ -169,9 +173,7 @@ handle_event(internal,
                 reply := true}},
              _,
              #{wal := WAL} = Data) ->
-    {keep_state,
-     Data#{wal := WAL#{clock := Clock}},
-     nei(ping)};
+    {keep_state, Data#{wal := WAL#{clock := Clock}}, nei(ping)};
 
 handle_event(internal, {keepalive, _}, _, _) ->
     keep_state_and_data;
@@ -233,7 +235,7 @@ handle_event(internal,
     {next_state,
      identify_system,
      Data#{types_ready := true},
-     [nei(snapshot_manager), nei(identify_system)]};
+     [nei(manager), nei(identify_system)]};
 
 handle_event(internal,
              bootstrap_complete,
@@ -248,16 +250,19 @@ handle_event(internal,
     {next_state,
      identify_system,
      Data,
-     [nei(snapshot_manager), nei(identify_system)]};
+     [nei(manager), nei(identify_system)]};
 
 handle_event(internal,
-             snapshot_manager,
+             manager,
              _,
              #{config := Config, ancestors :=  [_, LogicalSup]} = Data) ->
-    {_, SnapMan, worker, _} = pgmp_sup:get_child(
-                                LogicalSup,
-                                rep_log_snapshot_manager),
-    {keep_state, Data#{config := Config#{manager => SnapMan}}};
+    case pgmp_sup:get_child(LogicalSup, manager) of
+        {_, Manager, worker, _} when is_pid(Manager) ->
+            {keep_state,
+             Data#{config := Config#{manager => Manager,
+                                     module => pgmp_config:replication(
+                                                 logical, module)}}}
+    end;
 
 handle_event(internal, identify_system, _, _) ->
     {keep_state_and_data, nei({query, [<<"IDENTIFY_SYSTEM">>]})};
@@ -280,34 +285,39 @@ handle_event(
   internal,
   {recv, {ready_for_query, idle}},
   replication_slot,
-  #{config := #{manager := Manager},
+  #{config := #{manager := Manager,
+                module := M},
     requests := Requests,
     replication_slot := #{<<"snapshot_name">> := Snapshot}} = Data) ->
     {next_state,
      waiting_for_snapshot_completion,
-     Data#{requests := pgmp_rep_log_snapshot_manager:snapshot(
+     Data#{requests := M:snapshot(
                          #{server_ref => Manager,
                            label => snapshot_complete,
                            id => Snapshot,
                            requests => Requests})}};
 
-handle_event(internal, create_replication_slot = Command, _, _) ->
+handle_event(internal,
+             create_replication_slot = Command,
+             _,
+             #{config := #{publication := Publication}}) ->
     {keep_state_and_data,
-     nei({Command, pgmp_config:replication(logical, slot_name)})};
+     nei({Command,
+          iolist_to_binary(
+            lists:join(
+              "_",
+              [pgmp_config:replication(logical, slot_prefix), Publication]))})};
 
 handle_event(internal,
              {create_replication_slot, SlotName},
              _,
-             #{config := #{publication := Publication}}) ->
+             _) ->
     {keep_state_and_data,
      nei({query,
           [iolist_to_binary(
              io_lib:format(
                <<"CREATE_REPLICATION_SLOT ~s TEMPORARY LOGICAL pgoutput">>,
-               [iolist_to_binary(
-                  lists:join(
-                    "_",
-                    [SlotName, Publication]))]))]})};
+               [SlotName]))]})};
 
 handle_event(internal,
              start_replication,

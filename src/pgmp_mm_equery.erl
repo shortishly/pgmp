@@ -13,7 +13,7 @@
 %% limitations under the License.
 
 
--module(pgmp_mm_extended_query).
+-module(pgmp_mm_equery).
 
 
 -export([callback_mode/0]).

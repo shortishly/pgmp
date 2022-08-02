@@ -184,13 +184,13 @@ version() ->
 
 
 bootstrap_complete_callback_module(<<"false">>) ->
-    pgmp_mm_simple_query;
+    pgmp_mm_squery;
 
 bootstrap_complete_callback_module(<<"database">>) ->
-    pgmp_mm_replication_logical;
+    pgmp_mm_rep_log;
 
 bootstrap_complete_callback_module(Physical) when Physical == <<"true">>;
                                                   Physical == <<"on">>;
                                                   Physical == <<"yes">>;
                                                   Physical == <<"1">> ->
-    pgmp_mm_replication_physical.
+    pgmp_mm_rep_phy.

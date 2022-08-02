@@ -17,7 +17,7 @@
 
 
 -export([database/1]).
--export([decode/1]).
+-export([codec/1]).
 -export([enabled/1]).
 -export([options/1]).
 -export([pg/1]).
@@ -34,7 +34,7 @@ enabled(Name) ->
     envy(to_boolean, [Name, ?FUNCTION_NAME], true).
 
 
-decode(Type) ->
+codec(Type) ->
     envy(to_atom, [?FUNCTION_NAME, Type], pgmp_identity).
 
 
@@ -52,8 +52,11 @@ protocol(minor = Name) ->
     envy(to_integer, [?FUNCTION_NAME, Name], 0).
 
 
-replication(logical = Type, slot_name = Name) ->
-    envy(to_binary, [?FUNCTION_NAME, Type, Name], <<"slot">>);
+replication(logical = Type, module = Name) ->
+    envy(to_atom, [?FUNCTION_NAME, Type, Name], pgmp_rep_log_ets);
+
+replication(logical = Type, slot_prefix = Name) ->
+    envy(to_binary, [?FUNCTION_NAME, Type, Name], <<"pgmp">>);
 
 replication(logical = Type, proto_version = Name) ->
     envy(to_integer, [?FUNCTION_NAME, Type, Name], 2);

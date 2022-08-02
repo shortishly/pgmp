@@ -140,8 +140,7 @@ decode(_,
        #{<<"typname">> := Type}, Value)
   when Type == <<"xml">>;
        Type == <<"json">> ->
-    (pgmp_config:decode(binary_to_list(Type))):decode(Value);
-
+    (pgmp_config:codec(binary_to_atom(Type))):?FUNCTION_NAME(Value);
 
 %% src/backend/utils/adt/arrayfuncs.c#array_recv
 decode(Parameters,
@@ -456,12 +455,16 @@ encode(#{<<"integer_datetimes">> := <<"on">>},
       int32,
       calendar:date_to_gregorian_days(Date) - calendar:date_to_gregorian_days(epoch_date(pg)));
 
+
+encode(_, _, _, #{<<"typname">> := Type}, Value)
+  when Type == <<"json">>;
+       Type == <<"xml">> ->
+    (pgmp_config:codec(binary_to_atom(Type))):?FUNCTION_NAME(Value);
+
 encode(_, _, _, #{<<"typname">> := Type}, Value)
   when Type == <<"varchar">>;
        Type == <<"name">>;
        Type == <<"bytea">>;
-       Type == <<"json">>;
-       Type == <<"xml">>;
        Type == <<"text">> ->
     Value;
 

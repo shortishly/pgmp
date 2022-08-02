@@ -13,9 +13,10 @@
 %% limitations under the License.
 
 
--module(pgmp_rep_log_snapshot_manager).
+-module(pgmp_rep_log_ets).
 
 
+-behaviour(pgmp_rep_log).
 -export([callback_mode/0]).
 -export([delete/1]).
 -export([handle_event/4]).

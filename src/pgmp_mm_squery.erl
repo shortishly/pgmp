@@ -13,7 +13,7 @@
 %% limitations under the License.
 
 
--module(pgmp_mm_simple_query).
+-module(pgmp_mm_squery).
 
 
 -export([callback_mode/0]).
@@ -67,7 +67,7 @@ handle_event({call, _} = Call,
     {next_state,
      Action,
      data(Call, Arg, Data),
-     [{push_callback_module, pgmp_mm_extended_query} | actions(Call, Arg, Data)]};
+     [{push_callback_module, pgmp_mm_equery} | actions(Call, Arg, Data)]};
 
 handle_event({call, _}, {request, _}, _, _) ->
     {keep_state_and_data, postpone};

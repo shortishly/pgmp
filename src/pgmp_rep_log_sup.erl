@@ -43,7 +43,8 @@ children(Arg) ->
                   significant => true,
                   args => [Arg]}),
 
-     worker(#{m => pgmp_rep_log_snapshot_manager,
+     worker(#{m => pgmp_config:replication(logical, module),
+              id => manager,
               restart => transient,
               significant => true,
               args => [Arg]})].

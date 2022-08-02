@@ -17,7 +17,11 @@
 
 
 -export([decode/1]).
+-export([encode/1]).
 
 
 decode(Value) ->
+    Value.
+
+encode(Value) ->
     Value.

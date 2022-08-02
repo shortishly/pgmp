@@ -13,7 +13,7 @@
 %% limitations under the License.
 
 
--module(pgmp_mm_replication_physical).
+-module(pgmp_mm_rep_phy).
 
 
 -export([callback_mode/0]).

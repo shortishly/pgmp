@@ -36,6 +36,6 @@ configuration(Children) ->
 
 
 children(Arg) ->
-    [worker(pgmp_connection),
-     supervisor(#{m => pgmp_pool_sup, args => [Arg]}),
-     worker(pgmp_types)].
+    [worker(pgmp_types),
+     worker(pgmp_connection),
+     supervisor(#{m => pgmp_pool_sup, args => [Arg]})].
