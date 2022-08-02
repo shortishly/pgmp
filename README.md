@@ -68,8 +68,8 @@ Finally, execute the prepared statement:
 Execute by default will return all rows. To page the results instead:
 
 ```sql
-create table xy (x integer primary key, y text);
-insert into xy values (1, 'abc'), (2, 'foo'), (3, 'bar'), (4, 'baz'), (5, 'bat');
+postgres=# create table xy (x integer primary key, y text);
+postgres=# insert into xy values (1, 'abc'), (2, 'foo'), (3, 'bar'), (4, 'baz'), (5, 'bat');
 ```
 
 Prepare a statement to return all values:
@@ -147,14 +147,14 @@ data, applying any changes thereafter automatically.
 ### Primary Key
 
 ```sql
-create table xy (x integer primary key, y text);
-insert into xy values (1, 'foo');
+postgres=# create table xy (x integer primary key, y text);
+postgres=# insert into xy values (1, 'foo');
 ```
 
-Create a Postgresql publication for that table:
+Create a PostgreSQL publication for that table:
 
 ```sql
-create publication xy for table xy;
+postgres=# create publication xy for table xy;
 ```
 
 Configure `pgmp` to replicate the `xy` publication, via the stanza:
@@ -178,21 +178,21 @@ Introspection on the PostgreSQL metadata is done automatically by
 table.
 
 Thereafter, CRUD changes on the underlying PostgreSQL table will be
-automatically pushed to `pmgmp` and reflected in the ETS table.
+automatically pushed to `pgmp` and reflected in the ETS table.
 
 ### Composite Key
 
 An example of logical replication of a single table with a composite key:
 
 ```sql
-create table xyz (x integer, y integer, z integer, primary key (x, y));
-insert into xyz values (1, 1, 3);
+postgres=# create table xyz (x integer, y integer, z integer, primary key (x, y));
+postgres=# insert into xyz values (1, 1, 3);
 ```
 
 Create a PostgreSQL publication for that table:
 
 ```sql
-create publication xyz for table xyz;
+postgres=# create publication xyz for table xyz;
 ```
 
 With `pgmp` configured for replication, the stanza:
@@ -218,9 +218,9 @@ Note that replication introspects the PostgreSQL table metadata so that `{1, 1}`
 Making some CRUD within PostgreSQL:
 
 ```sql
-insert into xyz values (1, 2, 3), (1, 3, 5), (1, 4, 5);
-update xyz set z = 4 where x = 1 and y = 1;
-delete from xyz where x = 1 and y = 3;
+postgres=# insert into xyz values (1, 2, 3), (1, 3, 5), (1, 4, 5);
+postgres=# update xyz set z = 4 where x = 1 and y = 1;
+postgres=# delete from xyz where x = 1 and y = 3;
 ```
 
 The changes are streamed to `pgmp` and applied to the ETS table automatically.
@@ -228,7 +228,7 @@ The changes are streamed to `pgmp` and applied to the ETS table automatically.
 Replication slots can be viewed via:
 
 ```sql
-select slot_name,plugin,slot_type,active,xmin,catalog_xmin,restart_lsn from pg_replication_slots;
+postgres=# select slot_name,plugin,slot_type,active,xmin,catalog_xmin,restart_lsn from pg_replication_slots;
  slot_name |  plugin  | slot_type | active | xmin | catalog_xmin | restart_lsn 
 -----------+----------+-----------+--------+------+--------------+-------------
  pgmp_xyz  | pgoutput | logical   | t      |      |    533287257 | A1/CEAA6AA8

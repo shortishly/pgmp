@@ -65,7 +65,7 @@ delete(#{relation := Relation, tuple := Tuple} = Arg) ->
 truncate(#{relations := Relations} = Arg) ->
     send_request(
       maps:without(
-        [table, tuple, x_log],
+        [relations],
         Arg#{request => {?FUNCTION_NAME, Relations}})).
 
 
@@ -352,7 +352,6 @@ insert_or_update_tuple(Tuple, [_]) ->
     Tuple;
 
 insert_or_update_tuple(Tuple, Composite) ->
-    ?LOG_DEBUG(#{tuple => Tuple, composite => Composite}),
     list_to_tuple(
       [list_to_tuple([element(Pos, Tuple) || Pos <- Composite]) |
        lists:filtermap(
