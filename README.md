@@ -19,10 +19,97 @@ Features:
 - A [connection](src/pgmp_connection.erl) pool that is aware of the underlying
   statement state (a simple or extended query, outside or within a
   transaction block).
+  
+## Asynchronous Requests
+
+There are two mechanisms for making asynchronous requests to `pmgp`
+which are described in the following.
+
+### send_request/2 with receive_response/1
+
+You can immediately wait for a response (via
+[receive_response/1](https://www.erlang.org/doc/man/gen_statem.html#receive_response-1)). The
+examples in the following sections use this method, purely because it
+is simpler as a command line example.
+
+```erlang
+1> gen_statem:receive_response(pgmp_connection:query(#{sql => <<"select 2*3">>})).
+{reply, [{row_description, [<<"?column?">>]},
+         {data_row, [6]},
+         {command_complete, {select, 1}}]}
+```
+
+Effectively the above turns an asynchronous call into an asynchronous
+request that immediately blocks the current process until it receives
+the reply.
+
+
+### send_request/4 with check_response/3
+
+However, it is likely that you can continue doing some other important
+work, e.g., responding to other messages, while waiting for the
+response from `pgmp`. In which case using the
+[send_request/4](https://www.erlang.org/doc/man/gen_statem.html#send_request-4)
+and
+[check_response/3](https://www.erlang.org/doc/man/gen_statem.html#check_response-3)
+pattern is preferred.
+
+If you're using `pgmp` within another `gen_*` behaviour (`gen_server`,
+`gen_statem`, etc), this is very likely to be the option to
+choose. So using another `gen_statem` as an example:
+
+The following `init/1` sets up some state with a [request id
+collection](https://www.erlang.org/doc/man/gen_statem.html#type-request_id_collection)
+to maintain our outstanding asynchronous requests.
+
+```erlang
+init([]) ->
+    {ok, ready, #{requests => gen_statem:reqids_new()}}.
+```
+
+You can then use the `label` and `requests` parameter to `pgmp` to
+identify the response to your asynchronous request as follows:
+
+```sql
+handle_event(internal, commit = Label, _, _) ->
+    {keep_state_and_data,
+      {next_event, internal, {query, #{label => Label, sql => <<"commit">>}}}};
+     
+     
+handle_event(internal, {query, Arg}, _, #{requests := Requests} = Data) ->
+    {keep_state,
+     Data#{requests := pgmp_connection:query(Arg#{requests => Requests})}};
+```
+
+A call to any of `pgmp_connection` functions: `query/1`, `parse/1`,
+`bind/1`, `describe/1` or `execute/1` take a map of parameters. If
+that map includes both a `label` and `requests` then the request is
+made using
+[send_request/4](https://www.erlang.org/doc/man/gen_statem.html#send_request-4). The
+response will be received as an `info` message as follows:
+
+```erlang
+handle_event(info, Msg, _, #{requests := Existing} = Data) ->
+    case gen_statem:check_response(Msg, Existing, true) of
+        {{reply, Reply}, Label, Updated} ->
+            # You have a response with a Label so that you stitch it
+            # back to the original request...
+            do_something_with_response(Reply, Label),
+            {keep_state, Data#{requests := Updated}};
+
+        ...deal with other cases...
+    end.
+```
+
+The internals of `pgmp` use this pattern,
+[pgmp_rep_log_ets](src/pgmp_rep_log_ets.erl) being an example that
+uses `pgmp_connection` itself to manage logical replication into ETS
+tables.
+
 
 ## Simple Query
 
-An asynchronous simple query request using [`receive_response`](https://www.erlang.org/doc/man/gen_statem.html#receive_response-1) to wait for the response:
+An asynchronous simple query request using [receive_response](https://www.erlang.org/doc/man/gen_statem.html#receive_response-1) to wait for the response:
 
 ```erlang
 1> gen_statem:receive_response(pgmp_connection:query(#{sql => <<"select 2*3">>})).
