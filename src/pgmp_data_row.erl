@@ -16,14 +16,17 @@
 -module(pgmp_data_row).
 
 
+-define(NBASE,10_000).
 -export([decode/2]).
 -export([decode/3]).
 -export([decode/5]).
 -export([encode/2]).
 -export([encode/3]).
 -export([encode/5]).
+-export([numeric_encode/1]).
 -import(pgmp_codec, [marshal/2]).
 -import(pgmp_codec, [size_exclusive/1]).
+-include_lib("kernel/include/logger.hrl").
 
 
 decode(Parameters, TypeValue) ->
@@ -167,6 +170,23 @@ decode(_, text, _, #{<<"typname">> := <<"float", _/bytes>>}, Encoded) ->
 
 decode(_, text, _, #{<<"typname">> := <<"numeric">>}, Encoded) ->
     numeric(Encoded);
+
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"numeric">>},
+       <<Length:16,
+         Weight:16/signed,
+         _Sign:16,
+         _DScale:16,
+         Digits:Length/binary-unit:16>> = Encoded) ->
+    lists:foldl(
+      numeric_decode(Encoded),
+      0,
+      lists:zip(
+        [Digit || <<Digit:16>> <= Digits],
+        lists:seq(Weight, Weight - Length + 1, -1)));
 
 decode(_, text, _, #{<<"typname">> := <<"date">>}, <<Ye:4/bytes, "-", Mo:2/bytes, "-", Da:2/bytes>>) ->
     triple(Ye, Mo, Da);
@@ -523,6 +543,20 @@ encode(_, text, _, #{<<"typname">> := Name}, Value)
        Name == <<"int8">> ->
     integer_to_binary(Value);
 
+encode(_, binary, _, #{<<"typname">> := <<"numeric">>}, Value) ->
+    {Weight, Digits} = numeric_encode(abs(Value)),
+    [<<(length(Digits)):16,
+       Weight:16,
+       (case Value of
+           Positive when  Positive >= 0 ->
+               0;
+
+           _ ->
+               16384
+       end):16,
+       0:16>>,
+     [<<Digit:16>> || Digit <- Digits]];
+
 encode(_, binary, _, #{<<"typname">> := Name}, Value)
   when Name == <<"int2">>;
        Name == <<"int4">>;
@@ -645,3 +679,86 @@ array_recv(Parameters,
         end,
         [],
         Data)).
+
+
+numeric_decode(<<Length:16,
+                 _:16/signed,
+                 0:16,
+                 _:16,
+                 _:Length/binary-unit:16>>) ->
+    fun
+        ({Digit, Weight}, A) ->
+            ?LOG_DEBUG(#{digit => Digit, weight => Weight, a => A}),
+            (pow(?NBASE, Weight) * Digit) + A
+    end;
+
+numeric_decode(<<Length:16,
+                 _:16/signed,
+                 16384:16,
+                 _:16,
+                 _:Length/binary-unit:16>>) ->
+    fun
+        ({Digit, Weight}, A) ->
+            ?LOG_DEBUG(#{digit => Digit, weight => Weight, a => A}),
+            A - (pow(?NBASE, Weight) * Digit)
+    end.
+
+
+pow(X, N) when is_integer(X), is_integer(N), N > 1 ->
+    ?FUNCTION_NAME(1, X, N);
+pow(_, 0) ->
+    1;
+pow(X, 1) ->
+    X;
+pow(X, N) ->
+    math:pow(X, N).
+
+
+pow(Y, _, 0) ->
+    Y;
+pow(Y, X, N) when N rem 2 == 0 ->
+    ?FUNCTION_NAME(Y, X * X, N div 2);
+pow(Y, X, N) ->
+    ?FUNCTION_NAME(X * Y, X * X, (N - 1) div 2).
+
+
+numeric_encode(Value) when is_integer(Value) ->
+    ?FUNCTION_NAME(Value, [], 0).
+
+%%     ?FUNCTION_NAME(Value, [], 0);
+%% numeric_encode(Value) when is_float(Value) ->
+%%     [Integer, Decimal] = [binary_to_integer(Part) || Part <- binary:split(
+%%                                                                float_to_binary(
+%%                                                                  Value,
+%%                                                                  [{decimals, 4}]),
+%%                                                                <<".">>)],
+
+%%     ?LOG_DEBUG(#{value => Value,
+%%                 integer => Integer,
+%%                 decimal => Decimal}),
+
+%%     {Weight, Digits} = ?FUNCTION_NAME(Integer, [], 0),
+
+%%     ?LOG_DEBUG(#{value => Value,
+%%                  weight => Weight,
+%%                  digits => Digits,
+%%                  integer => Integer,
+%%                  decimal => Decimal}),
+
+%%     ?FUNCTION_NAME(Decimal, Digits, Weight).
+
+
+numeric_encode(0, Digits, Weight) ->
+    {Weight - 1, Digits};
+
+numeric_encode(Value, [] = Digits, Weight) ->
+    case Value rem ?NBASE of
+        0 ->
+            ?FUNCTION_NAME(Value div ?NBASE, Digits, Weight + 1);
+
+        Remainder ->
+            ?FUNCTION_NAME(Value div ?NBASE, [Remainder | Digits], Weight + 1)
+    end;
+
+numeric_encode(Value, Digits, Weight) ->
+    ?FUNCTION_NAME(Value div ?NBASE, [Value rem ?NBASE | Digits], Weight + 1).
