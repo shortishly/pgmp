@@ -70,25 +70,42 @@ handle_event(internal, {begin_transaction, _}, _, _) ->
     keep_state_and_data;
 
 handle_event(internal,
+             {optional_callback, F, A},
+             _,
+             #{config := #{module := M}}) ->
+    case pgmp_util:is_exported(M, F, 1) of
+        true ->
+            {keep_state_and_data, nei({callback, F, A})};
+
+        false ->
+            keep_state_and_data
+    end;
+
+handle_event(internal,
+             {callback, F, A},
+             _,
+             #{config := #{manager := Manager,
+                           module := M},
+               requests := Requests} = Data) ->
+    {keep_state,
+     Data#{requests => M:F(A#{server_ref => Manager,
+                              label => F,
+                              requests => Requests})}};
+
+handle_event(internal,
              {insert = Modification,
               #{relation := Relation,
                 x_log := XLog,
                 tuple := Values}},
              _,
-             #{config := #{manager := Manager,
-                           module := M},
-               requests := Requests,
-               relations := Relations,
-               parameters := Parameters} = Data) ->
+             #{relations := Relations, parameters := Parameters}) ->
     #{Relation := #{columns := Columns, name := Table}} = Relations,
-    {keep_state,
-     Data#{requests => M:insert(
-                         #{server_ref => Manager,
-                           relation => Table,
-                           requests => Requests,
-                           x_log => XLog,
-                           label => Modification,
-                           tuple => row_tuple(Parameters, Columns, Values)})}};
+    {keep_state_and_data,
+     nei({callback,
+          Modification,
+          #{relation => Table,
+            x_log => XLog,
+            tuple => row_tuple(Parameters, Columns, Values)}})};
 
 handle_event(internal,
              {update = Modification,
@@ -96,51 +113,34 @@ handle_event(internal,
                 x_log := XLog,
                 new := Values}},
              _,
-             #{config := #{manager := Manager,
-                           module := M},
-               requests := Requests,
-               relations := Relations,
-               parameters := Parameters} = Data) ->
+             #{relations := Relations, parameters := Parameters}) ->
     #{Relation := #{columns := Columns, name := Table}} = Relations,
-    {keep_state,
-     Data#{requests => M:update(
-                         #{server_ref => Manager,
-                           relation => Table,
-                           requests => Requests,
-                           x_log => XLog,
-                           label => Modification,
-                           tuple => row_tuple(Parameters, Columns, Values)})}};
+    {keep_state_and_data,
+     nei({callback,
+          Modification,
+          #{relation => Table,
+            x_log => XLog,
+            tuple => row_tuple(Parameters, Columns, Values)}})};
 
 handle_event(internal,
              {delete = Modification,
-              #{relation := Relation,
-                x_log := XLog,
-                key := Values}},
+              #{relation := Relation, x_log := XLog, key := Values}},
              _,
-             #{config := #{manager := Manager,
-                           module := M},
-               requests := Requests,
-               relations := Relations,
-               parameters := Parameters} = Data) ->
+             #{relations := Relations, parameters := Parameters}) ->
     #{Relation := #{columns := Columns, name := Table}} = Relations,
-    {keep_state,
-     Data#{requests => M:delete(
-                         #{server_ref => Manager,
-                           relation => Table,
-                           requests => Requests,
-                           x_log => XLog,
-                           label => Modification,
-                           tuple => row_tuple(Parameters, Columns, Values)})}};
+    {keep_state_and_data,
+     nei({callback,
+          Modification,
+          #{relation => Table,
+            x_log => XLog,
+            tuple => row_tuple(Parameters, Columns, Values)}})};
 
 handle_event(internal,
              {truncate = Modification,
               #{x_log := XLog,
                 relations := Truncates}},
              _,
-             #{config := #{manager := Manager,
-                           module := M},
-               requests := Requests,
-               relations := Relations} = Data) ->
+             #{relations := Relations}) ->
     Names = lists:map(
               fun
                   (Relation) ->
@@ -148,13 +148,8 @@ handle_event(internal,
                       Table
               end,
               Truncates),
-    {keep_state,
-     Data#{requests => M:truncate(
-                         #{server_ref => Manager,
-                           relations => Names,
-                           requests => Requests,
-                           x_log => XLog,
-                           label => Modification})}};
+    {keep_state_and_data,
+     nei({callback, Modification, #{relations => Names, x_log => XLog}})};
 
 handle_event(internal,
              {relation, #{id := Id} = Relation},
@@ -231,7 +226,6 @@ handle_event(internal,
              {response, #{label := pgmp_types, reply := ready}},
              waiting_for_types,
              #{types_ready := false} = Data) ->
-
     {next_state,
      identify_system,
      Data#{types_ready := true},

@@ -23,7 +23,12 @@ DEPS = \
 	recon
 
 SHELL_DEPS = \
+	beaming \
 	sync
+
+TEST_DEPS = \
+	proper
+
 
 SHELL_OPTS = \
 	-config dev.config \
@@ -49,10 +54,11 @@ PLT_APPS = \
 	tools \
 	xmerl
 
-
+dep_beaming = git https://github.com/shortishly/beaming.git
 dep_envy = git https://github.com/shortishly/envy.git
 dep_phrase = git https://github.com/shortishly/phrase.git
 
+dep_beaming_commit = main
 dep_phrase_commit = main
 
 include erlang.mk

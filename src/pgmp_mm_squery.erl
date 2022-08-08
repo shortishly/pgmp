@@ -56,6 +56,16 @@ handle_event({call, _} = Call,
      data(Call, Arg, Data),
      actions(Call, Arg, Data)};
 
+handle_event({call, _},
+             {request, #{action := Action}},
+             {ready_for_query, _} = ReadyForQuery,
+             #{types_ready := false} = Data)
+  when Action == parse;
+       Action == describe;
+       Action == bind;
+       Action == execute ->
+    {next_state, {waiting_for_types, ReadyForQuery}, Data, postpone};
+
 handle_event({call, _} = Call,
              {request, #{action := Action} = Arg},
              {ready_for_query, _},
@@ -71,6 +81,18 @@ handle_event({call, _} = Call,
 
 handle_event({call, _}, {request, _}, _, _) ->
     {keep_state_and_data, postpone};
+
+handle_event(internal,
+             {response, #{label := pgmp_types, reply := ready}},
+             {waiting_for_types, ReadyForQuery},
+             #{types_ready := false} = Data) ->
+    {next_state, ReadyForQuery, Data#{types_ready := true}};
+
+handle_event(internal,
+             {response, #{label := pgmp_types, reply := ready}},
+             _,
+             #{types_ready := false} = Data) ->
+    {keep_state, Data#{types_ready := true}};
 
 handle_event(internal, {query, [SQL]}, _, _) ->
     {keep_state_and_data,

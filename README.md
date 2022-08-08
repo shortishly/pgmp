@@ -69,7 +69,6 @@ init([]) ->
 
 You can then use the `label` and `requests` parameter to `pgmp` to
 identify the response to your asynchronous request as follows:
-
 ```sql
 handle_event(internal, commit = Label, _, _) ->
     {keep_state_and_data,

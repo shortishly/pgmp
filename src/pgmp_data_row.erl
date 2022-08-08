@@ -537,6 +537,10 @@ encode(_, text, _, #{<<"typname">> := <<"bit">>}, <<Value/bits>>) ->
 encode(_, text, _, #{<<"typname">> := <<"float", _/bytes>>}, Value) ->
     numeric(Value);
 
+encode(_, binary, _, #{<<"typname">> := <<"float", R/bytes>>}, Value) ->
+    Size = binary_to_integer(R),
+    <<Value:Size/signed-float-unit:8>>;
+
 encode(_, text, _, #{<<"typname">> := Name}, Value)
   when Name == <<"int2">>;
        Name == <<"int4">>;

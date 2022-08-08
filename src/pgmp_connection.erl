@@ -27,6 +27,7 @@
 -export([query/1]).
 -export([ready_for_query/1]).
 -export([start_link/0]).
+-export([sync/1]).
 -import(pgmp_statem, [nei/1]).
 -import(pgmp_statem, [send_request/1]).
 
@@ -43,6 +44,10 @@ query(Arg) ->
 
 
 parse(Arg) ->
+    pgmp_mm:?FUNCTION_NAME(Arg#{server_ref => ?MODULE}).
+
+
+sync(Arg) ->
     pgmp_mm:?FUNCTION_NAME(Arg#{server_ref => ?MODULE}).
 
 
@@ -119,6 +124,7 @@ init([]) ->
      #{requests => gen_statem:reqids_new(),
        owners => #{},
        outstanding => #{},
+       monitors => #{},
        connections => #{}}}.
 
 handle_event({call, {Owner, _} = From},
@@ -144,6 +150,7 @@ handle_event({call, {Owner, _} = From},
              {request, _} = Request,
              available,
              #{connections := Connections,
+               monitors := Monitors,
                outstanding := Outstanding,
                requests := Requests,
                owners := Owners} = Data) ->
@@ -165,6 +172,7 @@ handle_event({call, {Owner, _} = From},
      NextState,
      Data#{connections := maps:without([Connection], Connections),
            outstanding := Outstanding#{Connection => [From]},
+           monitors := Monitors#{erlang:monitor(process, Owner) => Owner},
            requests := gen_statem:send_request(
                          Connection,
                          Request,
@@ -237,6 +245,20 @@ handle_event({call, {Connection, _} = From},
      Data#{connections := Connections#{Connection => State}},
      {reply, From, ok}};
 
+
+handle_event(internal,
+             {response,
+              #{label := #{module := ?MODULE,
+                           connection := Connection,
+                           from := {'DOWN', Monitor, process, Owner, _Info}},
+                reply := ok}},
+             _,
+             #{owners := Owners, monitors := Monitors} = Data) ->
+    #{Owner := Connection} = Owners,
+    {keep_state,
+     Data#{monitors := maps:without([Monitor], Monitors),
+           owners := maps:without([Owner], Owners)}};
+
 handle_event(internal,
              {response,
               #{label := #{module := ?MODULE,
@@ -257,6 +279,24 @@ handle_event(internal,
              Data#{outstanding := Outstanding#{Connection := Remaining}},
              {reply, From, Reply}}
     end;
+
+handle_event(info,
+             {'DOWN', Monitor, process, Owner, _Info} = Down,
+             _,
+             #{monitors := Monitors,
+               requests := Requests,
+               owners := Owners} = Data)
+  when is_map_key(Monitor, Monitors),
+       is_map_key(Owner, Owners) ->
+    #{Owner := Connection} = Owners,
+    {keep_state,
+     Data#{requests := gen_statem:send_request(
+                         Connection,
+                         {request, #{action => sync}},
+                         #{module => ?MODULE,
+                           connection => Connection,
+                           from => Down},
+                         Requests)}};
 
 handle_event(info, Msg, _, #{requests := Existing} = Data) ->
     case gen_statem:check_response(Msg, Existing, true) of

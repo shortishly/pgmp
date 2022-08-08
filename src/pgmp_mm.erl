@@ -25,6 +25,7 @@
 -export([query/1]).
 -export([recv/1]).
 -export([start_link/1]).
+-export([sync/1]).
 -export([terminate/3]).
 -import(pgmp_statem, [nei/1]).
 -import(pgmp_statem, [send_request/1]).
@@ -48,6 +49,10 @@ query(Arg) ->
 
 parse(Arg) ->
     send_request(Arg, ?FUNCTION_NAME, [{name, <<>>}, sql]).
+
+
+sync(Arg) ->
+    send_request(Arg, ?FUNCTION_NAME, []).
 
 
 bind(Arg) ->
