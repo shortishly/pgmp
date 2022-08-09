@@ -164,8 +164,8 @@ handle_event(internal, connect, _, #{socket := Socket} = Data) ->
            #{family => inet,
              port => pgmp_config:database(port),
              addr => case inet:gethostbyname(pgmp_config:database(hostname)) of
-                         {ok, #hostent{h_addr_list = [Address]}} ->
-                             Address
+                         {ok, #hostent{h_addr_list = Addresses}} ->
+                             pick_one(Addresses)
                      end}) of
 
         ok ->
@@ -174,3 +174,7 @@ handle_event(internal, connect, _, #{socket := Socket} = Data) ->
         {error, Reason} ->
             {stop, Reason}
     end.
+
+
+pick_one(L) ->
+    lists:nth(rand:uniform(length(L)), L).
