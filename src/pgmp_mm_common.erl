@@ -113,12 +113,6 @@ handle_event(internal, {recv, {notice_response, _} = TM}, query, _) ->
 handle_event(internal, {process, Reply}, _, #{from := _, replies := Rs} = Data) ->
     {keep_state, Data#{replies := [Reply | Rs]}};
 
-handle_event(internal,
-             {response, #{label := pgmp_types, reply := ready}},
-             _,
-             #{types_ready := Missing} = Data) when Missing == false ->
-    {keep_state, Data#{types_ready => not(Missing)}};
-
 handle_event(internal, types_when_ready, _, Data) ->
     {keep_state, Data#{requests := pgmp_types:when_ready(
                                      maps:with([requests], Data))}};

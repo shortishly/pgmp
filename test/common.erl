@@ -13,29 +13,20 @@
 %% limitations under the License.
 
 
--module(pgmp_int_sup).
+-module(common).
 
 
--behaviour(supervisor).
--export([init/1]).
--export([start_link/1]).
--import(pgmp_sup, [supervisor/1]).
--import(pgmp_sup, [worker/1]).
+-export([all/1]).
+-include_lib("common_test/include/ct.hrl").
 
 
-start_link(#{} = Arg) ->
-    supervisor:start_link(?MODULE, [Arg]).
+is_a_test(is_a_test) ->
+    false;
+is_a_test(Function) ->
+    hd(lists:reverse(string:tokens(atom_to_list(Function), "_"))) =:= "test".
 
 
-init([Arg]) ->
-    {ok, configuration(children(Arg))}.
-
-
-configuration(Children) ->
-    {#{intensity => length(Children), strategy => one_for_all}, Children}.
-
-
-children(Arg) ->
-    [worker(pgmp_connection),
-     worker(pgmp_types),
-     supervisor(#{m => pgmp_pool_sup, args => [Arg]})].
+all(Module) ->
+    [Function || {Function, Arity} <- Module:module_info(exports),
+                 Arity =:= 1,
+                 is_a_test(Function)].

@@ -44,17 +44,37 @@ terminate(Reason, State, Data) ->
 handle_event(internal, bootstrap_complete, _, _) ->
     keep_state_and_data;
 
+handle_event(internal,
+             {recv, {ready_for_query, _} = TM},
+             sync,
+             #{from := From} = Data) ->
+    %% sync is different, unlike the other requests ready_for_query is
+    %% the reply, as well as the marker for being ready for the next
+    %% query.
+    {next_state, TM, Data, {reply, From, TM}};
+
 handle_event(internal, {recv, {ready_for_query, _} = TM}, _, Data) ->
     {next_state, TM, Data};
 
 handle_event({call, _} = Call,
-             {request, #{action := query = Action} = Arg},
+             {request, #{action := Action} = Arg},
              {ready_for_query, _},
-             Data) ->
+             Data)
+  when Action == query; Action == sync ->
     {next_state,
      Action,
      data(Call, Arg, Data),
      actions(Call, Arg, Data)};
+
+handle_event({call, _},
+             {request, #{action := Action}},
+             {ready_for_query, _} = ReadyForQuery,
+             #{types_ready := false} = Data)
+  when Action == parse;
+       Action == describe;
+       Action == bind;
+       Action == execute ->
+    {next_state, {waiting_for_types, ReadyForQuery}, Data, postpone};
 
 handle_event({call, _} = Call,
              {request, #{action := Action} = Arg},
@@ -71,6 +91,21 @@ handle_event({call, _} = Call,
 
 handle_event({call, _}, {request, _}, _, _) ->
     {keep_state_and_data, postpone};
+
+handle_event(internal,
+             {response, #{label := pgmp_types, reply := ready}},
+             {waiting_for_types, ReadyForQuery},
+             #{types_ready := false} = Data) ->
+    {next_state, ReadyForQuery, Data#{types_ready := true}};
+
+handle_event(internal,
+             {response, #{label := pgmp_types, reply := ready}},
+             _,
+             #{types_ready := false} = Data) ->
+    {keep_state, Data#{types_ready := true}};
+
+handle_event(internal, {sync, _}, _, _) ->
+    {keep_state_and_data, nei({send, ["S", size_inclusive([])]})};
 
 handle_event(internal, {query, [SQL]}, _, _) ->
     {keep_state_and_data,

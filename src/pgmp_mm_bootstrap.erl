@@ -76,12 +76,6 @@ handle_event(internal,
 handle_event(internal, join, _, #{config := #{}}) ->
     keep_state_and_data;
 
-handle_event(internal,
-             {response, #{label := pgmp_types, reply := ready}},
-             _,
-             #{type_catalogue := false} = Data) ->
-    {keep_state, maps:without([type_catalogue], Data)};
-
 handle_event(internal, types_when_ready, _, Data) ->
     {keep_state,
      Data#{requests := pgmp_types:when_ready(
@@ -169,6 +163,12 @@ handle_event(internal,
              _,
              Data) ->
     {keep_state, Data#{backend => #{pid => PID, key => Key}}};
+
+handle_event(internal,
+             {response, #{label := pgmp_types, reply := ready}},
+             _,
+             #{types_ready := false} = Data) ->
+    {keep_state, Data#{types_ready := true}};
 
 handle_event(EventType, EventContent, State, Data) ->
     pgmp_mm_common:handle_event(EventType,

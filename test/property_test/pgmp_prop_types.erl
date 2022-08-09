@@ -1,0 +1,314 @@
+%% Copyright (c) 2022 Peter Morgan <peter.james.morgan@gmail.com>
+%%
+%% Licensed under the Apache License, Version 2.0 (the "License");
+%% you may not use this file except in compliance with the License.
+%% You may obtain a copy of the License at
+%%
+%% http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS,
+%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%% See the License for the specific language governing permissions and
+%% limitations under the License.
+
+-module(pgmp_prop_types).
+
+
+-include_lib("proper/include/proper.hrl").
+
+
+prop_smallint() ->
+    ?FORALL(
+       Expected,
+       integer(-32_768, 32_767),
+       begin
+           [{parse_complete, []}] = pgmp_connection_sync:parse(
+                                      #{sql => <<"select $1::smallint">>}),
+
+           [{bind_complete, []}] = pgmp_connection_sync:bind(
+                                     #{args => [Expected]}),
+
+           [{row_description, [_]},
+            {data_row, [Result]},
+            {command_complete,
+             {select, 1}}] = pgmp_connection_sync:execute(#{}),
+
+           ?WHENFAIL(
+              io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
+              Result == Expected)
+       end).
+
+
+prop_integer() ->
+    ?FORALL(
+       Expected,
+       integer(-2_147_483_648, 2_147_483_647),
+       begin
+           [{parse_complete, []}] = pgmp_connection_sync:parse(
+                                      #{sql => <<"select $1::integer">>}),
+
+           [{bind_complete, []}] = pgmp_connection_sync:bind(#{args => [Expected]}),
+
+           [{row_description, [_]},
+            {data_row, [Result]},
+            {command_complete,
+             {select, 1}}] = pgmp_connection_sync:execute(#{}),
+
+           ?WHENFAIL(
+              io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
+              Result == Expected)
+       end).
+
+
+%% https://www.postgresql.org/docs/8.1/datatype-oid.html
+%%
+%% The oid type is currently implemented as an unsigned four-byte
+%% integer. Therefore, it is not large enough to provide database-wide
+%% uniqueness in large databases, or even in large individual
+%% tables. So, using a user-created table's OID column as a primary
+%% key is discouraged. OIDs are best used only for references to
+%% system tables.
+%%
+prop_oid() ->
+    ?FORALL(
+       Expected,
+       integer(0, 4_294_967_295),
+       begin
+           [{parse_complete, []}] = pgmp_connection_sync:parse(
+                                      #{sql => <<"select $1::oid">>}),
+
+           [{bind_complete, []}] = pgmp_connection_sync:bind(
+                                     #{args => [Expected]}),
+
+           [{row_description, [_]},
+            {data_row, [Result]},
+            {command_complete,
+             {select, 1}}] = pgmp_connection_sync:execute(#{}),
+
+           ?WHENFAIL(
+              io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
+              Result == Expected)
+       end).
+
+prop_oidvector() ->
+    ?FORALL(
+       Expected,
+       non_empty(list(integer(0, 4_294_967_295))),
+       begin
+           ct:pal("~p~n", [Expected]),
+
+           [{parse_complete, []}] = pgmp_connection_sync:parse(
+                                      #{sql => <<"select $1::oidvector">>}),
+
+           ?WHENFAIL(
+              io:format("Expected: ~p~n", [Expected]),
+              [{bind_complete, []}] == pgmp_connection_sync:bind(
+                                             #{args => [Expected]})),
+           [{row_description, [_]},
+            {data_row, [Result]},
+            {command_complete,
+             {select, 1}}] = pgmp_connection_sync:execute(#{}),
+
+           ?WHENFAIL(
+              io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
+              Result == Expected)
+       end).
+
+
+prop_integer_array() ->
+    ?FORALL(
+       Expected,
+       list(integer(-2_147_483_648, 2_147_483_647)),
+       begin
+           [{parse_complete, []}] = pgmp_connection_sync:parse(
+                                      #{sql => <<"select $1::integer array">>}),
+
+           [{bind_complete, []}] = pgmp_connection_sync:bind(#{args => [Expected]}),
+
+           [{row_description, [_]},
+            {data_row, [Result]},
+            {command_complete,
+             {select, 1}}] = pgmp_connection_sync:execute(#{}),
+
+           ?WHENFAIL(
+              io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
+              Result == Expected)
+       end).
+
+
+prop_bigint() ->
+    ?FORALL(
+       Expected,
+       integer(-9_223_372_036_854_775_808, +9_223_372_036_854_775_807),
+       begin
+           [{parse_complete, []}] = pgmp_connection_sync:parse(
+                                      #{sql => <<"select $1::bigint">>}),
+
+           [{bind_complete, []}] = pgmp_connection_sync:bind(
+                                     #{args => [Expected]}),
+
+           [{row_description, [_]},
+            {data_row, [Result]},
+            {command_complete,
+             {select, 1}}] = pgmp_connection_sync:execute(#{}),
+
+           ?WHENFAIL(
+              io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
+              Result == Expected)
+       end).
+
+
+prop_numeric() ->
+    ?FORALL(
+       Expected,
+       integer(inf, inf),
+       begin
+           [{parse_complete, []}] = pgmp_connection_sync:parse(
+                                      #{sql => <<"select $1::numeric">>}),
+
+           [{bind_complete, []}] = pgmp_connection_sync:bind(#{args => [Expected]}),
+
+           [{row_description, [_]},
+            {data_row, [Result]},
+            {command_complete,
+             {select, 1}}] = pgmp_connection_sync:execute(#{}),
+
+           ?WHENFAIL(
+              io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
+              Result == Expected)
+       end).
+
+%% real - 4 bytes - 6 decimal digits precision.
+prop_real() ->
+    ?FORALL(
+       Expected,
+       ?LET(Expected, float(inf, inf), precision(Expected, 6)),
+       begin
+           Result = pbe(#{sql => <<"select $1::real">>, args => [Expected]}),
+
+           ?WHENFAIL(
+              io:format("expected: ~p, result: ~p~n", [Expected, Result]),
+              Result == Expected)
+       end).
+
+
+%% double - 8 bytes - 15 decimal digits precision
+prop_double() ->
+    ?FORALL(
+       Expected,
+       ?LET(Expected, float(inf, inf), precision(Expected, 15)),
+       begin
+           Result = pbe(#{sql => <<"select $1::double precision">>, args => [Expected]}),
+
+           ?WHENFAIL(
+              io:format("expected: ~p, result: ~p~n", [Expected, Result]),
+              Result == Expected)
+       end).
+
+
+precision(Value, Digits) ->
+    Decimals = float_to_binary(
+                 Value,
+                 [{decimals, Digits - trunc(math:ceil(math:log10(trunc(abs(Value)) + 1)))}]),
+    case binary:split(Decimals, <<".">>) of
+        [_, _] ->
+            binary_to_float(Decimals);
+
+        [_] ->
+            binary_to_float(<<Decimals/bytes, ".0">>)
+    end.
+
+
+prop_bytea() ->
+    ?FORALL(
+       Expected,
+       binary(),
+       begin
+           Result = pbe(#{sql => <<"select $1::bytea">>, args => [Expected]}),
+
+           ?WHENFAIL(
+              io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
+              Result == Expected)
+       end).
+
+
+prop_boolean() ->
+    ?FORALL(
+       Expected,
+       boolean(),
+       begin
+           Result = pbe(#{sql => <<"select $1::boolean">>, args => [Expected]}),
+
+           ?WHENFAIL(
+              io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
+              Result == Expected)
+       end).
+
+
+prop_bit_varying() ->
+    ?FORALL(
+       Expected,
+       bitstring(),
+       begin
+           Result = pbe(#{sql => <<"select $1::bit varying">>, args => [Expected]}),
+
+           ?WHENFAIL(
+              io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
+              Result == Expected)
+       end).
+
+
+prop_varchar() ->
+    ?FORALL(
+       Expected,
+       ?LET(Expected, list(alphanumeric()), list_to_binary(Expected)),
+       begin
+           Result = pbe(#{sql => <<"select $1::varchar">>, args => [Expected]}),
+
+           ?WHENFAIL(
+              io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
+              Result == Expected)
+       end).
+
+
+prop_uuid() ->
+    ?FORALL(
+       Expected,
+       ?LET(
+          UUID,
+          bitstring(128),
+          begin
+              <<TimeLow:32, TimeMid:16, TimeHi:16, Clock:16, Node:48>> = UUID,
+                  iolist_to_binary(
+                    io_lib:format(
+                      "~8.16.0b-~4.16.0b-~4.16.0b-~4.16.0b-~12.16.0b",
+                      [TimeLow, TimeMid, TimeHi, Clock, Node]))
+          end),
+       begin
+           Result = pbe(#{sql => <<"select $1::uuid">>, args => [Expected]}),
+
+           ?WHENFAIL(
+              io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
+              Result == Expected)
+       end).
+
+pbe(Arg) ->
+    [{parse_complete, []}] = pgmp_connection_sync:parse(
+                               maps:with([sql], Arg)),
+    [{bind_complete, []}] = pgmp_connection_sync:bind(
+                              maps:with([args], Arg)),
+
+    [{row_description, _},
+     {data_row, [Row]},
+     {command_complete,
+      {select, 1}}] = pgmp_connection_sync:execute(#{}),
+
+    ct:log("arg: ~p~nrow: ~p~n", [Arg, Row]),
+    Row.
+
+
+alphanumeric() ->
+    union([integer($a, $z),
+           integer($A, $Z),
+           integer($0, $9)]).

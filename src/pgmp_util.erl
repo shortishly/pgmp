@@ -16,6 +16,7 @@
 -module(pgmp_util).
 
 
+-export([is_exported/3]).
 -export([snake_case/1]).
 -export([tl_snake_case/1]).
 
@@ -35,3 +36,14 @@ tl_snake_case(Name) ->
         Names ->
             snake_case(tl(Names))
     end.
+
+
+is_exported(M, F, A) ->
+    _ = case erlang:module_loaded(M) of
+            false ->
+                code:ensure_loaded(M);
+
+            true ->
+                ok
+        end,
+    erlang:function_exported(M, F, A).

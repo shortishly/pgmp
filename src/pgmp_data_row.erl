@@ -16,14 +16,17 @@
 -module(pgmp_data_row).
 
 
+-define(NBASE,10_000).
 -export([decode/2]).
 -export([decode/3]).
 -export([decode/5]).
 -export([encode/2]).
 -export([encode/3]).
 -export([encode/5]).
+-export([numeric_encode/1]).
 -import(pgmp_codec, [marshal/2]).
 -import(pgmp_codec, [size_exclusive/1]).
+-include_lib("kernel/include/logger.hrl").
 
 
 decode(Parameters, TypeValue) ->
@@ -87,8 +90,20 @@ decode(_,
 decode(_,
        binary,
        _,
-       #{<<"typname">> := <<"bit">>},
-       <<Length:32, Data:Length/bits, 0:(8 - Length)>>) ->
+       #{<<"typname">> := Name},
+       <<Length:32, Data:Length/bits>>)
+    when Length rem 8 == 0,
+         Name == <<"bit">>;
+         Name == <<"varbit">> ->
+    Data;
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := Name},
+       <<Length:32, Data:Length/bits, 0:(8 - (Length rem 8))>>)
+    when Name == <<"bit">>;
+         Name == <<"varbit">> ->
     Data;
 
 decode(_,
@@ -167,6 +182,23 @@ decode(_, text, _, #{<<"typname">> := <<"float", _/bytes>>}, Encoded) ->
 
 decode(_, text, _, #{<<"typname">> := <<"numeric">>}, Encoded) ->
     numeric(Encoded);
+
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"numeric">>},
+       <<Length:16,
+         Weight:16/signed,
+         _Sign:16,
+         _DScale:16,
+         Digits:Length/binary-unit:16>> = Encoded) ->
+    lists:foldl(
+      numeric_decode(Encoded),
+      0,
+      lists:zip(
+        [Digit || <<Digit:16>> <= Digits],
+        lists:seq(Weight, Weight - Length + 1, -1)));
 
 decode(_, text, _, #{<<"typname">> := <<"date">>}, <<Ye:4/bytes, "-", Mo:2/bytes, "-", Da:2/bytes>>) ->
     triple(Ye, Mo, Da);
@@ -257,7 +289,7 @@ decode(_,
        Encoded) ->
     Size = binary_to_integer(R),
     <<Decoded:Size/signed-float-unit:8>> = Encoded,
-    Decoded;
+    precision(Decoded, <<"float", R/bytes>>);
 
 decode(_,
        _,
@@ -506,7 +538,9 @@ encode(_, binary, _, #{<<"typname">> := <<"oid">>}, Value) ->
 encode(_, text, _, #{<<"typname">> := <<"oid">>}, Value) ->
     integer_to_binary(Value);
 
-encode(_, binary, _, #{<<"typname">> := <<"bit">>}, <<Value/bits>>) ->
+encode(_, binary, _, #{<<"typname">> := Name}, <<Value/bits>>)
+  when Name == <<"bit">>;
+       Name == <<"varbit">>  ->
     Length = bit_size(Value),
     Padding = byte_size(Value) * 8 - Length,
     <<Length:32, Value/bits, 0:Padding>>;
@@ -517,11 +551,29 @@ encode(_, text, _, #{<<"typname">> := <<"bit">>}, <<Value/bits>>) ->
 encode(_, text, _, #{<<"typname">> := <<"float", _/bytes>>}, Value) ->
     numeric(Value);
 
+encode(_, binary, _, #{<<"typname">> := <<"float", R/bytes>>}, Value) ->
+    Size = binary_to_integer(R),
+    <<(precision(Value, <<"float", R/bytes>>)):Size/signed-float-unit:8>>;
+
 encode(_, text, _, #{<<"typname">> := Name}, Value)
   when Name == <<"int2">>;
        Name == <<"int4">>;
        Name == <<"int8">> ->
     integer_to_binary(Value);
+
+encode(_, binary, _, #{<<"typname">> := <<"numeric">>}, Value) ->
+    {Weight, Digits} = numeric_encode(abs(Value)),
+    [<<(length(Digits)):16,
+       Weight:16,
+       (case Value of
+           Positive when  Positive >= 0 ->
+               0;
+
+           _ ->
+               16384
+       end):16,
+       0:16>>,
+     [<<Digit:16>> || Digit <- Digits]];
 
 encode(_, binary, _, #{<<"typname">> := Name}, Value)
   when Name == <<"int2">>;
@@ -542,6 +594,9 @@ vector_send(
       [encode(Parameters, Format, Types, Type, V) || V <- L]);
 
 
+vector_send(_, binary, _, #{<<"oid">> := OID}, []) ->
+    <<1:32, 0:32, OID:32>>;
+
 %% must be 1-D, 0-based with no nulls
 vector_send(
   Parameters,
@@ -556,6 +611,9 @@ vector_send(
        0:32>>,
      [size_exclusive(encode(Parameters, Format, Types, Type, V)) || V <- L]].
 
+
+array_send(_, binary, _, #{<<"oid">> := OID}, []) ->
+    <<0:32, 0:32, OID:32>>;
 
 array_send(
   Parameters,
@@ -594,6 +652,9 @@ null_bitmap(L) ->
     end.
 
 
+array_recv(_, text, _, _, <<>>) ->
+    [];
+
 array_recv(Parameters,
            text = Format,
            Types,
@@ -605,6 +666,9 @@ array_recv(Parameters,
             Types,
             Type,
             Value) || Value <- binary:split(Values, <<" ">>, [global])];
+
+array_recv(_, binary, _, _, <<0:32, 0:32, _:32>>) ->
+    [];
 
 array_recv(Parameters,
            binary = Format,
@@ -645,3 +709,100 @@ array_recv(Parameters,
         end,
         [],
         Data)).
+
+
+numeric_decode(<<Length:16,
+                 _:16/signed,
+                 0:16,
+                 _:16,
+                 _:Length/binary-unit:16>>) ->
+    fun
+        ({Digit, Weight}, A) ->
+            ?LOG_DEBUG(#{digit => Digit, weight => Weight, a => A}),
+            (pow(?NBASE, Weight) * Digit) + A
+    end;
+
+numeric_decode(<<Length:16,
+                 _:16/signed,
+                 16384:16,
+                 _:16,
+                 _:Length/binary-unit:16>>) ->
+    fun
+        ({Digit, Weight}, A) ->
+            ?LOG_DEBUG(#{digit => Digit, weight => Weight, a => A}),
+            A - (pow(?NBASE, Weight) * Digit)
+    end.
+
+
+pow(X, N) when is_integer(X), is_integer(N), N > 1 ->
+    ?FUNCTION_NAME(1, X, N);
+pow(_, 0) ->
+    1;
+pow(X, 1) ->
+    X;
+pow(X, N) ->
+    math:pow(X, N).
+
+
+pow(Y, _, 0) ->
+    Y;
+pow(Y, X, N) when N rem 2 == 0 ->
+    ?FUNCTION_NAME(Y, X * X, N div 2);
+pow(Y, X, N) ->
+    ?FUNCTION_NAME(X * Y, X * X, (N - 1) div 2).
+
+
+numeric_encode(Value) when is_integer(Value) ->
+    ?FUNCTION_NAME(Value, [], 0).
+
+%%     ?FUNCTION_NAME(Value, [], 0);
+%% numeric_encode(Value) when is_float(Value) ->
+%%     [Integer, Decimal] = [binary_to_integer(Part) || Part <- binary:split(
+%%                                                                float_to_binary(
+%%                                                                  Value,
+%%                                                                  [{decimals, 4}]),
+%%                                                                <<".">>)],
+
+%%     ?LOG_DEBUG(#{value => Value,
+%%                 integer => Integer,
+%%                 decimal => Decimal}),
+
+%%     {Weight, Digits} = ?FUNCTION_NAME(Integer, [], 0),
+
+%%     ?LOG_DEBUG(#{value => Value,
+%%                  weight => Weight,
+%%                  digits => Digits,
+%%                  integer => Integer,
+%%                  decimal => Decimal}),
+
+%%     ?FUNCTION_NAME(Decimal, Digits, Weight).
+
+
+numeric_encode(0, Digits, Weight) ->
+    {Weight - 1, Digits};
+
+numeric_encode(Value, [] = Digits, Weight) ->
+    case Value rem ?NBASE of
+        0 ->
+            ?FUNCTION_NAME(Value div ?NBASE, Digits, Weight + 1);
+
+        Remainder ->
+            ?FUNCTION_NAME(Value div ?NBASE, [Remainder | Digits], Weight + 1)
+    end;
+
+numeric_encode(Value, Digits, Weight) ->
+    ?FUNCTION_NAME(Value div ?NBASE, [Value rem ?NBASE | Digits], Weight + 1).
+
+
+precision(Value, <<"float8">>) ->
+    ?FUNCTION_NAME(Value, 15);
+
+precision(Value, <<"float4">>) ->
+    ?FUNCTION_NAME(Value, 6);
+
+precision(Value, Digits) when is_float(Value),
+                              is_integer(Digits) ->
+    Decimals = Digits - trunc(math:ceil(math:log10(trunc(abs(Value)) + 1))),
+    binary_to_float(
+      iolist_to_binary(
+        io_lib:fwrite("~.*f", [Decimals, Value]))).

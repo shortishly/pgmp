@@ -61,6 +61,9 @@ replication(logical = Type, slot_prefix = Name) ->
 replication(logical = Type, proto_version = Name) ->
     envy(to_integer, [?FUNCTION_NAME, Type, Name], 2);
 
+replication(logical = Type, max_rows = Name) ->
+    envy(to_integer, [?FUNCTION_NAME, Type, Name], 5_000);
+
 replication(logical = Type, publication_names = Name) ->
     envy(to_binary, [?FUNCTION_NAME, Type, Name], <<"pub">>).
 

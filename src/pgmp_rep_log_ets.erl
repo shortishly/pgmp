@@ -65,7 +65,7 @@ delete(#{relation := Relation, tuple := Tuple} = Arg) ->
 truncate(#{relations := Relations} = Arg) ->
     send_request(
       maps:without(
-        [table, tuple, x_log],
+        [relations],
         Arg#{request => {?FUNCTION_NAME, Relations}})).
 
 
@@ -224,35 +224,57 @@ handle_event(
   _,
   #{keys := Keys, tables := Tables} = Data) ->
     Name = binary_to_atom(Table),
+    Label = {table,
+             ets:new(
+               Name,
+               [{keypos,
+                 case Key of
+                     [Primary] ->
+                         Primary;
+
+                     _Composite ->
+                         1
+                 end},
+                public,
+                named_table])},
     {keep_state,
      Data#{keys := Keys#{Table => Key},
            tables := [Name | Tables]},
-     nei({query,
-          #{label => {table,
-                      ets:new(
-                        Name,
-                        [{keypos,
-                          case Key of
-                              [Primary] ->
-                                  Primary;
-
-                              _Composite ->
-                                  1
-                          end},
-                         public,
-                         named_table])},
-            sql => iolist_to_binary(
-                     io_lib:format(
-                       "select * from ~s.~s", [Schema, Table]))}})};
+     [nei({parse,
+           #{label => Label,
+             sql => iolist_to_binary(
+                      io_lib:format(
+                        "select * from ~s.~s",
+                        [Schema, Table]))}}),
+      nei({bind, #{label => Label}}),
+      nei({execute,
+           #{label => Label,
+             max_rows => pgmp_config:replication(
+                           logical,
+                           max_rows)}})]};
 
 
 handle_event(internal,
-             {response, #{label := {table, Table},
+             {response,
+              #{label := {table, _},
+                reply := [{parse_complete, []}]}},
+             _,
+             _) ->
+    keep_state_and_data;
+
+handle_event(internal,
+             {response,
+              #{label := {table, _},
+                reply := [{bind_complete, []}]}},
+             _,
+             _) ->
+    keep_state_and_data;
+
+handle_event(internal,
+             {response, #{label := {table, Table} = Label,
                           reply := [{row_description, _} | T]}},
              _,
              #{tables := Tables, keys := Keys} = Data) ->
-    {command_complete, {select, _}} = lists:last(T),
-
     true = ets:insert_new(
              Table,
              lists:map(
@@ -264,14 +286,27 @@ handle_event(internal,
                end,
                lists:droplast(T))),
 
-    case lists:delete(Table, Tables) of
-        [] ->
-            {keep_state,
-             maps:without([tables], Data),
-             nei(commit)};
+    case lists:last(T) of
+        {command_complete, {select, _}} = Result ->
+            ?LOG_DEBUG(#{result => Result, length => length(T)}),
+            case lists:delete(Table, Tables) of
+                [] ->
+                    {keep_state,
+                     maps:without([tables], Data),
+                     nei(commit)};
 
-        Remaining ->
-            {keep_state, Data#{tables := Remaining}}
+                Remaining ->
+                    {keep_state, Data#{tables := Remaining}}
+            end;
+
+        {portal_suspended, _} = Result ->
+            ?LOG_DEBUG(#{result => Result, length => length(T)}),
+            {keep_state_and_data,
+             nei({execute,
+                  #{label => Label,
+                    max_rows => pgmp_config:replication(
+                                  logical,
+                                  max_rows)}})}
     end;
 
 handle_event(internal,
@@ -352,7 +387,6 @@ insert_or_update_tuple(Tuple, [_]) ->
     Tuple;
 
 insert_or_update_tuple(Tuple, Composite) ->
-    ?LOG_DEBUG(#{tuple => Tuple, composite => Composite}),
     list_to_tuple(
       [list_to_tuple([element(Pos, Tuple) || Pos <- Composite]) |
        lists:filtermap(
