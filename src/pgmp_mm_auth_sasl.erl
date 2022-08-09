@@ -68,25 +68,17 @@ handle_event(internal,
              [marshal(string, Mechanism), marshal(int32, -1)])]})};
 
 handle_event(internal,
-             {recv, {authentication, {sasl_continue, Encoded}}},
+             {recv, {authentication, {Action, Encoded}}},
              _,
-             #{sasl := #{mechanism := <<"SCRAM-SHA-256">>}}) ->
-    {keep_state_and_data, nei({sasl_continue, Encoded, decode(Encoded)})};
+             #{sasl := #{mechanism := <<"SCRAM-SHA-256">>}})
+  when Action == sasl_continue; Action == sasl_final ->
+    {keep_state_and_data, nei({Action, Encoded, decode(Encoded)})};
 
-%%%
-%% https://datatracker.ietf.org/doc/html/rfc5802
-%%
-%% SaltedPassword  := Hi(Normalize(password), salt, i)
-%% ClientKey       := HMAC(SaltedPassword, "Client Key")
-%% StoredKey       := H(ClientKey)
-%% AuthMessage     := client-first-message-bare + "," +
-%%                    server-first-message + "," +
-%%                    client-final-message-without-proof
-%% ClientSignature := HMAC(StoredKey, AuthMessage)
-%% ClientProof     := ClientKey XOR ClientSignature
-%% ServerKey       := HMAC(SaltedPassword, "Server Key")
-%% ServerSignature := HMAC(ServerKey, AuthMessage)
-
+handle_event(internal,
+             {sasl_final, _, #{v := V}},
+             _,
+             #{sasl := #{client := #{v := V}}}) ->
+    keep_state_and_data;
 
 handle_event(
   internal,
@@ -95,8 +87,7 @@ handle_event(
    #{r := R, s := Salt, i := I} = Server},
   _,
   #{config := #{identity := #{password := Password}},
-    sasl := #{client := #{header := Header,
-                          nonce := Nonce},
+    sasl := #{client := #{header := Header, nonce := Nonce} = Client,
               mechanism := <<"SCRAM-SHA-256">> = Mechanism} = SASL} = Data) ->
 
     %% SaltedPassword  := Hi(Normalize(password), salt, i)
@@ -138,13 +129,14 @@ handle_event(
                     ClientSignature),
 
     %% ServerKey       := HMAC(SaltedPassword, "Server Key")
-    %%    ServerKey = hmac(Mechanism, SaltedPassword, "Server Key"),
+    ServerKey = hmac(Mechanism, SaltedPassword, "Server Key"),
 
     %% ServerSignature := HMAC(ServerKey, AuthMessage)
-    %%    ServerSignature = hmac(Mechanism, ServerKey, AuthMessage),
+    ServerSignature = hmac(Mechanism, ServerKey, AuthMessage),
 
     {keep_state,
-     Data#{sasl := SASL#{server => Server}},
+     Data#{sasl := SASL#{server => Server,
+                         client := Client#{v => ServerSignature}}},
      nei({send,
           ["p",
            size_inclusive(
