@@ -301,6 +301,9 @@ demarshal(authentication, 10, R) ->
 demarshal(authentication, 11, R) ->
     {{sasl_continue, R}, <<>>};
 
+demarshal(authentication, 12, R) ->
+    {{sasl_final, R}, <<>>};
+
 demarshal(Type, <<0:8, Remainder/bytes>>, A)
   when Type == notice_response;
        Type == error_response ->
