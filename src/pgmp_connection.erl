@@ -17,8 +17,8 @@
 
 
 -export([bind/1]).
--export([describe/1]).
 -export([callback_mode/0]).
+-export([describe/1]).
 -export([execute/1]).
 -export([handle_event/4]).
 -export([init/1]).
@@ -30,6 +30,7 @@
 -export([sync/1]).
 -import(pgmp_statem, [nei/1]).
 -import(pgmp_statem, [send_request/1]).
+-include_lib("kernel/include/logger.hrl").
 
 
 start_link() ->
@@ -298,6 +299,14 @@ handle_event(info,
                            from => Down},
                          Requests)}};
 
+
+handle_event(info,
+             {'DOWN', Monitor, process, _Owner, _Info},
+             _,
+             #{monitors := Monitors} = Data)
+  when is_map_key(Monitor, Monitors) ->
+    {keep_state, Data#{monitors := maps:without([Monitor], Monitors)}};
+
 handle_event(info, Msg, _, #{requests := Existing} = Data) ->
     case gen_statem:check_response(Msg, Existing, true) of
         {{reply, Reply}, Label, Updated} ->
@@ -310,7 +319,15 @@ handle_event(info, Msg, _, #{requests := Existing} = Data) ->
                  #{reason => Reason,
                    server_ref => ServerRef,
                    label => Label},
-                 Data#{requests := UpdatedRequests}}
+                 Data#{requests := UpdatedRequests}};
+
+        no_request ->
+            ?LOG_ERROR(#{msg => Msg, data => Data}),
+            keep_state_and_data;
+
+        no_reply ->
+            ?LOG_ERROR(#{msg => Msg, data => Data}),
+            keep_state_and_data
     end.
 
 

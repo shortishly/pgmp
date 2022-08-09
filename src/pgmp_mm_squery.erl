@@ -44,13 +44,23 @@ terminate(Reason, State, Data) ->
 handle_event(internal, bootstrap_complete, _, _) ->
     keep_state_and_data;
 
+handle_event(internal,
+             {recv, {ready_for_query, _} = TM},
+             sync,
+             #{from := From} = Data) ->
+    %% sync is different, unlike the other requests ready_for_query is
+    %% the reply, as well as the marker for being ready for the next
+    %% query.
+    {next_state, TM, Data, {reply, From, TM}};
+
 handle_event(internal, {recv, {ready_for_query, _} = TM}, _, Data) ->
     {next_state, TM, Data};
 
 handle_event({call, _} = Call,
-             {request, #{action := query = Action} = Arg},
+             {request, #{action := Action} = Arg},
              {ready_for_query, _},
-             Data) ->
+             Data)
+  when Action == query; Action == sync ->
     {next_state,
      Action,
      data(Call, Arg, Data),
@@ -93,6 +103,9 @@ handle_event(internal,
              _,
              #{types_ready := false} = Data) ->
     {keep_state, Data#{types_ready := true}};
+
+handle_event(internal, {sync, _}, _, _) ->
+    {keep_state_and_data, nei({send, ["S", size_inclusive([])]})};
 
 handle_event(internal, {query, [SQL]}, _, _) ->
     {keep_state_and_data,

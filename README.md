@@ -43,6 +43,15 @@ Effectively the above turns an asynchronous call into an asynchronous
 request that immediately blocks the current process until it receives
 the reply.
 
+The module `pgmp_connection_sync` wraps the above:
+
+```erlang
+1> pgmp_connection_sync:query(#{sql => <<"select 2*3">>})).
+[{row_description, [<<"?column?">>]},
+ {data_row, [6]},
+ {command_complete, {select, 1}}]
+```
+
 
 ### send_request/4 with check_response/3
 
@@ -111,10 +120,10 @@ tables.
 An asynchronous simple query request using [receive_response](https://www.erlang.org/doc/man/gen_statem.html#receive_response-1) to wait for the response:
 
 ```erlang
-1> gen_statem:receive_response(pgmp_connection:query(#{sql => <<"select 2*3">>})).
-{reply, [{row_description, [<<"?column?">>]},
-         {data_row, [6]},
-         {command_complete, {select, 1}}]}
+1> pgmp_connection_sync:query(#{sql => <<"select 2*3">>}).
+[{row_description, [<<"?column?">>]},
+ {data_row, [6]},
+ {command_complete, {select, 1}}]
 ```
 
 ## Extended Query
@@ -129,8 +138,8 @@ receiving all rows in one go.
 To parse SQL into a prepared statement:
 
 ```erlang
-1> gen_statem:receive_response(pgmp_connection:parse(#{sql => <<"select $1 * 3">>})).
-{reply, [{parse_complete, []}]}
+1> pgmp_connection_sync:parse(#{sql => <<"select $1 * 3">>}).
+[{parse_complete, []}]
 ```
 
 Where `$1` is a parameter that will be bound during the `bind` phase.
@@ -138,48 +147,48 @@ Where `$1` is a parameter that will be bound during the `bind` phase.
 To `bind` parameters to the prepared statement:
 
 ```erlang
-1> gen_statem:receive_response(pgmp_connection:bind(#{args => [2]})).
-{reply, [{bind_complete, []}]}
+1> pgmp_connection_sync:bind(#{args => [2]}).
+[{bind_complete, []}]
 ```
 
 Finally, execute the prepared statement:
 
 ```erlang
-1> gen_statem:receive_response(pgmp_connection:execute(#{})).
-{reply, [{row_description, [<<"?column?">>]},
-         {data_row, [6]},
-         {command_complete, {select, 1}}]}
+1> pgmp_connection_sync:execute(#{}).
+[{row_description, [<<"?column?">>]},
+ {data_row, [6]},
+ {command_complete, {select, 1}}]
 ```
 
 Execute by default will return all rows. To page the results instead:
 
 ```sql
-postgres=# create table xy (x integer primary key, y text);
-postgres=# insert into xy values (1, 'abc'), (2, 'foo'), (3, 'bar'), (4, 'baz'), (5, 'bat');
+create table xy (x integer primary key, y text);
+insert into xy values (1, 'abc'), (2, 'foo'), (3, 'bar'), (4, 'baz'), (5, 'bat');
 ```
 
 Prepare a statement to return all values:
 
 ```erlang
-1> gen_statem:receive_response(pgmp_connection:parse(#{sql => <<"select * from xy">>})).
-{reply, [{parse_complete, []}]}
+1> pgmp_connection_sync:parse(#{sql => <<"select * from xy">>}).
+[{parse_complete, []}]
 ```
 
 Bind the statement with no parameters:
 
 ```erlang
-1> gen_statem:receive_response(pgmp_connection:bind(#{args => []})).
-{reply, [{bind_complete, []}]}
+1> pgmp_connection_sync:bind(#{args => []}).
+[{bind_complete, []}]
 ```
 
 Finally, execute the prepared statement, returning a maximum of only 2 rows:
 
 ```erlang
-1> gen_statem:receive_response(pgmp_connection:execute(#{max_rows => 2})).
-{reply, [{row_description, [<<"x">>, <<"y">>]},
-         {data_row, [1, <<"abc">>]},
-         {data_row, [2, <<"foo">>]},
-         {portal_suspended, []}]}
+1> pgmp_connection_sync:execute(#{max_rows => 2}).
+[{row_description, [<<"x">>, <<"y">>]},
+ {data_row, [1, <<"abc">>]},
+ {data_row, [2, <<"foo">>]},
+ {portal_suspended, []}]
 ```
 
 Note that `portal_suspended` is being returned (rather than
@@ -187,25 +196,42 @@ Note that `portal_suspended` is being returned (rather than
 available. Repeat the `execute` to get the next page of results:
 
 ```erlang
-1> gen_statem:receive_response(pgmp_connection:execute(#{max_rows => 2})).
-{reply, [{row_description, [<<"x">>, <<"y">>]},
-         {data_row, [3, <<"bar">>]},
-         {data_row, [4, <<"baz">>]},
-         {portal_suspended, []}]}
+1> pgmp_connection_sync:execute(#{max_rows => 2}).
+[{row_description, [<<"x">>, <<"y">>]},
+ {data_row, [3, <<"bar">>]},
+ {data_row, [4, <<"baz">>]},
+ {portal_suspended, []}]
 ```
 
 The final execute will return the last row, and `command_complete`:
 
 ```erlang
-1> gen_statem:receive_response(pgmp_connection:execute(#{max_rows => 2})).
-{reply, [{row_description, [<<"x">>, <<"y">>]},
-         {data_row, [5, <<"bat">>]},
-         {command_complete, {select, 1}}]}
+1> pgmp_connection_sync:execute(#{max_rows => 2}).
+[{row_description, [<<"x">>, <<"y">>]},
+ {data_row, [5, <<"bat">>]},
+ {command_complete, {select, 1}}]
 ```
 
-Note that as above, only the unnamed statement and portal should be used
-with a connection pool to ensure continuity.
+`pgmp` has its own connection pool that is aware of extended
+query. Extended query connections are reserved by the process that
+initiated the `parse`. This is to ensure continuity of the unnamed
+prepared statement or portal, otherwise another process could prepare
+or bind (and overwrite) another statement or portal.
 
+After an extended query, you can release the connection by:
+
+```erlang
+1> pgmp_connection_sync:sync(#{args => []}).
+ok
+```
+
+Alternatively, the initiating process can call `query` to returning
+back to simple query mode, which will also release the connection in
+the pool.
+
+Without a call to `sync`, the completion of the transaction, or a
+simple query, that connection will remain reserved for the initiating
+process and not returned to the connection pool.
 
 ## Logical Replication
 
@@ -233,14 +259,14 @@ data, applying any changes thereafter automatically.
 ### Primary Key
 
 ```sql
-postgres=# create table xy (x integer primary key, y text);
-postgres=# insert into xy values (1, 'foo');
+create table xy (x integer primary key, y text);
+insert into xy values (1, 'foo');
 ```
 
 Create a PostgreSQL publication for that table:
 
 ```sql
-postgres=# create publication xy for table xy;
+create publication xy for table xy;
 ```
 
 Configure `pgmp` to replicate the `xy` publication, via the stanza:
@@ -271,14 +297,14 @@ automatically pushed to `pgmp` and reflected in the ETS table.
 An example of logical replication of a single table with a composite key:
 
 ```sql
-postgres=# create table xyz (x integer, y integer, z integer, primary key (x, y));
-postgres=# insert into xyz values (1, 1, 3);
+create table xyz (x integer, y integer, z integer, primary key (x, y));
+insert into xyz values (1, 1, 3);
 ```
 
 Create a PostgreSQL publication for that table:
 
 ```sql
-postgres=# create publication xyz for table xyz;
+create publication xyz for table xyz;
 ```
 
 With `pgmp` configured for replication, the stanza:
@@ -304,9 +330,9 @@ Note that replication introspects the PostgreSQL table metadata so that `{1, 1}`
 Making some CRUD within PostgreSQL:
 
 ```sql
-postgres=# insert into xyz values (1, 2, 3), (1, 3, 5), (1, 4, 5);
-postgres=# update xyz set z = 4 where x = 1 and y = 1;
-postgres=# delete from xyz where x = 1 and y = 3;
+insert into xyz values (1, 2, 3), (1, 3, 5), (1, 4, 5);
+update xyz set z = 4 where x = 1 and y = 1;
+delete from xyz where x = 1 and y = 3;
 ```
 
 The changes are streamed to `pgmp` and applied to the ETS table automatically.
@@ -314,7 +340,8 @@ The changes are streamed to `pgmp` and applied to the ETS table automatically.
 Replication slots can be viewed via:
 
 ```sql
-postgres=# select slot_name,plugin,slot_type,active,xmin,catalog_xmin,restart_lsn from pg_replication_slots;
+select slot_name,plugin,slot_type,active,xmin,catalog_xmin,restart_lsn from pg_replication_slots;
+
  slot_name |  plugin  | slot_type | active | xmin | catalog_xmin | restart_lsn 
 -----------+----------+-----------+--------+------+--------------+-------------
  pgmp_xyz  | pgoutput | logical   | t      |      |    533287257 | A1/CEAA6AA8

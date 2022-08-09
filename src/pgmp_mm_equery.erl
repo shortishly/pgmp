@@ -172,7 +172,12 @@ handle_event(internal, {execute, [Portal, MaxRows]}, _, _) ->
              [marshal(string, Portal),
               marshal(int32, MaxRows)])]})};
 
-handle_event(internal, {recv, {ready_for_query, _} = TM}, unsynchronized, Data) ->
+handle_event(internal,
+             {recv, {ready_for_query, _} = TM},
+             State,
+             Data)
+  when State == unsynchronized;
+       State == error ->
     {next_state, TM, Data, pop_callback_module};
 
 handle_event(internal,
@@ -202,7 +207,7 @@ handle_event(internal, {sync_when_named, _}, _, _) ->
 
 handle_event(internal, {recv, {error_response, _} = TM}, parse, Data) ->
     {next_state,
-     unsynchronized,
+     error,
      Data,
      [nei({process, TM}), nei(complete), nei(sync)]};
 
@@ -225,17 +230,20 @@ handle_event(internal,
     ets:delete(Cache, {parameter_description, Portal}),
     ets:delete(Cache, {row_description, Portal}),
     {next_state,
-     unsynchronized,
+     error,
      Data,
      [nei({process, Reply}), nei(complete), nei(sync)]};
 
 handle_event(internal,
              {recv, {error_response, _} = Reply},
              execute,
-             #{args := [Portal, _], cache := Cache}) ->
+             #{args := [Portal, _], cache := Cache} = Data) ->
     ets:delete(Cache, {parameter_description, Portal}),
     ets:delete(Cache, {row_description, Portal}),
-    {keep_state_and_data, [nei({process, Reply}), nei(complete), nei(sync)]};
+    {next_state,
+     error,
+     Data,
+     [nei({process, Reply}), nei(complete), nei(sync)]};
 
 handle_event(internal,
              {recv, {data_row = Tag, Columns}},
@@ -264,7 +272,7 @@ handle_event(internal, {recv, {Tag, _} = Reply}, describe, _)
 
 handle_event(internal, {recv, {error_response, _} = Reply}, describe, Data) ->
     {next_state,
-     unsynchronized,
+     error,
      Data,
      [nei({process, Reply}), nei(complete), nei(sync)]};
 
@@ -324,7 +332,7 @@ handle_event(internal,
              {recv, {error_response, _}},
              describe_portal,
              #{args := [$P, _]} = Data) ->
-    {next_state, unsynchronized, Data};
+    {next_state, error, Data};
 
 handle_event(internal, complete, _, #{replies := Replies, from := From} = Data) ->
     {keep_state,

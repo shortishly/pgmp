@@ -90,8 +90,20 @@ decode(_,
 decode(_,
        binary,
        _,
-       #{<<"typname">> := <<"bit">>},
-       <<Length:32, Data:Length/bits, 0:(8 - Length)>>) ->
+       #{<<"typname">> := Name},
+       <<Length:32, Data:Length/bits>>)
+    when Length rem 8 == 0,
+         Name == <<"bit">>;
+         Name == <<"varbit">> ->
+    Data;
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := Name},
+       <<Length:32, Data:Length/bits, 0:(8 - (Length rem 8))>>)
+    when Name == <<"bit">>;
+         Name == <<"varbit">> ->
     Data;
 
 decode(_,
@@ -277,7 +289,7 @@ decode(_,
        Encoded) ->
     Size = binary_to_integer(R),
     <<Decoded:Size/signed-float-unit:8>> = Encoded,
-    Decoded;
+    precision(Decoded, <<"float", R/bytes>>);
 
 decode(_,
        _,
@@ -526,7 +538,9 @@ encode(_, binary, _, #{<<"typname">> := <<"oid">>}, Value) ->
 encode(_, text, _, #{<<"typname">> := <<"oid">>}, Value) ->
     integer_to_binary(Value);
 
-encode(_, binary, _, #{<<"typname">> := <<"bit">>}, <<Value/bits>>) ->
+encode(_, binary, _, #{<<"typname">> := Name}, <<Value/bits>>)
+  when Name == <<"bit">>;
+       Name == <<"varbit">>  ->
     Length = bit_size(Value),
     Padding = byte_size(Value) * 8 - Length,
     <<Length:32, Value/bits, 0:Padding>>;
@@ -539,7 +553,7 @@ encode(_, text, _, #{<<"typname">> := <<"float", _/bytes>>}, Value) ->
 
 encode(_, binary, _, #{<<"typname">> := <<"float", R/bytes>>}, Value) ->
     Size = binary_to_integer(R),
-    <<Value:Size/signed-float-unit:8>>;
+    <<(precision(Value, <<"float", R/bytes>>)):Size/signed-float-unit:8>>;
 
 encode(_, text, _, #{<<"typname">> := Name}, Value)
   when Name == <<"int2">>;
@@ -580,6 +594,9 @@ vector_send(
       [encode(Parameters, Format, Types, Type, V) || V <- L]);
 
 
+vector_send(_, binary, _, #{<<"oid">> := OID}, []) ->
+    <<1:32, 0:32, OID:32>>;
+
 %% must be 1-D, 0-based with no nulls
 vector_send(
   Parameters,
@@ -594,6 +611,9 @@ vector_send(
        0:32>>,
      [size_exclusive(encode(Parameters, Format, Types, Type, V)) || V <- L]].
 
+
+array_send(_, binary, _, #{<<"oid">> := OID}, []) ->
+    <<0:32, 0:32, OID:32>>;
 
 array_send(
   Parameters,
@@ -632,6 +652,9 @@ null_bitmap(L) ->
     end.
 
 
+array_recv(_, text, _, _, <<>>) ->
+    [];
+
 array_recv(Parameters,
            text = Format,
            Types,
@@ -643,6 +666,9 @@ array_recv(Parameters,
             Types,
             Type,
             Value) || Value <- binary:split(Values, <<" ">>, [global])];
+
+array_recv(_, binary, _, _, <<0:32, 0:32, _:32>>) ->
+    [];
 
 array_recv(Parameters,
            binary = Format,
@@ -766,3 +792,17 @@ numeric_encode(Value, [] = Digits, Weight) ->
 
 numeric_encode(Value, Digits, Weight) ->
     ?FUNCTION_NAME(Value div ?NBASE, [Value rem ?NBASE | Digits], Weight + 1).
+
+
+precision(Value, <<"float8">>) ->
+    ?FUNCTION_NAME(Value, 15);
+
+precision(Value, <<"float4">>) ->
+    ?FUNCTION_NAME(Value, 6);
+
+precision(Value, Digits) when is_float(Value),
+                              is_integer(Digits) ->
+    Decimals = Digits - trunc(math:ceil(math:log10(trunc(abs(Value)) + 1))),
+    binary_to_float(
+      iolist_to_binary(
+        io_lib:fwrite("~.*f", [Decimals, Value]))).
