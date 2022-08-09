@@ -221,7 +221,7 @@ or bind (and overwrite) another statement or portal.
 After an extended query, you can release the connection by:
 
 ```erlang
-1> pgmp_connection_sync:sync(#{args => []}).
+1> pgmp_connection_sync:sync(#{}).
 ok
 ```
 
@@ -256,6 +256,52 @@ for logical replication. Only the `publication` needs to be created,
 `pgmp` will create the necessary slots and synchronise the published
 data, applying any changes thereafter automatically.
 
+Or with a local `postgres` via `docker`:
+
+```shell
+docker run \
+    --rm \
+    --name postgres \
+    -d \
+    -p 5432:5432 \
+    -e POSTGRES_PASSWORD=postgres \
+    postgres:14 \
+    -c shared_buffers=256MB \
+    -c max_connections=200 \
+    -c wal_level=logical
+```
+
+You can then run a SQL shell with:
+
+```shell
+docker exec --interactive --tty postgres psql postgres postgres
+
+psql (14.4 (Debian 14.4-1.pgdg110+1))
+Type "help" for help.
+
+postgres=# 
+```
+
+The [dev.config](/dev.config) is used to configure `pgmp`, with
+various connection parameters (database hostname, user and password).
+
+To start `pgmp` run:
+
+```shell
+make shell
+```
+
+### Replication Process Overview
+
+A replication slot is created by
+[pgmp_mm_rep_log](src/pgmp_mm_rep_log.erl), from which a transactional
+snapshot is created by the database. Using this snapshot,
+[pgmp_rep_log_ets](src/pgmp_rep_log_ets.erl) retrieves all data from
+the tables in the publication, in a single transaction (using extended
+query with batched execute). Once the initial data has been collected,
+streaming replication is then started, receiving changes that have
+applied since the transaction snapshot to ensure no loss of data.
+
 ### Primary Key
 
 ```sql
@@ -276,6 +322,10 @@ Configure `pgmp` to replicate the `xy` publication, via the stanza:
          {replication_logical_publication_names, <<"xy">>},
          ...]}
 ```
+
+You should restart `pgmp` if you change any of the publication names in
+[dev.config](/dev.config), or if you create the publication in PSQL
+after `pgmp` has started.
 
 The current state of the table is replicated into an ETS table also called `xy`:
 
