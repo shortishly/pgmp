@@ -22,6 +22,7 @@ jobs:
       - name: Common Test
         run: make ct
         env:
+          PGMP_DATABASE_HOSTNAME: postgres
           PGMP_DATABASE_USER: postgres
           PGMP_DATABASE_NAME: postgres
           PGMP_DATABASE_PASSWORD: postgres
