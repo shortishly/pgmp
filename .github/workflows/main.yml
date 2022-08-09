@@ -24,6 +24,7 @@ jobs:
       - name: Common Test
         run: make ct
         env:
+          PGMP_PGMP_REPLICATION_ENABLED: false
           PGMP_DATABASE_USER: postgres
           PGMP_DATABASE_NAME: postgres
           PGMP_DATABASE_PASSWORD: postgres
