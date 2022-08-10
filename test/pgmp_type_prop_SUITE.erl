@@ -63,6 +63,18 @@ oid_test(Config) ->
       Config).
 
 
+time_test(Config) ->
+    ct_property_test:quickcheck(
+      pgmp_prop_types:prop_time(),
+      Config).
+
+
+date_test(Config) ->
+    ct_property_test:quickcheck(
+      pgmp_prop_types:prop_date(),
+      Config).
+
+
 %% oidvector_test(Config) ->
 %%     ct_property_test:quickcheck(
 %%       pgmp_prop_types:prop_oidvector(),

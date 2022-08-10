@@ -23,16 +23,7 @@ prop_smallint() ->
        Expected,
        integer(-32_768, 32_767),
        begin
-           [{parse_complete, []}] = pgmp_connection_sync:parse(
-                                      #{sql => <<"select $1::smallint">>}),
-
-           [{bind_complete, []}] = pgmp_connection_sync:bind(
-                                     #{args => [Expected]}),
-
-           [{row_description, [_]},
-            {data_row, [Result]},
-            {command_complete,
-             {select, 1}}] = pgmp_connection_sync:execute(#{}),
+           Result = pbe(#{sql => <<"select $1::smallint">>, args => [Expected]}),
 
            ?WHENFAIL(
               io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
@@ -45,15 +36,7 @@ prop_integer() ->
        Expected,
        integer(-2_147_483_648, 2_147_483_647),
        begin
-           [{parse_complete, []}] = pgmp_connection_sync:parse(
-                                      #{sql => <<"select $1::integer">>}),
-
-           [{bind_complete, []}] = pgmp_connection_sync:bind(#{args => [Expected]}),
-
-           [{row_description, [_]},
-            {data_row, [Result]},
-            {command_complete,
-             {select, 1}}] = pgmp_connection_sync:execute(#{}),
+           Result = pbe(#{sql => <<"select $1::integer">>, args => [Expected]}),
 
            ?WHENFAIL(
               io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
@@ -75,16 +58,7 @@ prop_oid() ->
        Expected,
        integer(0, 4_294_967_295),
        begin
-           [{parse_complete, []}] = pgmp_connection_sync:parse(
-                                      #{sql => <<"select $1::oid">>}),
-
-           [{bind_complete, []}] = pgmp_connection_sync:bind(
-                                     #{args => [Expected]}),
-
-           [{row_description, [_]},
-            {data_row, [Result]},
-            {command_complete,
-             {select, 1}}] = pgmp_connection_sync:execute(#{}),
+           Result = pbe(#{sql => <<"select $1::oid">>, args => [Expected]}),
 
            ?WHENFAIL(
               io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
@@ -98,17 +72,7 @@ prop_oidvector() ->
        begin
            ct:pal("~p~n", [Expected]),
 
-           [{parse_complete, []}] = pgmp_connection_sync:parse(
-                                      #{sql => <<"select $1::oidvector">>}),
-
-           ?WHENFAIL(
-              io:format("Expected: ~p~n", [Expected]),
-              [{bind_complete, []}] == pgmp_connection_sync:bind(
-                                             #{args => [Expected]})),
-           [{row_description, [_]},
-            {data_row, [Result]},
-            {command_complete,
-             {select, 1}}] = pgmp_connection_sync:execute(#{}),
+           Result = pbe(#{sql => <<"select $1::oidvector">>, args => [Expected]}),
 
            ?WHENFAIL(
               io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
@@ -121,15 +85,7 @@ prop_integer_array() ->
        Expected,
        list(integer(-2_147_483_648, 2_147_483_647)),
        begin
-           [{parse_complete, []}] = pgmp_connection_sync:parse(
-                                      #{sql => <<"select $1::integer array">>}),
-
-           [{bind_complete, []}] = pgmp_connection_sync:bind(#{args => [Expected]}),
-
-           [{row_description, [_]},
-            {data_row, [Result]},
-            {command_complete,
-             {select, 1}}] = pgmp_connection_sync:execute(#{}),
+           Result = pbe(#{sql => <<"select $1::integer array">>, args => [Expected]}),
 
            ?WHENFAIL(
               io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
@@ -142,16 +98,7 @@ prop_bigint() ->
        Expected,
        integer(-9_223_372_036_854_775_808, +9_223_372_036_854_775_807),
        begin
-           [{parse_complete, []}] = pgmp_connection_sync:parse(
-                                      #{sql => <<"select $1::bigint">>}),
-
-           [{bind_complete, []}] = pgmp_connection_sync:bind(
-                                     #{args => [Expected]}),
-
-           [{row_description, [_]},
-            {data_row, [Result]},
-            {command_complete,
-             {select, 1}}] = pgmp_connection_sync:execute(#{}),
+           Result = pbe(#{sql => <<"select $1::bigint">>, args => [Expected]}),
 
            ?WHENFAIL(
               io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
@@ -164,15 +111,7 @@ prop_numeric() ->
        Expected,
        integer(inf, inf),
        begin
-           [{parse_complete, []}] = pgmp_connection_sync:parse(
-                                      #{sql => <<"select $1::numeric">>}),
-
-           [{bind_complete, []}] = pgmp_connection_sync:bind(#{args => [Expected]}),
-
-           [{row_description, [_]},
-            {data_row, [Result]},
-            {command_complete,
-             {select, 1}}] = pgmp_connection_sync:execute(#{}),
+           Result = pbe(#{sql => <<"select $1::numeric">>, args => [Expected]}),
 
            ?WHENFAIL(
               io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
@@ -252,6 +191,35 @@ prop_bit_varying() ->
        bitstring(),
        begin
            Result = pbe(#{sql => <<"select $1::bit varying">>, args => [Expected]}),
+
+           ?WHENFAIL(
+              io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
+              Result == Expected)
+       end).
+
+prop_time() ->
+    ?FORALL(
+       Expected,
+       ?LET({Hour, Minute, Second},
+            {integer(0, 23), integer(0, 59), integer(0, 59)},
+            {Hour, Minute, Second}),
+       begin
+           Result = pbe(#{sql => <<"select $1::time">>, args => [Expected]}),
+
+           ?WHENFAIL(
+              io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
+              Result == Expected)
+       end).
+
+
+prop_date() ->
+    ?FORALL(
+       Expected,
+       ?LET({Year, Month, Day},
+            {integer(1, 2100), integer(1, 12), integer(1, 28)},
+            {Year, Month, Day}),
+       begin
+           Result = pbe(#{sql => <<"select $1::date">>, args => [Expected]}),
 
            ?WHENFAIL(
               io:format("Expected: ~p, result: ~p~n", [Expected, Result]),

@@ -140,9 +140,10 @@ handle_event(internal,
                      [marshal(string, Portal),
                       marshal(string, Statement),
                       marshal(int16, 1),
-                      marshal(int16, 1),
+                      marshal(int16, format(pgmp_config:bind(parameter))),
 
                       marshal(int16, length(Values)),
+
                       lists:foldl(
                         fun
                             ({_, null}, A) ->
@@ -151,7 +152,7 @@ handle_event(internal,
                             ({TypeOID, Value}, A) ->
                                 Encoded = pgmp_data_row:encode(
                                             Parameters,
-                                            [{#{format => binary,
+                                            [{#{format => pgmp_config:bind(parameter),
                                                 type_oid => TypeOID},
                                               Value}]),
                                 [A,
@@ -161,7 +162,9 @@ handle_event(internal,
                         [],
                         lists:zip(Types, Values)),
                       marshal(int16, 1),
-                      marshal(int16, 1)])]})}
+                      marshal(
+                        int16,
+                        format(pgmp_config:bind(result)))])]})}
     end;
 
 handle_event(internal, {execute, [Portal, MaxRows]}, _, _) ->
@@ -344,3 +347,10 @@ handle_event(enter, _, unsynchronized, Data) ->
 
 handle_event(Type, Content, State, Data) ->
     pgmp_mm_common:handle_event(Type, Content, State, Data).
+
+
+format(text) ->
+    0;
+
+format(binary) ->
+    1.
