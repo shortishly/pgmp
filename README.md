@@ -237,10 +237,10 @@ process and not returned to the connection pool.
 
 A named statement can be created in any connection by using
 `parse`. However, the named statement is only created in that
-connection. Once the connection is released (via `sync`), you may not
-get the same connection back from the pool.
+connection. Once the connection is released, you may not get the same
+connection back from the pool.
 
-Named prepared statements that are available in all pooled connection,
+Named prepared statements that are available in all pooled connections,
 can be setup in Application configuration in [dev.config](/dev.config):
 
 ```erlang
