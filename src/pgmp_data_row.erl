@@ -231,10 +231,8 @@ decode(#{<<"integer_datetimes">> := <<"on">>},
          _/bytes>>) ->
     {triple(Ye, Mo, Da), triple(Ho, Mi, Se)};
 
-decode(_, binary, _, #{<<"typname">> := <<"timestamp">>}, <<Encoded:64>>) ->
-    calendar:system_time_to_universal_time(
-      epoch(pg) + Encoded - epoch(posix),
-      microsecond);
+decode(_, binary, _, #{<<"typname">> := <<"timestamp">>}, <<Encoded:64/signed>>) ->
+    pgmp_calendar:decode(Encoded);
 
 decode(_, binary, _, #{<<"typname">> := <<"int", R/bytes>>}, Encoded) ->
     Size = binary_to_integer(R),
@@ -358,19 +356,6 @@ numeric([], Value) ->
 
 triple(X, Y, Z) ->
     list_to_tuple([binary_to_integer(I) || I <- [X, Y, Z]]).
-
-
-epoch(System) ->
-    erlang:convert_time_unit(
-      calendar:datetime_to_gregorian_seconds({epoch_date(System), {0, 0, 0}}),
-      second,
-      microsecond).
-
-epoch_date(pg) ->
-    {2000, 1, 1};
-
-epoch_date(posix) ->
-    {1970, 1, 1}.
 
 
 encode(Parameters, TypeValue) ->

@@ -227,6 +227,32 @@ prop_date() ->
        end).
 
 
+prop_timestamp() ->
+    ?FORALL(
+       Expected,
+       ?LET({{Ye, Mo, Da}, {Ho, Mi, Se}},
+
+            {{integer(1, 2100), integer(1, 12), integer(1, 28)},
+             {integer(0, 23), integer(0, 59), integer(0, 59)}},
+
+            begin
+                erlang:convert_time_unit(
+                  calendar:datetime_to_gregorian_seconds(
+                    {{Ye, Mo, Da}, {Ho, Mi, Se}}) -
+                      calendar:datetime_to_gregorian_seconds(
+                        {{1970, 1, 1}, {0, 0, 0}}),
+                  second,
+                  microsecond)
+            end),
+       begin
+           Result = pbe(#{sql => <<"select $1::timestamp">>, args => [Expected]}),
+
+           ?WHENFAIL(
+              io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
+              Result == Expected)
+       end).
+
+
 prop_varchar() ->
     ?FORALL(
        Expected,
