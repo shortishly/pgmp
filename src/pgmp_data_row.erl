@@ -231,7 +231,9 @@ decode(#{<<"integer_datetimes">> := <<"on">>},
          _/bytes>>) ->
     {triple(Ye, Mo, Da), triple(Ho, Mi, Se)};
 
-decode(_, binary, _, #{<<"typname">> := <<"timestamp">>}, <<Encoded:64/signed>>) ->
+decode(_, binary, _, #{<<"typname">> := Name}, <<Encoded:64/signed>>)
+  when Name == <<"timestamp">>;
+       Name == <<"timestamptz">> ->
     pgmp_calendar:decode(Encoded);
 
 decode(_, binary, _, #{<<"typname">> := <<"int", R/bytes>>}, Encoded) ->
@@ -303,6 +305,7 @@ decode(#{<<"client_encoding">> := <<"UTF8">>},
        #{<<"typname">> := Type},
        <<Encoded/bytes>>) when Type == <<"varchar">>;
                                Type == <<"name">>;
+                               Type == <<"regtype">>;
                                Type == <<"text">> ->
     unicode:characters_to_binary(Encoded);
 
@@ -312,6 +315,7 @@ decode(#{<<"client_encoding">> := <<"SQL_ASCII">>},
        #{<<"typname">> := Type},
        <<Encoded/bytes>>) when Type == <<"varchar">>;
                                Type == <<"name">>;
+                               Type == <<"regtype">>;
                                Type == <<"text">> ->
     unicode:characters_to_binary(Encoded, latin1);
 
@@ -453,8 +457,10 @@ encode(#{<<"integer_datetimes">> := <<"on">>},
 encode(#{<<"integer_datetimes">> := <<"on">>},
        binary,
        _,
-       #{<<"typname">> := <<"timestamp">>},
-       Timestamp) when is_integer(Timestamp) ->
+       #{<<"typname">> := Name},
+       Timestamp) when is_integer(Timestamp),
+                       Name == <<"timestamp">>;
+                       Name == <<"timestamptz">> ->
     marshal(int64, pgmp_calendar:encode(Timestamp));
 
 encode(#{<<"integer_datetimes">> := <<"on">>},

@@ -41,8 +41,17 @@ terminate(Reason, State, Data) ->
     pgmp_mm_common:terminate(Reason, State, Data).
 
 
-handle_event(internal, bootstrap_complete, _, _) ->
-    keep_state_and_data;
+handle_event(internal, bootstrap_complete, State, Data) ->
+    case pgmp:get_env(named_statements) of
+        {ok, NamedStatements} ->
+            {next_state,
+             {named_statements, State},
+             Data#{named => maps:iterator(NamedStatements)},
+             [{push_callback_module, pgmp_mm_equery}, nei(next_named)]};
+
+        undefined ->
+            keep_state_and_data
+    end;
 
 handle_event(internal,
              {recv, {ready_for_query, _} = TM},

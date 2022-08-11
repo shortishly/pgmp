@@ -233,6 +233,39 @@ Without a call to `sync`, the completion of the transaction, or a
 simple query, that connection will remain reserved for the initiating
 process and not returned to the connection pool.
 
+### Named Prepared Statements
+
+A named statement can be created in any connection by using
+`parse`. However, the named statement is only created in that
+connection. Once the connection is released (via `sync`), you may not
+get the same connection back from the pool.
+
+Named prepared statements that are available in all pooled connection,
+can be setup in Application configuration in [dev.config](/dev.config):
+
+```erlang
+ {pgmp, [...
+         {named_statements,
+          #{<<"now">> => <<"select now()">>,
+            <<"cursors">> => <<"select * from pg_catalog.pg_cursors">>,
+            <<"prepared">> => <<"select * from pg_catalog.pg_prepared_statements">>,
+            <<"yesterday">> => <<"select timestamp 'yesterday'">>,
+            <<"allballs">> => <<"select time 'allballs'">>}},
+         ...]}
+```
+
+The named statements can be used in any connection:
+
+```erlang
+pgmp_connection_sync:bind(#{name => <<"allballs">>}).
+
+pgmp_connection_sync:execute(#{}).
+[{row_description, [<<"time">>]},
+ {data_row, [{0, 0, 0}]},
+ {command_complete,{select,1}}]
+```
+
+
 ## Logical Replication
 
 Tables with single column (primary) or composite (multiple columns)

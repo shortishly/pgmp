@@ -16,6 +16,7 @@
 -module(pgmp).
 
 
+-export([get_env/1]).
 -export([priv_consult/1]).
 -export([priv_dir/0]).
 -export([start/0]).
@@ -27,6 +28,10 @@ start() ->
 
 priv_dir() ->
     code:priv_dir(?MODULE).
+
+
+get_env(Par) ->
+    application:get_env(?MODULE, Par).
 
 
 priv_consult(Filename) ->

@@ -81,6 +81,12 @@ timestamp_test(Config) ->
       Config).
 
 
+timestamptz_test(Config) ->
+    ct_property_test:quickcheck(
+      pgmp_prop_types:prop_timestamptz(),
+      Config).
+
+
 %% oidvector_test(Config) ->
 %%     ct_property_test:quickcheck(
 %%       pgmp_prop_types:prop_oidvector(),
