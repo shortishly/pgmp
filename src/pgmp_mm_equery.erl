@@ -111,7 +111,7 @@ handle_event(internal, {parse, [Name, SQL]}, _, _) ->
               marshal(int16, 0)])]})};
 
 handle_event(internal,
-             {bind, [Portal, Statement, Values]},
+             {bind, [Statement, Portal, Values]},
              _,
              #{cache := Cache, parameters := Parameters}) ->
     case ets:lookup(Cache, {parameter_description, Statement}) of
@@ -140,9 +140,10 @@ handle_event(internal,
                      [marshal(string, Portal),
                       marshal(string, Statement),
                       marshal(int16, 1),
-                      marshal(int16, 1),
+                      marshal(int16, format(pgmp_config:bind(parameter))),
 
                       marshal(int16, length(Values)),
+
                       lists:foldl(
                         fun
                             ({_, null}, A) ->
@@ -151,7 +152,7 @@ handle_event(internal,
                             ({TypeOID, Value}, A) ->
                                 Encoded = pgmp_data_row:encode(
                                             Parameters,
-                                            [{#{format => binary,
+                                            [{#{format => pgmp_config:bind(parameter),
                                                 type_oid => TypeOID},
                                               Value}]),
                                 [A,
@@ -161,7 +162,9 @@ handle_event(internal,
                         [],
                         lists:zip(Types, Values)),
                       marshal(int16, 1),
-                      marshal(int16, 1)])]})}
+                      marshal(
+                        int16,
+                        format(pgmp_config:bind(result)))])]})}
     end;
 
 handle_event(internal, {execute, [Portal, MaxRows]}, _, _) ->
@@ -186,6 +189,51 @@ handle_event(internal,
              #{parameters := Parameters, types := Types}) ->
     {keep_state_and_data,
      nei({process, {Tag, decode(Parameters, lists:zip(Types, Columns))}})};
+
+handle_event(internal,
+             {recv, {parse_complete, _}},
+             {named_statements, _},
+             #{args := [Statement, _]} = Data) ->
+    Args = [$S, Statement],
+    {keep_state,
+     Data#{args := Args},
+     [nei({describe, Args}), nei(flush)]};
+
+handle_event(internal,
+             {recv, {parameter_description = Tag, Decoded}},
+             {named_statements, _},
+             #{args := [$S, Statement],
+               cache := Cache}) ->
+    ets:insert(Cache, {{Tag, Statement}, Decoded}),
+    keep_state_and_data;
+
+handle_event(internal,
+             {recv, {row_description = Tag, Decoded}},
+             {named_statements, _},
+             #{args := [$S, Statement], cache := Cache} = Data) ->
+    ets:insert(Cache, {{Tag, Statement}, Decoded}),
+    {keep_state, maps:without([args], Data), nei(next_named)};
+
+handle_event(internal,
+             {recv, {ready_for_query, idle}},
+             {named_statements, Previous},
+             Data) ->
+    {next_state, Previous, Data, pop_callback_module};
+
+handle_event(internal,
+             next_named,
+             {named_statements, _},
+             #{named := Named} = Data) ->
+    case maps:next(Named) of
+        {Statement, SQL, Iterator} ->
+            {keep_state,
+             Data#{named := Iterator,
+                   args =>  [Statement, SQL]},
+             [nei({parse, [Statement, SQL]}), nei(flush)]};
+
+        none ->
+            {keep_state, maps:without([named], Data), nei(sync)}
+    end;
 
 handle_event(internal,
              {recv, {parse_complete, _} = TM},
@@ -214,7 +262,7 @@ handle_event(internal, {recv, {error_response, _} = TM}, parse, Data) ->
 handle_event(internal,
              {recv, {bind_complete, _} = Reply},
              bind,
-             #{args := [Portal, _, _]} = Data) ->
+             #{args := [_, Portal, _]} = Data) ->
     {next_state,
      unsynchronized,
      Data,
@@ -344,3 +392,10 @@ handle_event(enter, _, unsynchronized, Data) ->
 
 handle_event(Type, Content, State, Data) ->
     pgmp_mm_common:handle_event(Type, Content, State, Data).
+
+
+format(text) ->
+    0;
+
+format(binary) ->
+    1.

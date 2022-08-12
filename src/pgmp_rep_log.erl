@@ -16,15 +16,23 @@
 -module(pgmp_rep_log).
 
 
+-optional_callbacks([begin_transaction/1]).
+-optional_callbacks([commit/1]).
+
+
 -type relation() :: binary().
 -type request_id_collection() :: gen_statem:request_id_collection().
 -type server_ref() :: gen_statem:server_ref().
 -type snapshot_id() :: binary().
+-type x_log() :: #{clock := integer(),
+                   start_wal := integer(),
+                   end_wal := integer()}.
 
 -type crud_collection_req() :: #{server_ref := server_ref(),
                                  label := any(),
                                  relation := relation(),
                                  tuple := tuple(),
+                                 x_log := x_log(),
                                  requests := request_id_collection()}.
 
 -type snapshot_collection_req() :: #{server_ref := server_ref(),
@@ -35,7 +43,22 @@
 -type truncate_collection_req() :: #{server_ref := server_ref(),
                                      label := any(),
                                      relations := [relation()],
+                                     x_log := x_log(),
                                      requests := request_id_collection()}.
+
+-type begin_transaction_req() :: #{server_ref := server_ref(),
+                                   label := any(),
+                                   commit_timestamp := integer(),
+                                   final_lsn := integer(),
+                                   xid := integer(),
+                                   requests := request_id_collection()}.
+
+-type commit_req() :: #{server_ref := server_ref(),
+                        label := any(),
+                        commit_lsn := integer(),
+                        commit_timestamp := integer(),
+                        end_lsn := integer(),
+                        requests := request_id_collection()}.
 
 
 -callback delete(crud_collection_req()) -> request_id_collection().
@@ -43,3 +66,5 @@
 -callback snapshot(snapshot_collection_req()) -> request_id_collection().
 -callback truncate(truncate_collection_req()) -> request_id_collection().
 -callback update(crud_collection_req()) -> request_id_collection().
+-callback begin_transaction(begin_transaction_req()) -> request_id_collection().
+-callback commit(commit_req()) -> request_id_collection().

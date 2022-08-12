@@ -221,7 +221,7 @@ or bind (and overwrite) another statement or portal.
 After an extended query, you can release the connection by:
 
 ```erlang
-1> pgmp_connection_sync:sync(#{args => []}).
+1> pgmp_connection_sync:sync(#{}).
 ok
 ```
 
@@ -232,6 +232,39 @@ the pool.
 Without a call to `sync`, the completion of the transaction, or a
 simple query, that connection will remain reserved for the initiating
 process and not returned to the connection pool.
+
+### Named Prepared Statements
+
+A named statement can be created in any connection by using
+`parse`. However, the named statement is only created in that
+connection. Once the connection is released, you may not get the same
+connection back from the pool.
+
+Named prepared statements that are available in all pooled connections,
+can be setup in Application configuration in [dev.config](/dev.config):
+
+```erlang
+ {pgmp, [...
+         {named_statements,
+          #{<<"now">> => <<"select now()">>,
+            <<"cursors">> => <<"select * from pg_catalog.pg_cursors">>,
+            <<"prepared">> => <<"select * from pg_catalog.pg_prepared_statements">>,
+            <<"yesterday">> => <<"select timestamp 'yesterday'">>,
+            <<"allballs">> => <<"select time 'allballs'">>}},
+         ...]}
+```
+
+The named statements can be used in any connection:
+
+```erlang
+pgmp_connection_sync:bind(#{name => <<"allballs">>}).
+
+pgmp_connection_sync:execute(#{}).
+[{row_description, [<<"time">>]},
+ {data_row, [{0, 0, 0}]},
+ {command_complete,{select,1}}]
+```
+
 
 ## Logical Replication
 
@@ -256,6 +289,52 @@ for logical replication. Only the `publication` needs to be created,
 `pgmp` will create the necessary slots and synchronise the published
 data, applying any changes thereafter automatically.
 
+Or with a local `postgres` via `docker`:
+
+```shell
+docker run \
+    --rm \
+    --name postgres \
+    -d \
+    -p 5432:5432 \
+    -e POSTGRES_PASSWORD=postgres \
+    postgres:14 \
+    -c shared_buffers=256MB \
+    -c max_connections=200 \
+    -c wal_level=logical
+```
+
+You can then run a SQL shell with:
+
+```shell
+docker exec --interactive --tty postgres psql postgres postgres
+
+psql (14.4 (Debian 14.4-1.pgdg110+1))
+Type "help" for help.
+
+postgres=# 
+```
+
+The [dev.config](/dev.config) is used to configure `pgmp`, with
+various connection parameters (database hostname, user and password).
+
+To start `pgmp` run:
+
+```shell
+make shell
+```
+
+### Replication Process Overview
+
+A replication slot is created by
+[pgmp_mm_rep_log](src/pgmp_mm_rep_log.erl), from which a transactional
+snapshot is created by the database. Using this snapshot,
+[pgmp_rep_log_ets](src/pgmp_rep_log_ets.erl) retrieves all data from
+the tables in the publication, in a single transaction (using extended
+query with batched execute). Once the initial data has been collected,
+streaming replication is then started, receiving changes that have
+applied since the transaction snapshot to ensure no loss of data.
+
 ### Primary Key
 
 ```sql
@@ -276,6 +355,10 @@ Configure `pgmp` to replicate the `xy` publication, via the stanza:
          {replication_logical_publication_names, <<"xy">>},
          ...]}
 ```
+
+You should restart `pgmp` if you change any of the publication names in
+[dev.config](/dev.config), or if you create the publication in PSQL
+after `pgmp` has started.
 
 The current state of the table is replicated into an ETS table also called `xy`:
 

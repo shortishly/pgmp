@@ -13,7 +13,7 @@
 %% limitations under the License.
 
 
--module(pgmp_type_prop_SUITE).
+-module(pgmp_prop_types_SUITE).
 
 
 -compile(export_all).
@@ -60,6 +60,30 @@ integer_test(Config) ->
 oid_test(Config) ->
     ct_property_test:quickcheck(
       pgmp_prop_types:prop_oid(),
+      Config).
+
+
+time_test(Config) ->
+    ct_property_test:quickcheck(
+      pgmp_prop_types:prop_time(),
+      Config).
+
+
+date_test(Config) ->
+    ct_property_test:quickcheck(
+      pgmp_prop_types:prop_date(),
+      Config).
+
+
+timestamp_test(Config) ->
+    ct_property_test:quickcheck(
+      pgmp_prop_types:prop_timestamp(),
+      Config).
+
+
+timestamptz_test(Config) ->
+    ct_property_test:quickcheck(
+      pgmp_prop_types:prop_timestamptz(),
       Config).
 
 
