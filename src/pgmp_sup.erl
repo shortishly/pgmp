@@ -17,6 +17,7 @@
 
 
 -behaviour(supervisor).
+-export([config/0]).
 -export([get_child/2]).
 -export([init/1]).
 -export([start_link/0]).

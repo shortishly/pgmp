@@ -40,7 +40,7 @@ init_per_suite(Config) ->
             pgmp_connection_sync:query(
               #{sql => iolist_to_binary(
                          io_lib:format(
-                           "create table ~s (x int, y text)",
+                           "create table ~s (id serial, y text)",
                            [Table]))})]),
 
     Publication = alpha(5),
@@ -53,18 +53,23 @@ init_per_suite(Config) ->
                            "create publication ~s for table ~s",
                            [Publication, Table]))})]),
 
+    {ok, _} = pgmp_rep_sup:start_child(Publication),
+
     [{publication, Publication}, {table, Table} | Config].
 
 
 end_per_suite(Config) ->
     Table = ?config(table, Config),
+    Publication = ?config(table, Config),
+
+    {ok, _} = pgmp_rep_sup:terminate_child(Publication),
 
     ct:log("~s: ~p~n",
            [Table,
             pgmp_connection_sync:query(
               #{sql => iolist_to_binary(
                          io_lib:format(
-                           "drop table ~s",
+                           "drop table ~s cascade",
                            [Table]))})]),
 
     ok = application:stop(pgmp).

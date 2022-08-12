@@ -18,28 +18,44 @@
 
 -behaviour(supervisor).
 -export([init/1]).
+-export([start_child/1]).
 -export([start_link/1]).
+-export([terminate_child/1]).
 -import(pgmp_sup, [supervisor/1]).
 
 
 start_link(#{} = Arg) ->
-    supervisor:start_link(?MODULE, [Arg]).
+    supervisor:start_link({local, ?MODULE}, ?MODULE, [Arg]).
+
+start_child(Pub) ->
+    Arg = #{config := Config} = pgmp_sup:config(),
+    supervisor:start_child(
+      ?MODULE,
+      supervisor(#{id => Pub,
+                   m => pgmp_rep_log_sup,
+                   restart => transient,
+                   significant => true,
+                   args => [Arg#{config := Config#{publication => Pub}}]})).
+
+
+terminate_child(Pub) ->
+    supervisor:terminate_child(?MODULE, Pub).
 
 
 init([Arg]) ->
-    case pgmp_config:enabled(pgmp_replication) of
-        true ->
-            {ok, configuration(children(Arg))};
+    {ok,
+     configuration(
+       case pgmp_config:enabled(pgmp_replication) of
+           true ->
+               children(Arg);
 
-        false ->
-            ignore
-    end.
+           false ->
+               []
+       end)}.
 
 
 configuration(Children) ->
-    {#{intensity => length(Children),
-       auto_shutdown => all_significant},
-     Children}.
+    {#{auto_shutdown => all_significant}, Children}.
 
 
 children(#{config := Config} = Arg) ->
