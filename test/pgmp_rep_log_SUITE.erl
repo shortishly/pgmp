@@ -29,7 +29,7 @@ init_per_suite(Config) ->
     _ = application:load(pgmp),
 
     application:set_env(pgmp, pgmp_replication_enabled, false),
-    application:set_env(pgmp, pgmp_mm_trace, true),
+    application:set_env(pgmp, pgmp_mm_trace, false),
     application:set_env(pgmp, pgmp_mm_log, true),
     application:set_env(pgmp, pgmp_mm_log_n, 50),
 
