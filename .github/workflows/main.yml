@@ -16,9 +16,13 @@ jobs:
         run: |
           sudo systemctl start postgresql.service
           pg_isready
+      - name: ci
+        run: |
+          sudo -u postgres psql --command="create user ci password 'ci'"
       - name: Common Test
         run: make ct
         env:
           PGMP_PGMP_REPLICATION_ENABLED: false
-          PGMP_DATABASE_USER: postgres
+          PGMP_DATABASE_USER: ci
           PGMP_DATABASE_NAME: postgres
+          PGMP_DATABASE_PASSWORD: ci
