@@ -19,7 +19,9 @@ Features:
 - A [connection](src/pgmp_connection.erl) pool that is aware of the underlying
   statement state (a simple or extended query, outside or within a
   transaction block).
-  
+
+![main](https://github.com/shortishly/pgmp/actions/workflows/main.yml/badge.svg)
+
 ## Asynchronous Requests
 
 There are two mechanisms for making asynchronous requests to `pmgp`
