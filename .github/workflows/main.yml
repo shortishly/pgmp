@@ -11,7 +11,7 @@ jobs:
         run: make
       - name: PostgreSQL wal_level = logical
         run: |
-          pg_conftool set wal_level logical
+          sudo pg_conftool set wal_level logical
       - name: Start PostgreSQL service
         run: |
           sudo systemctl start postgresql.service
