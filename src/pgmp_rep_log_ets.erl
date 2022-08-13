@@ -28,6 +28,7 @@
 -export([start_link/1]).
 -export([truncate/1]).
 -export([update/1]).
+-export([when_ready/1]).
 -import(pgmp_statem, [nei/1]).
 -include_lib("kernel/include/logger.hrl").
 
@@ -75,6 +76,13 @@ send_request(Action, Keys, Arg) ->
         Arg#{request => {Action, maps:with(Keys, Arg)}})).
 
 
+when_ready(Arg) ->
+    send_request(
+      maps:merge(
+        Arg,
+        #{request => ?FUNCTION_NAME})).
+
+
 send_request(#{label := _} = Arg) ->
     pgmp_statem:send_request(Arg);
 
@@ -90,6 +98,12 @@ init([Arg]) ->
 callback_mode() ->
     handle_event_function.
 
+
+handle_event({call, From}, when_ready, ready, _) ->
+    {keep_state_and_data, {reply, From, ok}};
+
+handle_event({call, _}, when_ready, _, _) ->
+    {keep_state_and_data, postpone};
 
 handle_event({call, From},
              {begin_transaction, _},
@@ -278,10 +292,9 @@ handle_event(
            tables := [Name | Tables]},
      [nei({parse,
            #{label => Label,
-             sql => iolist_to_binary(
-                      io_lib:format(
-                        "select * from ~s.~s",
-                        [Schema, Table]))}}),
+             sql => io_lib:format(
+                      "select * from ~s.~s",
+                      [Schema, Table])}}),
       nei({bind, #{label => Label}}),
       nei({execute,
            #{label => Label,
@@ -375,10 +388,9 @@ handle_event(internal, {set_transaction_snapshot = Label, Id}, _, _) ->
     {keep_state_and_data,
      nei({query,
           #{label => Label,
-            sql => iolist_to_binary(
-                     io_lib:format(
-                       "SET TRANSACTION SNAPSHOT '~s'",
-                       [Id]))}})};
+            sql => io_lib:format(
+                     "SET TRANSACTION SNAPSHOT '~s'",
+                     [Id])}})};
 
 handle_event(internal,
              {Action, Arg},

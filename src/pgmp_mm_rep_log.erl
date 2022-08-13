@@ -277,7 +277,7 @@ handle_event(internal,
     end;
 
 handle_event(internal, identify_system, _, _) ->
-    {keep_state_and_data, nei({query, [<<"IDENTIFY_SYSTEM">>]})};
+    {keep_state_and_data, nei({query, <<"IDENTIFY_SYSTEM">>})};
 
 handle_event(internal,
              {recv, {command_complete, Command}},
@@ -309,10 +309,9 @@ handle_event(internal,
              #{config := #{publication := Publication}}) ->
     {keep_state_and_data,
      nei({Command,
-          iolist_to_binary(
-            lists:join(
-              "_",
-              [pgmp_config:replication(logical, slot_prefix), Publication]))})};
+          lists:join(
+            "_",
+            [pgmp_config:replication(logical, slot_prefix), Publication])})};
 
 handle_event(internal,
              {create_replication_slot, SlotName},
@@ -320,10 +319,9 @@ handle_event(internal,
              _) ->
     {keep_state_and_data,
      nei({query,
-          [iolist_to_binary(
-             io_lib:format(
-               <<"CREATE_REPLICATION_SLOT ~s TEMPORARY LOGICAL pgoutput">>,
-               [SlotName]))]})};
+          io_lib:format(
+            <<"CREATE_REPLICATION_SLOT ~s TEMPORARY LOGICAL pgoutput">>,
+            [SlotName])})};
 
 handle_event(internal,
              start_replication,
@@ -342,11 +340,10 @@ handle_event(internal,
     {keep_state,
      Data#{relations => #{}},
      nei({query,
-          [iolist_to_binary(
-             io_lib:format(
-               <<"START_REPLICATION SLOT ~s LOGICAL ~s ",
-                 "(proto_version '~b', publication_names '~s')">>,
-               [SlotName, "0/0", ProtoVersion, PublicationNames]))]})};
+          io_lib:format(
+             <<"START_REPLICATION SLOT ~s LOGICAL ~s ",
+               "(proto_version '~b', publication_names '~s')">>,
+             [SlotName, "0/0", ProtoVersion, PublicationNames])})};
 
 handle_event(internal, {recv, {row_description, Columns}}, _, Data) ->
     {keep_state, Data#{columns => Columns}};
@@ -370,7 +367,7 @@ handle_event(internal,
                             lists:zip(Columns, Values)))),
               Data)};
 
-handle_event(internal, {query, [SQL]}, _, _) ->
+handle_event(internal, {query, SQL}, _, _) ->
     {keep_state_and_data,
      nei({send, ["Q", size_inclusive([marshal(string, SQL)])]})};
 
