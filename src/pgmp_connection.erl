@@ -254,11 +254,21 @@ handle_event(internal,
                            from := {'DOWN', Monitor, process, Owner, _Info}},
                 reply := ok}},
              _,
-             #{owners := Owners, monitors := Monitors} = Data) ->
+             #{owners := Owners, monitors := Monitors} = Data) when is_map_key(Owner, Owners) ->
     #{Owner := Connection} = Owners,
     {keep_state,
      Data#{monitors := maps:without([Monitor], Monitors),
            owners := maps:without([Owner], Owners)}};
+
+handle_event(internal,
+             {response,
+              #{label := #{module := ?MODULE,
+                           connection := _Connection,
+                           from := {'DOWN', Monitor, process, _Owner, _Info}},
+                reply := ok}},
+             _,
+             #{monitors := Monitors} = Data) ->
+    {keep_state, Data#{monitors := maps:without([Monitor], Monitors)}};
 
 handle_event(internal,
              {response,
