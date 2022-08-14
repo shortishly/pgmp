@@ -24,8 +24,10 @@
 -export([handle_event/4]).
 -export([init/1]).
 -export([insert/1]).
+-export([metadata/1]).
 -export([snapshot/1]).
 -export([start_link/1]).
+-export([terminate/3]).
 -export([truncate/1]).
 -export([update/1]).
 -export([when_ready/1]).
@@ -69,6 +71,10 @@ truncate(Arg) ->
     send_request(?FUNCTION_NAME, [relations, x_log], Arg).
 
 
+metadata(Arg) ->
+    send_request(?FUNCTION_NAME, [], Arg).
+
+
 send_request(Action, Keys, Arg) ->
     send_request(
       maps:without(
@@ -90,14 +96,20 @@ send_request(Arg) ->
     pgmp_statem:send_request(Arg#{label => ?MODULE}).
 
 
-init([Arg]) ->
+init([#{config := #{publication := Publication}} = Arg]) ->
     process_flag(trap_exit, true),
-    {ok, unready, Arg#{requests => gen_statem:reqids_new()}}.
+    pgmp_pg:join([?MODULE, Publication]),
+    {ok,
+     unready,
+     Arg#{requests => gen_statem:reqids_new(), metadata => #{}}}.
 
 
 callback_mode() ->
     handle_event_function.
 
+
+handle_event({call, From}, {metadata, #{}}, ready, #{metadata := Metadata}) ->
+    {keep_state_and_data, {reply, From, Metadata}};
 
 handle_event({call, From}, when_ready, ready, _) ->
     {keep_state_and_data, {reply, From, ok}};
@@ -321,9 +333,9 @@ handle_event(internal,
 
 handle_event(internal,
              {response, #{label := {table, Table} = Label,
-                          reply := [{row_description, _} | T]}},
+                          reply := [{row_description, Columns} | T]}},
              _,
-             #{tables := Tables, keys := Keys} = Data) ->
+             #{tables := Tables, metadata := Metadata, keys := Keys} = Data) ->
     true = ets:insert_new(
              Table,
              lists:map(
@@ -341,7 +353,9 @@ handle_event(internal,
             case lists:delete(Table, Tables) of
                 [] ->
                     {keep_state,
-                     maps:without([tables], Data),
+                     maps:without(
+                       [tables],
+                       Data#{metadata := Metadata#{Table => Columns}}),
                      nei(commit)};
 
                 Remaining ->
@@ -418,6 +432,10 @@ handle_event(info, Msg, _, #{requests := Existing} = Data) ->
                    label => Label},
                  Data#{requests := UpdatedRequests}}
     end.
+
+
+terminate(_Reason, _State, #{config := #{publication := Publication}}) ->
+    pgmp_pg:leave([?MODULE, Publication]).
 
 
 insert_new(Relation, Tuple, Keys) ->
