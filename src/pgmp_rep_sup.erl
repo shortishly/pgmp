@@ -69,8 +69,4 @@ children(#{config := Config} = Arg) ->
                   significant => true,
                   args => [Arg#{config := Config#{publication => Pub}}]})
       end,
-      binary:split(
-        pgmp_config:replication(
-          logical, publication_names),
-        <<",">>,
-        [global, trim_all])).
+      pgmp_config:replication(logical, publication_names)).
