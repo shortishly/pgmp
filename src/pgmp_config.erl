@@ -66,7 +66,10 @@ replication(logical = Type, max_rows = Name) ->
     envy(to_integer, [?FUNCTION_NAME, Type, Name], 5_000);
 
 replication(logical = Type, publication_names = Name) ->
-    envy(to_binary, [?FUNCTION_NAME, Type, Name], <<"pub">>).
+      binary:split(
+        envy(to_binary, [?FUNCTION_NAME, Type, Name], <<"pub">>),
+        <<",">>,
+        [global, trim_all]).
 
 
 -spec bind(parameter | result) -> binary | text.
