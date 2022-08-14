@@ -203,8 +203,9 @@ decode(_,
 decode(_, text, _, #{<<"typname">> := <<"date">>}, <<Ye:4/bytes, "-", Mo:2/bytes, "-", Da:2/bytes>>) ->
     triple(Ye, Mo, Da);
 
-decode(_, binary, _, #{<<"typname">> := <<"date">>}, <<Days:32>>) ->
-    calendar:gregorian_days_to_date(calendar:date_to_gregorian_days(epoch_date(pg)) + Days);
+decode(_, binary, _, #{<<"typname">> := <<"date">>}, <<Days:32/signed>>) ->
+    calendar:gregorian_days_to_date(
+      calendar:date_to_gregorian_days(pgmp_calendar:epoch_date(pg)) + Days);
 
 decode(_, text, _, #{<<"typname">> := <<"time">>}, <<Ho:2/bytes, ":", Mi:2/bytes, ":", Se:2/bytes>>) ->
     triple(Ho, Mi, Se);
@@ -230,10 +231,10 @@ decode(#{<<"integer_datetimes">> := <<"on">>},
          _/bytes>>) ->
     {triple(Ye, Mo, Da), triple(Ho, Mi, Se)};
 
-decode(_, binary, _, #{<<"typname">> := <<"timestamp">>}, <<Encoded:64>>) ->
-    calendar:system_time_to_universal_time(
-      epoch(pg) + Encoded - epoch(posix),
-      microsecond);
+decode(_, binary, _, #{<<"typname">> := Name}, <<Encoded:64/signed>>)
+  when Name == <<"timestamp">>;
+       Name == <<"timestamptz">> ->
+    pgmp_calendar:decode(Encoded);
 
 decode(_, binary, _, #{<<"typname">> := <<"int", R/bytes>>}, Encoded) ->
     Size = binary_to_integer(R),
@@ -304,6 +305,7 @@ decode(#{<<"client_encoding">> := <<"UTF8">>},
        #{<<"typname">> := Type},
        <<Encoded/bytes>>) when Type == <<"varchar">>;
                                Type == <<"name">>;
+                               Type == <<"regtype">>;
                                Type == <<"text">> ->
     unicode:characters_to_binary(Encoded);
 
@@ -313,6 +315,7 @@ decode(#{<<"client_encoding">> := <<"SQL_ASCII">>},
        #{<<"typname">> := Type},
        <<Encoded/bytes>>) when Type == <<"varchar">>;
                                Type == <<"name">>;
+                               Type == <<"regtype">>;
                                Type == <<"text">> ->
     unicode:characters_to_binary(Encoded, latin1);
 
@@ -357,19 +360,6 @@ numeric([], Value) ->
 
 triple(X, Y, Z) ->
     list_to_tuple([binary_to_integer(I) || I <- [X, Y, Z]]).
-
-
-epoch(System) ->
-    erlang:convert_time_unit(
-      calendar:datetime_to_gregorian_seconds({epoch_date(System), {0, 0, 0}}),
-      second,
-      microsecond).
-
-epoch_date(pg) ->
-    {2000, 1, 1};
-
-epoch_date(posix) ->
-    {1970, 1, 1}.
 
 
 encode(Parameters, TypeValue) ->
@@ -454,10 +444,24 @@ encode(#{<<"integer_datetimes">> := <<"on">>},
        text,
        _,
        #{<<"typname">> := <<"timestamp">>},
-       {{Ye, Mo, Da}, {Ho, Mi, Se}}) ->
+       {{Ye, Mo, Da}, {Ho, Mi, Se}}) when is_integer(Ye),
+                                          is_integer(Mo),
+                                          is_integer(Da),
+                                          is_integer(Ho),
+                                          is_integer(Mi),
+                                          is_integer(Se) ->
     io_lib:format(
       "~4..0b-~2..0b-~2..0b ~2..0b:~2..0b:~2..0b",
       [Ye, Mo, Da, Ho, Mi, Se]);
+
+encode(#{<<"integer_datetimes">> := <<"on">>},
+       binary,
+       _,
+       #{<<"typname">> := Name},
+       Timestamp) when is_integer(Timestamp),
+                       Name == <<"timestamp">>;
+                       Name == <<"timestamptz">> ->
+    marshal(int64, pgmp_calendar:encode(Timestamp));
 
 encode(#{<<"integer_datetimes">> := <<"on">>},
        text,
@@ -473,10 +477,24 @@ encode(#{<<"integer_datetimes">> := <<"on">>},
        text,
        _,
        #{<<"typname">> := <<"time">>},
-       {Ho, Mi, Se}) ->
+       {Ho, Mi, Se}) when is_integer(Ho),
+                          is_integer(Mi),
+                          is_integer(Se) ->
     io_lib:format(
       "~2..0b:~2..0b:~2..0b",
       [Ho, Mi, Se]);
+
+encode(#{<<"integer_datetimes">> := <<"on">>},
+       binary,
+       _,
+       #{<<"typname">> := <<"time">>},
+       {Ho, Mi, Se}  = Time) when is_integer(Ho),
+                                  is_integer(Mi),
+                                  is_integer(Se) ->
+    marshal(
+      int64,
+      erlang:convert_time_unit(
+        calendar:time_to_seconds(Time), second, microsecond));
 
 encode(#{<<"integer_datetimes">> := <<"on">>},
        binary,
@@ -485,7 +503,8 @@ encode(#{<<"integer_datetimes">> := <<"on">>},
        {_Ye, _Mo, _Da} = Date) ->
     marshal(
       int32,
-      calendar:date_to_gregorian_days(Date) - calendar:date_to_gregorian_days(epoch_date(pg)));
+      calendar:date_to_gregorian_days(Date) -
+          calendar:date_to_gregorian_days(pgmp_calendar:epoch_date(pg)));
 
 
 encode(_, _, _, #{<<"typname">> := Type}, Value)

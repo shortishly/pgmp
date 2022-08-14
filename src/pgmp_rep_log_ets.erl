@@ -17,15 +17,18 @@
 
 
 -behaviour(pgmp_rep_log).
+-export([begin_transaction/1]).
 -export([callback_mode/0]).
+-export([commit/1]).
 -export([delete/1]).
 -export([handle_event/4]).
 -export([init/1]).
 -export([insert/1]).
 -export([snapshot/1]).
--export([truncate/1]).
 -export([start_link/1]).
+-export([truncate/1]).
 -export([update/1]).
+-export([when_ready/1]).
 -import(pgmp_statem, [nei/1]).
 -include_lib("kernel/include/logger.hrl").
 
@@ -34,39 +37,50 @@ start_link(Arg) ->
     gen_statem:start_link(?MODULE, [Arg], pgmp_config:options(?MODULE)).
 
 
-snapshot(#{id := Id} = Arg) ->
+snapshot(Arg) ->
+    send_request(?FUNCTION_NAME, [id], Arg).
+
+
+begin_transaction(Arg) ->
+    send_request(?FUNCTION_NAME,
+                 [commit_timestamp, final_lsn, xid, x_log],
+                 Arg).
+
+
+commit(Arg) ->
+    send_request(?FUNCTION_NAME,
+                 [commit_lsn, commit_timestamp, end_lsn, x_log],
+                 Arg).
+
+
+insert(Arg) ->
+    send_request(?FUNCTION_NAME, [relation, tuple, x_log], Arg).
+
+
+update(Arg) ->
+    send_request(?FUNCTION_NAME, [relation, tuple, x_log], Arg).
+
+
+delete(Arg) ->
+    send_request(?FUNCTION_NAME, [relation, tuple, x_log], Arg).
+
+
+truncate(Arg) ->
+    send_request(?FUNCTION_NAME, [relations, x_log], Arg).
+
+
+send_request(Action, Keys, Arg) ->
     send_request(
       maps:without(
-        [id],
-        Arg#{request => {?FUNCTION_NAME, Id}})).
+        Keys,
+        Arg#{request => {Action, maps:with(Keys, Arg)}})).
 
 
-insert(#{relation := Relation, tuple := Tuple} = Arg) ->
+when_ready(Arg) ->
     send_request(
-      maps:without(
-        [table, tuple, x_log],
-        Arg#{request => {?FUNCTION_NAME, Relation, Tuple}})).
-
-
-update(#{relation := Relation, tuple := Tuple} = Arg) ->
-    send_request(
-      maps:without(
-        [table, tuple, x_log],
-        Arg#{request => {?FUNCTION_NAME, Relation, Tuple}})).
-
-
-delete(#{relation := Relation, tuple := Tuple} = Arg) ->
-    send_request(
-      maps:without(
-        [table, tuple, x_log],
-        Arg#{request => {?FUNCTION_NAME, Relation, Tuple}})).
-
-
-truncate(#{relations := Relations} = Arg) ->
-    send_request(
-      maps:without(
-        [relations],
-        Arg#{request => {?FUNCTION_NAME, Relations}})).
+      maps:merge(
+        Arg,
+        #{request => ?FUNCTION_NAME})).
 
 
 send_request(#{label := _} = Arg) ->
@@ -85,17 +99,53 @@ callback_mode() ->
     handle_event_function.
 
 
-handle_event({call, From}, {insert, Relation, Tuple}, _, #{keys := Keys}) ->
+handle_event({call, From}, when_ready, ready, _) ->
+    {keep_state_and_data, {reply, From, ok}};
+
+handle_event({call, _}, when_ready, _, _) ->
+    {keep_state_and_data, postpone};
+
+handle_event({call, From},
+             {begin_transaction, _},
+             _,
+             _) ->
+    {keep_state_and_data, {reply, From, ok}};
+
+handle_event({call, From},
+             {commit, _},
+             _,
+             _) ->
+    {keep_state_and_data, {reply, From, ok}};
+
+handle_event({call, From},
+             {insert,
+              #{relation := Relation,
+                x_log := _XLog,
+                tuple := Tuple}},
+             _,
+             #{keys := Keys}) ->
     #{Relation := Positions} = Keys,
     insert_new(Relation, Tuple, Positions),
     {keep_state_and_data, {reply, From, ok}};
 
-handle_event({call, From}, {update, Relation, Tuple}, _, #{keys := Keys}) ->
+handle_event({call, From},
+             {update,
+              #{relation := Relation,
+                x_log := _XLog,
+                tuple := Tuple}},
+              _,
+              #{keys := Keys}) ->
     #{Relation := Positions} = Keys,
     update(Relation, Tuple, Positions),
     {keep_state_and_data, {reply, From, ok}};
 
-handle_event({call, From}, {delete, Relation, Tuple}, _, #{keys := Keys}) ->
+handle_event({call, From},
+             {delete,
+              #{relation := Relation,
+                x_log := _XLog,
+                tuple := Tuple}},
+              _,
+              #{keys := Keys}) ->
     ets:delete(
       binary_to_atom(Relation),
       case Keys of
@@ -107,7 +157,7 @@ handle_event({call, From}, {delete, Relation, Tuple}, _, #{keys := Keys}) ->
       end),
     {keep_state_and_data, {reply, From, ok}};
 
-handle_event({call, From}, {truncate, Relations}, _, _) ->
+handle_event({call, From}, {truncate, #{relations := Relations}}, _, _) ->
     lists:foreach(
       fun
           (Relation) ->
@@ -117,7 +167,7 @@ handle_event({call, From}, {truncate, Relations}, _, _) ->
     {keep_state_and_data, {reply, From, ok}};
 
 
-handle_event({call, Stream}, {snapshot, Id}, _, Data) ->
+handle_event({call, Stream}, {snapshot, #{id := Id}}, _, Data) ->
     {keep_state,
      Data#{stream => Stream, keys => #{}},
      [nei(begin_transaction),
@@ -242,10 +292,9 @@ handle_event(
            tables := [Name | Tables]},
      [nei({parse,
            #{label => Label,
-             sql => iolist_to_binary(
-                      io_lib:format(
-                        "select * from ~s.~s",
-                        [Schema, Table]))}}),
+             sql => io_lib:format(
+                      "select * from ~s.~s",
+                      [Schema, Table])}}),
       nei({bind, #{label => Label}}),
       nei({execute,
            #{label => Label,
@@ -339,10 +388,9 @@ handle_event(internal, {set_transaction_snapshot = Label, Id}, _, _) ->
     {keep_state_and_data,
      nei({query,
           #{label => Label,
-            sql => iolist_to_binary(
-                     io_lib:format(
-                       "SET TRANSACTION SNAPSHOT '~s'",
-                       [Id]))}})};
+            sql => io_lib:format(
+                     "SET TRANSACTION SNAPSHOT '~s'",
+                     [Id])}})};
 
 handle_event(internal,
              {Action, Arg},

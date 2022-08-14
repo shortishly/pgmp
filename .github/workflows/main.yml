@@ -4,27 +4,25 @@ on: [push]
 jobs:
   build:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres
-        env:
-          POSTGRES_PASSWORD: postgres
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
     steps:
       - name: Checkout
         uses: actions/checkout@v2
       - name: Build
         run: make
+      - name: PostgreSQL wal_level = logical
+        run: |
+          sudo pg_conftool set wal_level logical
+      - name: Start PostgreSQL service
+        run: |
+          sudo systemctl start postgresql.service
+          pg_isready
+      - name: ci
+        run: |
+          sudo -u postgres psql --command="create user ci password 'ci' superuser replication"
       - name: Common Test
         run: make ct
         env:
           PGMP_PGMP_REPLICATION_ENABLED: false
-          PGMP_DATABASE_USER: postgres
+          PGMP_DATABASE_USER: ci
           PGMP_DATABASE_NAME: postgres
-          PGMP_DATABASE_PASSWORD: postgres
+          PGMP_DATABASE_PASSWORD: ci

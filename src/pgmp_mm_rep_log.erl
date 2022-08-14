@@ -51,23 +51,18 @@ handle_event(internal,
               #{clock := Clock,
                 end_wal := EndWAL,
                 start_wal := StartWAL,
-                stream := {Command, Arg}} = XLog},
+                stream := {Command, Arg}}},
              _,
              #{wal := WAL} = Data) ->
     {keep_state,
      Data#{wal := WAL#{received := EndWAL,
                        flushed := EndWAL,
                        clock := Clock,
-                       applied := StartWAL}},
+                       applied := EndWAL}},
      nei({Command,
-          Arg#{x_log => maps:with(
-                          [clock,
-                           end_wal,
-                           start_wal],
-                          XLog)}})};
-
-handle_event(internal, {begin_transaction, _}, _, _) ->
-    keep_state_and_data;
+          Arg#{x_log => #{clock => pgmp_calendar:decode(Clock),
+                          end_wal => EndWAL,
+                          start_wal => StartWAL}}})};
 
 handle_event(internal,
              {optional_callback, F, A},
@@ -92,8 +87,21 @@ handle_event(internal,
                               label => F,
                               requests => Requests})}};
 
+
 handle_event(internal,
-             {insert = Modification,
+             {begin_transaction =  Change, Arg},
+             _,
+             _) ->
+    {keep_state_and_data,
+     nei({optional_callback,
+          Change,
+          maps:with([commit_timestamp,
+                     final_lsn,
+                     xid,
+                     x_log], Arg)})};
+
+handle_event(internal,
+             {insert = Change,
               #{relation := Relation,
                 x_log := XLog,
                 tuple := Values}},
@@ -102,13 +110,13 @@ handle_event(internal,
     #{Relation := #{columns := Columns, name := Table}} = Relations,
     {keep_state_and_data,
      nei({callback,
-          Modification,
+          Change,
           #{relation => Table,
             x_log => XLog,
             tuple => row_tuple(Parameters, Columns, Values)}})};
 
 handle_event(internal,
-             {update = Modification,
+             {update = Change,
               #{relation := Relation,
                 x_log := XLog,
                 new := Values}},
@@ -117,26 +125,26 @@ handle_event(internal,
     #{Relation := #{columns := Columns, name := Table}} = Relations,
     {keep_state_and_data,
      nei({callback,
-          Modification,
+          Change,
           #{relation => Table,
             x_log => XLog,
             tuple => row_tuple(Parameters, Columns, Values)}})};
 
 handle_event(internal,
-             {delete = Modification,
+             {delete = Change,
               #{relation := Relation, x_log := XLog, key := Values}},
              _,
              #{relations := Relations, parameters := Parameters}) ->
     #{Relation := #{columns := Columns, name := Table}} = Relations,
     {keep_state_and_data,
      nei({callback,
-          Modification,
+          Change,
           #{relation => Table,
             x_log => XLog,
             tuple => row_tuple(Parameters, Columns, Values)}})};
 
 handle_event(internal,
-             {truncate = Modification,
+             {truncate = Change,
               #{x_log := XLog,
                 relations := Truncates}},
              _,
@@ -149,7 +157,16 @@ handle_event(internal,
               end,
               Truncates),
     {keep_state_and_data,
-     nei({callback, Modification, #{relations => Names, x_log => XLog}})};
+     nei({callback, Change, #{relations => Names, x_log => XLog}})};
+
+handle_event(internal, {commit = Change, Arg}, _, _) ->
+    {keep_state_and_data,
+     nei({optional_callback,
+          Change,
+          maps:with([commit_lsn,
+                     commit_timestamp,
+                     end_lsn],
+                    Arg)})};
 
 handle_event(internal,
              {relation, #{id := Id} = Relation},
@@ -158,17 +175,16 @@ handle_event(internal,
     {keep_state,
      Data#{relations := Relations#{Id => maps:without([id], Relation)}}};
 
-handle_event(internal, {commit, _}, _, _) ->
-    keep_state_and_data;
-
 handle_event(internal,
              {keepalive,
               #{clock := Clock,
-                end_wal := _,
+                end_wal := EndWAL,
                 reply := true}},
              _,
              #{wal := WAL} = Data) ->
-    {keep_state, Data#{wal := WAL#{clock := Clock}}, nei(ping)};
+    {keep_state,
+     Data#{wal := WAL#{clock := Clock, received := EndWAL}},
+     nei(ping)};
 
 handle_event(internal, {keepalive, _}, _, _) ->
     keep_state_and_data;
@@ -193,25 +209,27 @@ handle_event(internal,
             reply => true}})};
 
 handle_event(internal,
-             {response, #{label := Modification, reply := ok}},
+             {response, #{label := Change, reply := ok}},
              _,
              _)
-  when Modification == insert;
-       Modification == update;
-       Modification == delete;
-       Modification == truncate ->
+  when Change == insert;
+       Change == update;
+       Change == delete;
+       Change == truncate;
+       Change == begin_transaction;
+       Change == commit ->
        keep_state_and_data;
 
 handle_event(internal,
              {response,
-              #{label := snapshot_complete,
+              #{label := snapshot,
                 reply :=  {error, no_tables}}},
              waiting_for_snapshot_completion,
              _) ->
     stop;
 
 handle_event(internal,
-             {response, #{label := snapshot_complete, reply :=  ok}},
+             {response, #{label := snapshot, reply :=  ok}},
              waiting_for_snapshot_completion,
              Data) ->
     {next_state,
@@ -259,7 +277,7 @@ handle_event(internal,
     end;
 
 handle_event(internal, identify_system, _, _) ->
-    {keep_state_and_data, nei({query, [<<"IDENTIFY_SYSTEM">>]})};
+    {keep_state_and_data, nei({query, <<"IDENTIFY_SYSTEM">>})};
 
 handle_event(internal,
              {recv, {command_complete, Command}},
@@ -279,17 +297,11 @@ handle_event(
   internal,
   {recv, {ready_for_query, idle}},
   replication_slot,
-  #{config := #{manager := Manager,
-                module := M},
-    requests := Requests,
-    replication_slot := #{<<"snapshot_name">> := Snapshot}} = Data) ->
+  #{replication_slot := #{<<"snapshot_name">> := Snapshot}} = Data) ->
     {next_state,
      waiting_for_snapshot_completion,
-     Data#{requests := M:snapshot(
-                         #{server_ref => Manager,
-                           label => snapshot_complete,
-                           id => Snapshot,
-                           requests => Requests})}};
+     Data,
+     nei({callback, snapshot, #{id => Snapshot}})};
 
 handle_event(internal,
              create_replication_slot = Command,
@@ -297,10 +309,9 @@ handle_event(internal,
              #{config := #{publication := Publication}}) ->
     {keep_state_and_data,
      nei({Command,
-          iolist_to_binary(
-            lists:join(
-              "_",
-              [pgmp_config:replication(logical, slot_prefix), Publication]))})};
+          lists:join(
+            "_",
+            [pgmp_config:replication(logical, slot_prefix), Publication])})};
 
 handle_event(internal,
              {create_replication_slot, SlotName},
@@ -308,10 +319,9 @@ handle_event(internal,
              _) ->
     {keep_state_and_data,
      nei({query,
-          [iolist_to_binary(
-             io_lib:format(
-               <<"CREATE_REPLICATION_SLOT ~s TEMPORARY LOGICAL pgoutput">>,
-               [SlotName]))]})};
+          io_lib:format(
+            <<"CREATE_REPLICATION_SLOT ~s TEMPORARY LOGICAL pgoutput">>,
+            [SlotName])})};
 
 handle_event(internal,
              start_replication,
@@ -330,11 +340,10 @@ handle_event(internal,
     {keep_state,
      Data#{relations => #{}},
      nei({query,
-          [iolist_to_binary(
-             io_lib:format(
-               <<"START_REPLICATION SLOT ~s LOGICAL ~s ",
-                 "(proto_version '~b', publication_names '~s')">>,
-               [SlotName, "0/0", ProtoVersion, PublicationNames]))]})};
+          io_lib:format(
+             <<"START_REPLICATION SLOT ~s LOGICAL ~s ",
+               "(proto_version '~b', publication_names '~s')">>,
+             [SlotName, "0/0", ProtoVersion, PublicationNames])})};
 
 handle_event(internal, {recv, {row_description, Columns}}, _, Data) ->
     {keep_state, Data#{columns => Columns}};
@@ -358,7 +367,7 @@ handle_event(internal,
                             lists:zip(Columns, Values)))),
               Data)};
 
-handle_event(internal, {query, [SQL]}, _, _) ->
+handle_event(internal, {query, SQL}, _, _) ->
     {keep_state_and_data,
      nei({send, ["Q", size_inclusive([marshal(string, SQL)])]})};
 
