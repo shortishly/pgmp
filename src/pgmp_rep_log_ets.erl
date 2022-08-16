@@ -96,17 +96,20 @@ send_request(Arg) ->
     pgmp_statem:send_request(Arg#{label => ?MODULE}).
 
 
-init([#{config := #{publication := Publication}} = Arg]) ->
+init([Arg]) ->
     process_flag(trap_exit, true),
-    pgmp_pg:join([?MODULE, Publication]),
     {ok,
      unready,
-     Arg#{requests => gen_statem:reqids_new(), metadata => #{}}}.
+     Arg#{requests => gen_statem:reqids_new(), metadata => #{}},
+     nei(join)}.
 
 
 callback_mode() ->
     handle_event_function.
 
+handle_event(internal, join, _, #{config := #{publication := Publication}}) ->
+    pgmp_pg:join([?MODULE, Publication]),
+    keep_state_and_data;
 
 handle_event({call, From}, {metadata, #{}}, ready, #{metadata := Metadata}) ->
     {keep_state_and_data, {reply, From, Metadata}};
