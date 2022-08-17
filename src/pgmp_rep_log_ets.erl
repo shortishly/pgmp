@@ -135,42 +135,48 @@ handle_event({call, From},
 handle_event({call, From},
              {insert,
               #{relation := Relation,
-                x_log := _XLog,
+                x_log := XLog,
                 tuple := Tuple}},
              _,
-             #{keys := Keys}) ->
-    #{Relation := Positions} = Keys,
+             #{metadata := Metadata} = Data) ->
+    #{Relation := #{keys := Positions}} = Metadata,
     insert_new(Relation, Tuple, Positions),
-    {keep_state_and_data, {reply, From, ok}};
+    {keep_state,
+     Data#{metadata := metadata(Relation, x_log, XLog, Metadata)},
+     {reply, From, ok}};
 
 handle_event({call, From},
              {update,
               #{relation := Relation,
-                x_log := _XLog,
+                x_log := XLog,
                 tuple := Tuple}},
               _,
-              #{keys := Keys}) ->
-    #{Relation := Positions} = Keys,
+              #{metadata := Metadata} = Data) ->
+    #{Relation := #{keys := Positions}} = Metadata,
     update(Relation, Tuple, Positions),
-    {keep_state_and_data, {reply, From, ok}};
+    {keep_state,
+     Data#{metadata := metadata(Relation, x_log, XLog, Metadata)},
+     {reply, From, ok}};
 
 handle_event({call, From},
              {delete,
               #{relation := Relation,
-                x_log := _XLog,
+                x_log := XLog,
                 tuple := Tuple}},
               _,
-              #{keys := Keys}) ->
+             #{metadata := Metadata} = Data) ->
     ets:delete(
       binary_to_atom(Relation),
-      case Keys of
-          #{Relation := [Primary]} ->
+      case Metadata of
+          #{Relation := #{keys := [Primary]}} ->
               element(Primary, Tuple);
 
-          #{Relation := Composite} ->
+          #{Relation := #{keys := Composite}} ->
               list_to_tuple([element(Pos, Tuple) || Pos <- Composite])
       end),
-    {keep_state_and_data, {reply, From, ok}};
+    {keep_state,
+     Data#{metadata := metadata(Relation, x_log, XLog, Metadata)},
+     {reply, From, ok}};
 
 handle_event({call, From}, {truncate, #{relations := Relations}}, _, _) ->
     lists:foreach(
@@ -184,7 +190,7 @@ handle_event({call, From}, {truncate, #{relations := Relations}}, _, _) ->
 
 handle_event({call, Stream}, {snapshot, #{id := Id}}, _, Data) ->
     {keep_state,
-     Data#{stream => Stream, keys => #{}},
+     Data#{stream => Stream},
      [nei(begin_transaction),
       nei({set_transaction_snapshot, Id}),
       nei(sync_publication_tables)]};
@@ -287,7 +293,7 @@ handle_event(
                {data_row, [Key]},
                {command_complete, {select, 1}}]}},
   _,
-  #{keys := Keys, tables := Tables} = Data) ->
+  #{metadata := Metadata, tables := Tables} = Data) ->
     Name = binary_to_atom(Table),
     Label = {table,
              ets:new(
@@ -303,7 +309,7 @@ handle_event(
                 public,
                 named_table])},
     {keep_state,
-     Data#{keys := Keys#{Table => Key},
+     Data#{metadata := metadata(Table, keys, Key, Metadata),
            tables := [Name | Tables]},
      [nei({parse,
            #{label => Label,
@@ -311,6 +317,7 @@ handle_event(
                       "select * from ~s.~s",
                       [Schema, Table])}}),
       nei({bind, #{label => Label}}),
+      nei({describe, #{type => $P, label => Label}}),
       nei({execute,
            #{label => Label,
              max_rows => pgmp_config:replication(
@@ -334,11 +341,29 @@ handle_event(internal,
              _) ->
     keep_state_and_data;
 
+
+handle_event(internal,
+             {response, #{label := {table, Table},
+                          reply := [{row_description, Columns}]}},
+             _,
+             #{metadata := Metadata} = Data) ->
+    {keep_state,
+     Data#{metadata := metadata(
+                         atom_to_binary(Table),
+                         oids,
+                         [OID || #{type_oid := OID} <- Columns],
+                         Metadata)}};
+
 handle_event(internal,
              {response, #{label := {table, Table} = Label,
                           reply := [{row_description, Columns} | T]}},
              _,
-             #{tables := Tables, metadata := Metadata, keys := Keys} = Data) ->
+             #{tables := Tables, metadata := Metadata} = Data) ->
+
+    Relation = atom_to_binary(Table),
+
+    #{Relation := #{keys := Keys}} = Metadata,
+
     true = ets:insert_new(
              Table,
              lists:map(
@@ -346,7 +371,7 @@ handle_event(internal,
                    ({data_row, Values}) ->
                        insert_or_update_tuple(
                          list_to_tuple(Values),
-                         maps:get(atom_to_binary(Table), Keys))
+                         Keys)
                end,
                lists:droplast(T))),
 
@@ -358,8 +383,8 @@ handle_event(internal,
                     {keep_state,
                      maps:without(
                        [tables],
-                       Data#{metadata := Metadata#{Table => Columns}}),
-                     nei(commit)};
+                       Data#{metadata := metadata(Relation, columns, Columns, Metadata)}),
+                       nei(commit)};
 
                 Remaining ->
                     {keep_state, Data#{tables := Remaining}}
@@ -416,6 +441,7 @@ handle_event(internal,
   when Action == query;
        Action == parse;
        Action == bind;
+       Action == describe;
        Action == execute ->
     {keep_state,
      Data#{requests := pgmp_connection:Action(
@@ -472,3 +498,13 @@ insert_or_update_tuple(Tuple, Composite) ->
          lists:zip(
            lists:seq(1, tuple_size(Tuple)),
            tuple_to_list(Tuple)))]).
+
+
+metadata(Table, Key, Value, Metadata) ->
+    case Metadata of
+        #{Table := TMD} ->
+            Metadata#{Table := TMD#{Key => Value}};
+
+        #{} ->
+            Metadata#{Table => #{Key => Value}}
+    end.
