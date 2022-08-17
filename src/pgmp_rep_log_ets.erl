@@ -197,9 +197,9 @@ handle_event({call, Stream}, {snapshot, #{id := Id}}, _, Data) ->
 
 handle_event(internal,
              {response, #{reply := [{command_complete, 'begin'}]}},
-             _,
-             _) ->
-    keep_state_and_data;
+             query,
+             Data) ->
+    {next_state, unready, Data};
 
 handle_event(internal,
              {response, #{reply := [{command_complete, commit}]}},
@@ -214,18 +214,23 @@ handle_event(internal,
              {response,
               #{label := sync_publication_tables = Label,
                 reply := [{parse_complete, []}]}},
-             _,
-             #{config := #{publication := Publication}}) ->
-    {keep_state_and_data,
+             parse,
+             #{config := #{publication := Publication}} = Data) ->
+    {next_state,
+     unready,
+     Data,
      nei({bind, #{label => Label, args => [Publication]}})};
 
 handle_event(internal,
              {response,
               #{label := sync_publication_tables = Label,
                 reply := [{bind_complete, []}]}},
-             _,
-             _) ->
-    {keep_state_and_data, nei({execute, #{label => Label}})};
+             bind,
+             Data) ->
+    {next_state,
+     unready,
+     Data,
+     nei({execute, #{label => Label}})};
 
 handle_event(internal,
              {response, #{label := sync_publication_tables,
@@ -237,25 +242,33 @@ handle_event(internal,
 handle_event(internal,
              {response, #{label := sync_publication_tables,
                           reply := [{row_description, Columns} | T]}},
-             _,
+             execute,
              Data) ->
     {command_complete, {select, _}} = lists:last(T),
-    {keep_state,
-     Data#{tables => []},
-     lists:map(
-       fun
-           ({data_row, Values}) ->
-               nei({fetch, maps:from_list(lists:zip(Columns, Values))})
-       end,
-       lists:droplast(T))};
+    {next_state,
+     unready,
+     Data,
+     nei({fetch,
+          lists:map(
+            fun
+                ({data_row, Values}) ->
+                    maps:from_list(lists:zip(Columns, Values))
+            end,
+            lists:droplast(T))})};
 
 handle_event(internal,
-             {fetch, #{<<"schemaname">> := Schema, <<"tablename">> := Table}},
-             _,
+             {fetch, []},
+             unready,
+             _) ->
+    {keep_state_and_data, nei(commit)};
+
+handle_event(internal,
+             {fetch, _} = Label,
+             unready,
              _) ->
     {keep_state_and_data,
      nei({parse,
-          #{label => {fetch, #{schema => Schema, table => Table}},
+          #{label => Label,
             sql => <<"select i.indkey from pg_catalog.pg_index i"
                      ", pg_catalog.pg_namespace n"
                      ", pg_catalog.pg_class c"
@@ -270,30 +283,35 @@ handle_event(internal,
 
 handle_event(internal,
              {response,
-              #{label := {fetch, #{schema := Schema, table := Table}} = Label,
+              #{label := {fetch, [#{<<"schemaname">> := Schema, <<"tablename">> := Table} | _]} = Label,
                 reply := [{parse_complete, []}]}},
-             _,
-             _) ->
-    {keep_state_and_data,
+             parse,
+             Data) ->
+    {next_state,
+     unready,
+     Data,
      nei({bind, #{label => Label, args => [Schema, Table]}})};
 
 handle_event(internal,
              {response,
-              #{label := {fetch, #{schema := _, table := _}} = Label,
+              #{label := {fetch, _} = Label,
                 reply := [{bind_complete, []}]}},
-             _,
-             _) ->
-    {keep_state_and_data, nei({execute, #{label => Label}})};
+             bind,
+             Data) ->
+    {next_state,
+     unready,
+     Data,
+     nei({execute, #{label => Label}})};
 
 handle_event(
   internal,
   {response,
-   #{label := {fetch, #{schema := Schema, table := Table}},
+   #{label := {fetch, [#{<<"schemaname">> := Schema, <<"tablename">> := Table} | T]},
      reply := [{row_description, [<<"indkey">>]},
                {data_row, [Key]},
                {command_complete, {select, 1}}]}},
-  _,
-  #{metadata := Metadata, tables := Tables} = Data) ->
+  execute,
+  #{metadata := Metadata} = Data) ->
     Name = binary_to_atom(Table),
     Label = {table,
              ets:new(
@@ -308,57 +326,57 @@ handle_event(
                  end},
                 public,
                 named_table])},
-    {keep_state,
-     Data#{metadata := metadata(Table, keys, Key, Metadata),
-           tables := [Name | Tables]},
+    {next_state,
+     unready,
+     Data#{metadata := metadata(Table, keys, Key, Metadata)},
      [nei({parse,
            #{label => Label,
              sql => io_lib:format(
                       "select * from ~s.~s",
                       [Schema, Table])}}),
-      nei({bind, #{label => Label}}),
-      nei({describe, #{type => $P, label => Label}}),
-      nei({execute,
-           #{label => Label,
-             max_rows => pgmp_config:replication(
-                           logical,
-                           max_rows)}})]};
+      nei({fetch, T})]};
 
 
 handle_event(internal,
              {response,
-              #{label := {table, _},
+              #{label := {table, _} = Label,
                 reply := [{parse_complete, []}]}},
-             _,
-             _) ->
-    keep_state_and_data;
+             parse,
+             Data) ->
+    {next_state, unready, Data, nei({bind, #{label => Label}})};
 
 handle_event(internal,
              {response,
-              #{label := {table, _},
+              #{label := {table, _} = Label,
                 reply := [{bind_complete, []}]}},
-             _,
-             _) ->
-    keep_state_and_data;
+             bind,
+             Data) ->
+    {next_state, unready, Data, nei({describe, #{type => $P, label => Label}})};
 
 
 handle_event(internal,
-             {response, #{label := {table, Table},
+             {response, #{label := {table, Table} = Label,
                           reply := [{row_description, Columns}]}},
-             _,
+             describe,
              #{metadata := Metadata} = Data) ->
-    {keep_state,
+    {next_state,
+     unready,
      Data#{metadata := metadata(
                          atom_to_binary(Table),
                          oids,
                          [OID || #{type_oid := OID} <- Columns],
-                         Metadata)}};
+                         Metadata)},
+     nei({execute,
+          #{label => Label,
+            max_rows => pgmp_config:replication(
+                          logical,
+                          max_rows)}})};
 
 handle_event(internal,
              {response, #{label := {table, Table} = Label,
                           reply := [{row_description, Columns} | T]}},
-             _,
-             #{tables := Tables, metadata := Metadata} = Data) ->
+             execute,
+             #{metadata := Metadata} = Data) ->
 
     Relation = atom_to_binary(Table),
 
@@ -376,23 +394,15 @@ handle_event(internal,
                lists:droplast(T))),
 
     case lists:last(T) of
-        {command_complete, {select, _}} = Result ->
-            ?LOG_DEBUG(#{result => Result, length => length(T)}),
-            case lists:delete(Table, Tables) of
-                [] ->
-                    {keep_state,
-                     maps:without(
-                       [tables],
-                       Data#{metadata := metadata(Relation, columns, Columns, Metadata)}),
-                       nei(commit)};
+        {command_complete, {select, _}} ->
+            {next_state,
+             unready,
+             Data#{metadata := metadata(Relation, columns, Columns, Metadata)}};
 
-                Remaining ->
-                    {keep_state, Data#{tables := Remaining}}
-            end;
-
-        {portal_suspended, _} = Result ->
-            ?LOG_DEBUG(#{result => Result, length => length(T)}),
-            {keep_state_and_data,
+        {portal_suspended, _} ->
+            {next_state,
+             unready,
+             Data,
              nei({execute,
                   #{label => Label,
                     max_rows => pgmp_config:replication(
@@ -402,9 +412,9 @@ handle_event(internal,
 
 handle_event(internal,
              {response, #{reply := [{command_complete, set}]}},
-             _,
-             _) ->
-    keep_state_and_data;
+             query,
+             Data) ->
+    {next_state, unready, Data};
 
 handle_event(internal,
              sync_publication_tables = Label,
@@ -436,16 +446,28 @@ handle_event(internal, {set_transaction_snapshot = Label, Id}, _, _) ->
 
 handle_event(internal,
              {Action, Arg},
-             _,
+             unready,
              #{requests := Requests} = Data)
   when Action == query;
        Action == parse;
        Action == bind;
        Action == describe;
        Action == execute ->
-    {keep_state,
+    {next_state,
+     Action,
      Data#{requests := pgmp_connection:Action(
                          Arg#{requests => Requests})}};
+
+handle_event(internal, {Action, _}, _, _)
+  when Action == query;
+       Action == parse;
+       Action == bind;
+       Action == describe;
+       Action == execute ->
+    {keep_state_and_data, postpone};
+
+handle_event(internal, {fetch, _}, _, _) ->
+    {keep_state_and_data, postpone};
 
 handle_event(info, Msg, _, #{requests := Existing} = Data) ->
     case gen_statem:check_response(Msg, Existing, true) of
