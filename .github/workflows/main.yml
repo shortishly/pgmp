@@ -26,3 +26,7 @@ jobs:
           PGMP_DATABASE_USER: ci
           PGMP_DATABASE_NAME: postgres
           PGMP_DATABASE_PASSWORD: ci
+      - uses: actions/upload-artifact@v3
+        with:
+          name: ct-logs
+          path: logs
