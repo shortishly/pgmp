@@ -58,10 +58,8 @@ dep_beaming = git https://github.com/shortishly/beaming.git
 dep_envy = git https://github.com/shortishly/envy.git
 dep_phrase = git https://github.com/shortishly/phrase.git
 
-dep_beaming_commit = main
-dep_phrase_commit = main
+dep_beaming_commit = 0.1.0
+dep_envy_commit = 0.4.0
+dep_phrase_commit = 0.1.0
 
 include erlang.mk
-
-
-all:: dialyze eunit
