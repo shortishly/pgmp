@@ -66,7 +66,7 @@ describe(Arg) ->
     send_request(
       Arg,
       ?FUNCTION_NAME,
-      [type, name]).
+      [type, {name, <<>>}]).
 
 
 execute(Arg) ->

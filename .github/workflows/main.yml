@@ -16,7 +16,7 @@ jobs:
         run: |
           sudo systemctl start postgresql.service
           pg_isready
-      - name: ci
+      - name: Create PostgreSQL ci user
         run: |
           sudo -u postgres psql --command="create user ci password 'ci' superuser replication"
       - name: Common Test
@@ -26,3 +26,7 @@ jobs:
           PGMP_DATABASE_USER: ci
           PGMP_DATABASE_NAME: postgres
           PGMP_DATABASE_PASSWORD: ci
+      - uses: actions/upload-artifact@v3
+        with:
+          name: ct-logs
+          path: logs

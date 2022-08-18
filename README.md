@@ -102,8 +102,8 @@ response will be received as an `info` message as follows:
 handle_event(info, Msg, _, #{requests := Existing} = Data) ->
     case gen_statem:check_response(Msg, Existing, true) of
         {{reply, Reply}, Label, Updated} ->
-            # You have a response with a Label so that you stitch it
-            # back to the original request...
+            %% You have a response with a Label so that you stitch it
+            %% back to the original request...
             do_something_with_response(Reply, Label),
             {keep_state, Data#{requests := Updated}};
 
