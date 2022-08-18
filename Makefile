@@ -15,7 +15,7 @@
 #
 PROJECT = pgmp
 PROJECT_DESCRIPTION = PostgreSQL Message Protocol
-PROJECT_VERSION = 0.1.0
+PROJECT_VERSION = ${shell git describe --tags}
 
 DEPS = \
 	envy \
