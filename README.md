@@ -455,8 +455,10 @@ The implementation uses some recently introduced features of Erlang/OTP:
 
 - [socket](https://www.erlang.org/doc/man/socket.html) for all
   communication
-- [`send_request`](https://www.erlang.org/doc/man/gen_statem.html#send_request-4)
+- [send_request](https://www.erlang.org/doc/man/gen_statem.html#send_request-4)
   for asynchronous request and response.
-- [`change_callback_module`](https://www.erlang.org/doc/man/gen_statem.html#type-action)
+- [change_callback_module](https://www.erlang.org/doc/man/gen_statem.html#type-action)
   to switch between startup, various authentication implementations,
   simple and extended query modes.
+- [pbkdf2_hmac](https://www.erlang.org/doc/man/crypto.html#pbkdf2_hmac-5)
+  in [SCRAM](src/pgmp_scram.erl) authentication.
