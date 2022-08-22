@@ -123,6 +123,7 @@ init([]) ->
     {ok,
      drained,
      #{requests => gen_statem:reqids_new(),
+       max => pgmp_config:pool(max),
        owners => #{},
        outstanding => #{},
        monitors => #{},
@@ -182,6 +183,16 @@ handle_event({call, {Owner, _} = From},
                            from => From},
                          Requests),
            owners := Owners#{Owner => Connection}}};
+
+handle_event({call, _},
+             {request, _},
+             drained,
+             #{max := Max,
+               owners := Owners,
+               connections := Connections})
+             when map_size(Connections) + map_size(Owners) < Max ->
+    {ok, _} = pgmp_pool_sup:start_child(),
+    {keep_state_and_data, postpone};
 
 handle_event({call, _}, {request, _}, drained, _) ->
     {keep_state_and_data, postpone};

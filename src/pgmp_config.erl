@@ -22,6 +22,7 @@
 -export([enabled/1]).
 -export([options/1]).
 -export([pg/1]).
+-export([pool/1]).
 -export([protocol/1]).
 -export([replication/2]).
 -export([timeout/1]).
@@ -98,6 +99,9 @@ database(replication = Name) ->
 
 database(name = Name) ->
     envy(to_binary, [?FUNCTION_NAME, Name], ?FUNCTION_NAME(user)).
+
+pool(max = Name) ->
+    envy(to_integer, [?FUNCTION_NAME, Name], 5).
 
 
 options(M) ->
