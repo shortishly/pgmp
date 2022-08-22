@@ -169,17 +169,17 @@ precision(Value, Digits) ->
 
 
 prop_bytea() ->
-        numtests(
-          ?FORALL(
-             Expected,
-             binary(),
-             begin
-                 Result = pbe(#{sql => <<"select $1::bytea">>, args => [Expected]}),
+    numtests(
+      ?FORALL(
+         Expected,
+         binary(),
+         begin
+             Result = pbe(#{sql => <<"select $1::bytea">>, args => [Expected]}),
 
-                 ?WHENFAIL(
-                    io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
-                    Result == Expected)
-             end)).
+             ?WHENFAIL(
+                io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
+                Result == Expected)
+         end)).
 
 
 prop_boolean() ->
@@ -341,6 +341,7 @@ pbe(Arg) ->
      {data_row, [Row]},
      {command_complete,
       {select, 1}}] = pgmp_connection_sync:execute(#{}),
+
     Row.
 
 
