@@ -333,6 +333,20 @@ decode(_,
        <<Encoded/bytes>>) ->
     Encoded;
 
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"inet">>},
+       <<2:8, 32:8, 0:8, Size:8, Encoded:Size/bytes>>) ->
+    list_to_tuple([Octet || <<Octet:8>> <= Encoded]);
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"inet">>},
+       <<3:8, 128:8, 0:8, Size:8, Encoded:Size/bytes>>) ->
+    list_to_tuple([Component || <<Component:16>> <= Encoded]);
+
 decode(Parameters, Format, _TypeCache,Type, Value) ->
     #{parameters => Parameters, format => Format, type => Type, value => Value}.
 
@@ -593,6 +607,27 @@ encode(_, binary, _, #{<<"typname">> := <<"numeric">>}, Value) ->
        end):16,
        0:16>>,
      [<<Digit:16>> || Digit <- Digits]];
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"inet">>},
+       {_, _, _, _} = Value) ->
+    [<<2:8, 32:8, 0:8, 4:8>>, tuple_to_list(Value)];
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"inet">>},
+       {_, _, _, _, _, _, _, _} = Value) ->
+    [<<3:8,
+       128:8,
+       0:8,
+       16:8>>,
+     [<<Component:16>> || Component <- tuple_to_list(Value)]];
+
+encode(_, text, _, #{<<"typname">> := <<"inet">>}, Value) ->
+    Value;
 
 encode(_, binary, _, #{<<"typname">> := Name}, Value)
   when Name == <<"int2">>;

@@ -76,6 +76,12 @@ date_test(Config) ->
       Config).
 
 
+inet_test(Config) ->
+    ct_property_test:quickcheck(
+      pgmp_prop_types:prop_inet(),
+      Config).
+
+
 timestamp_test(Config) ->
     ct_property_test:quickcheck(
       pgmp_prop_types:prop_timestamp(),

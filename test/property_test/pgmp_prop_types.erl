@@ -241,6 +241,34 @@ prop_date() ->
          end)).
 
 
+prop_inet() ->
+    numtests(
+      ?FORALL(
+         Expected,
+         oneof([inet(v4), inet(v6)]),
+         begin
+             Result = pbe(#{sql => <<"select $1::inet">>, args => [Expected]}),
+
+             ?WHENFAIL(
+                io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
+                Result == Expected)
+         end)).
+
+
+inet(v4) ->
+    {integer(0, 255), integer(0, 255), integer(0, 255), integer(0, 255)};
+
+inet(v6) ->
+    {integer(0, 65_535),
+     integer(0, 65_535),
+     integer(0, 65_535),
+     integer(0, 65_535),
+     integer(0, 65_535),
+     integer(0, 65_535),
+     integer(0, 65_535),
+     integer(0, 65_535)}.
+
+
 prop_timestamp() ->
     numtests(
       ?FORALL(
