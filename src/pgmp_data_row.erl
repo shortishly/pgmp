@@ -347,6 +347,72 @@ decode(_,
        <<3:8, 128:8, 0:8, Size:8, Encoded:Size/bytes>>) ->
     list_to_tuple([Component || <<Component:16>> <= Encoded]);
 
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"point">>},
+       <<X:8/signed-float-unit:8, Y:8/signed-float-unit:8>>) ->
+    #{x => X, y => Y};
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"path">>},
+       <<0:8, _:32, Remainder/bytes>>) ->
+    #{path => open,
+      points => [#{x => X,
+                   y => Y} || <<X:8/signed-float-unit:8,
+                                Y:8/signed-float-unit:8>> <= Remainder]};
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"path">>},
+       <<1:8, _:32, Remainder/bytes>>) ->
+    #{path => closed,
+      points => [#{x => X,
+                   y => Y} || <<X:8/signed-float-unit:8,
+                                Y:8/signed-float-unit:8>> <= Remainder]};
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"polygon">>},
+       <<_:32, Remainder/bytes>>) ->
+    [#{x => X,
+       y => Y} || <<X:8/signed-float-unit:8,
+                    Y:8/signed-float-unit:8>> <= Remainder];
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"circle">>},
+       <<X:8/signed-float-unit:8,
+         Y:8/signed-float-unit:8,
+         Radius:8/signed-float-unit:8>>) ->
+    #{x => X, y => Y, radius => Radius};
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := Type},
+       <<X1:8/signed-float-unit:8, Y1:8/signed-float-unit:8,
+         X2:8/signed-float-unit:8, Y2:8/signed-float-unit:8>>)
+  when Type == <<"lseg">>;
+       Type == <<"box">> ->
+    {#{x => X1, y => Y1}, #{x => X2, y => Y2}};
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"line">>},
+       <<A:8/signed-float-unit:8,
+         B:8/signed-float-unit:8,
+         C:8/signed-float-unit:8>>) ->
+    %% Lines are represented by the linear equation Ax + By + C = 0,
+    %% where A and B are not both zero.
+    #{a => A, b => B, c => C};
+
 decode(Parameters, Format, _TypeCache,Type, Value) ->
     #{parameters => Parameters, format => Format, type => Type, value => Value}.
 
@@ -628,6 +694,70 @@ encode(_,
 
 encode(_, text, _, #{<<"typname">> := <<"inet">>}, Value) ->
     Value;
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"point">>},
+       #{x := X, y := Y}) ->
+    <<X:8/float-unit:8, Y:8/float-unit:8>>;
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"path">>},
+       #{path := open, points := Points}) when is_list(Points) ->
+    [<<0:8, (length(Points)):32>>,
+     [<<X:8/signed-float-unit:8,
+        Y:8/signed-float-unit:8>> || #{x := X,
+                                       y := Y} <- Points]];
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"path">>},
+       #{path := closed, points := Points}) when is_list(Points) ->
+    [<<1:8, (length(Points)):32>>,
+     [<<X:8/signed-float-unit:8,
+        Y:8/signed-float-unit:8>> || #{x := X,
+                                       y := Y} <- Points]];
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"polygon">>},
+       Points) when is_list(Points) ->
+    [<<(length(Points)):32>>,
+     [<<X:8/signed-float-unit:8,
+        Y:8/signed-float-unit:8>> || #{x := X,
+                                       y := Y} <- Points]];
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"circle">>},
+       #{x := X, y := Y, radius := Radius}) ->
+    <<X:8/float-unit:8, Y:8/float-unit:8, Radius:8/float-unit:8>>;
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := Type},
+       {#{x := X1, y := Y1}, #{x := X2, y := Y2}})
+  when Type == <<"lseg">>;
+       Type == <<"box">> ->
+    <<X1:8/float-unit:8, Y1:8/float-unit:8,
+      X2:8/float-unit:8, Y2:8/float-unit:8>>;
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"line">>},
+       #{a := A, b := B, c := C})
+  when A /= 0, B /= 0 ->
+    %% Lines are represented by the linear equation Ax + By + C = 0,
+    %% where A and B are not both zero.
+    <<A:8/float-unit:8, B:8/float-unit:8, C:8/float-unit:8>>;
 
 encode(_, binary, _, #{<<"typname">> := Name}, Value)
   when Name == <<"int2">>;

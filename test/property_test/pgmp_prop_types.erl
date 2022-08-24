@@ -19,140 +19,281 @@
 
 
 prop_smallint() ->
-    numtests(
-      ?FORALL(
-         Expected,
-         integer(-32_768, 32_767),
-         begin
-             Result = pbe(#{sql => <<"select $1::smallint">>, args => [Expected]}),
-
-             ?WHENFAIL(
-                io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
-                Result == Expected)
-         end)).
+    t(?FUNCTION_NAME).
 
 
 prop_integer() ->
-    numtests(
-      ?FORALL(
-         Expected,
-         integer(-2_147_483_648, 2_147_483_647),
-         begin
-             Result = pbe(#{sql => <<"select $1::integer">>, args => [Expected]}),
-
-             ?WHENFAIL(
-                io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
-                Result == Expected)
-         end)).
+    t(?FUNCTION_NAME).
 
 
-%% https://www.postgresql.org/docs/8.1/datatype-oid.html
-%%
-%% The oid type is currently implemented as an unsigned four-byte
-%% integer. Therefore, it is not large enough to provide database-wide
-%% uniqueness in large databases, or even in large individual
-%% tables. So, using a user-created table's OID column as a primary
-%% key is discouraged. OIDs are best used only for references to
-%% system tables.
-%%
 prop_oid() ->
-    numtests(
-      ?FORALL(
-         Expected,
-         integer(0, 4_294_967_295),
-         begin
-             Result = pbe(#{sql => <<"select $1::oid">>, args => [Expected]}),
+    t(?FUNCTION_NAME).
 
-             ?WHENFAIL(
-                io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
-                Result == Expected)
-         end)).
 
 prop_oidvector() ->
-    numtests(
-      ?FORALL(
-         Expected,
-         non_empty(list(integer(0, 4_294_967_295))),
-         begin
-             ct:pal("~p~n", [Expected]),
-
-             Result = pbe(#{sql => <<"select $1::oidvector">>, args => [Expected]}),
-
-             ?WHENFAIL(
-                io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
-                Result == Expected)
-         end)).
+    t(?FUNCTION_NAME).
 
 
 prop_integer_array() ->
-    numtests(
-      ?FORALL(
-         Expected,
-         list(integer(-2_147_483_648, 2_147_483_647)),
-         begin
-             Result = pbe(#{sql => <<"select $1::integer array">>, args => [Expected]}),
-
-             ?WHENFAIL(
-                io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
-                Result == Expected)
-         end)).
+    t(?FUNCTION_NAME).
 
 
 prop_bigint() ->
-    numtests(
-      ?FORALL(
-         Expected,
-         integer(-9_223_372_036_854_775_808, +9_223_372_036_854_775_807),
-         begin
-             Result = pbe(#{sql => <<"select $1::bigint">>, args => [Expected]}),
+    t(?FUNCTION_NAME).
 
-             ?WHENFAIL(
-                io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
-                Result == Expected)
-         end)).
+
+prop_real() ->
+    t(?FUNCTION_NAME).
+
+
+prop_double_precision() ->
+    t(?FUNCTION_NAME).
 
 
 prop_numeric() ->
+    t(?FUNCTION_NAME).
+
+
+prop_point() ->
+    t(?FUNCTION_NAME).
+
+
+prop_lseg() ->
+    t(?FUNCTION_NAME).
+
+
+prop_box() ->
+    t(?FUNCTION_NAME).
+
+
+prop_line() ->
+    t(?FUNCTION_NAME).
+
+
+prop_bytea() ->
+    t(?FUNCTION_NAME).
+
+
+prop_boolean() ->
+    t(?FUNCTION_NAME).
+
+
+prop_bit_varying() ->
+    t(?FUNCTION_NAME).
+
+
+prop_time() ->
+    t(?FUNCTION_NAME).
+
+
+prop_date() ->
+    t(?FUNCTION_NAME).
+
+
+prop_inet() ->
+    t(?FUNCTION_NAME).
+
+
+prop_uuid() ->
+    t(?FUNCTION_NAME).
+
+
+prop_varchar() ->
+    t(?FUNCTION_NAME).
+
+
+prop_timestamp() ->
+    t(?FUNCTION_NAME).
+
+
+prop_timestamptz() ->
+    t(?FUNCTION_NAME).
+
+
+prop_circle() ->
+    t(?FUNCTION_NAME).
+
+
+prop_polygon() ->
+    t(?FUNCTION_NAME).
+
+
+prop_path() ->
+    t(?FUNCTION_NAME).
+
+
+t(Property) ->
+    Type = type(Property),
+
     numtests(
       ?FORALL(
          Expected,
-         integer(inf, inf),
+         generator(Type),
          begin
-             Result = pbe(#{sql => <<"select $1::numeric">>, args => [Expected]}),
+             Result = pbe(#{sql => ["select $1::", sql_name(Type)], args => [Expected]}),
+             ct:log("expected: ~p, result: ~p~n", [Expected, Result]),
 
              ?WHENFAIL(
                 io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
                 Result == Expected)
          end)).
 
-%% real - 4 bytes - 6 decimal digits precision.
-prop_real() ->
-    numtests(
-      ?FORALL(
-         Expected,
-         ?LET(Expected, float(inf, inf), precision(Expected, 6)),
+
+generator(smallint) ->
+    integer(-32_768, 32_767);
+
+generator(integer) ->
+    integer(-2_147_483_648, 2_147_483_647);
+
+generator(numeric) ->
+    integer(inf, inf);
+
+generator(integer_array) ->
+    list(?FUNCTION_NAME(integer));
+
+generator(bigint) ->
+    integer(-9_223_372_036_854_775_808, +9_223_372_036_854_775_807);
+
+generator(real) ->
+    %% real - 4 bytes - 6 decimal digits precision.
+    ?LET(Real, float(inf, inf), precision(Real, 6));
+
+generator(double_precision) ->
+    %% double - 8 bytes - 15 decimal digits precision
+    ?LET(Double, float(inf, inf), precision(Double, 15));
+
+generator(point) ->
+    ?LET({X, Y},
+         {?FUNCTION_NAME(double_precision),
+          ?FUNCTION_NAME(double_precision)},
+         #{x => X, y => Y});
+
+generator(polygon) ->
+    non_empty(list(?FUNCTION_NAME(point)));
+
+generator(path) ->
+    ?LET({Path, Points},
+         {oneof([open, closed]), ?FUNCTION_NAME(polygon)},
+         #{path => Path, points => Points});
+
+generator(lseg) ->
+    {?FUNCTION_NAME(point), ?FUNCTION_NAME(point)};
+
+generator(circle) ->
+    ?LET({X, Y, Radius},
+         {?FUNCTION_NAME(double_precision),
+          ?FUNCTION_NAME(double_precision),
+          float(0, inf)},
+         #{x => X, y => Y, radius => precision(Radius, 15)});
+
+%% Any two opposite corners can be supplied on input, but the values
+%% will be reordered as needed to store the upper right and lower left
+%% corners, in that order.
+generator(box) ->
+    ?LET(
+       Box,
+       {?FUNCTION_NAME(point), ?FUNCTION_NAME(point)},
+       case Box of
+           {#{x := HX, y := HY}, #{x := LX, y := LY}} when (HX < LX),
+                                     (HY < LY) ->
+               {#{x => LX, y => LY}, #{x => HX, y => HY}};
+
+           {#{x := HX, y := HY}, #{x := LX, y := LY}} when (HX < LX) ->
+               {#{x => LX, y => HY}, #{x => HX, y => LY}};
+
+           {#{x := HX, y := HY}, #{x := LX, y := LY}} when (HY < LY) ->
+               {#{x => HX, y => LY}, #{x => LX, y => HY}};
+
+           {#{x := HX, y := HY}, #{x := LX, y := LY}} ->
+               {#{x => HX, y => HY}, #{x => LX, y => LY}}
+       end);
+
+generator(line) ->
+    ?LET({A, B, C},
+         {?FUNCTION_NAME(double_precision),
+          ?FUNCTION_NAME(double_precision),
+          ?FUNCTION_NAME(double_precision)},
+         #{a => A, b => B, c => C});
+
+generator(bytea) ->
+    binary();
+
+generator(boolean) ->
+    boolean();
+
+generator(bit_varying) ->
+    bitstring();
+
+generator(time) ->
+    {integer(0, 23), integer(0, 59), integer(0, 59)};
+
+generator(date) ->
+    {integer(1, 2100), integer(1, 12), integer(1, 28)};
+
+generator(oid) ->
+    integer(0, 4_294_967_295);
+
+generator(inet) ->
+    oneof([?FUNCTION_NAME(inet_v4), ?FUNCTION_NAME(inet_v6)]);
+
+generator(inet_v4) ->
+    {integer(0, 255), integer(0, 255), integer(0, 255), integer(0, 255)};
+
+generator(inet_v6) ->
+    {integer(0, 65_535),
+     integer(0, 65_535),
+     integer(0, 65_535),
+     integer(0, 65_535),
+     integer(0, 65_535),
+     integer(0, 65_535),
+     integer(0, 65_535),
+     integer(0, 65_535)};
+
+generator(uuid) ->
+    ?LET(
+       UUID,
+       bitstring(128),
+       begin
+           <<TimeLow:32, TimeMid:16, TimeHi:16, Clock:16, Node:48>> = UUID,
+           iolist_to_binary(
+             io_lib:format(
+               "~8.16.0b-~4.16.0b-~4.16.0b-~4.16.0b-~12.16.0b",
+               [TimeLow, TimeMid, TimeHi, Clock, Node]))
+       end);
+
+generator(varchar) ->
+    ?LET(Expected, list(alphanumeric()), list_to_binary(Expected));
+
+generator(Type) when Type == timestamptz;
+                     Type == timestamp ->
+    ?LET({{Ye, Mo, Da}, {Ho, Mi, Se}},
+         {{integer(1, 2100), integer(1, 12), integer(1, 28)},
+          {integer(0, 23), integer(0, 59), integer(0, 59)}},
          begin
-             Result = pbe(#{sql => <<"select $1::real">>, args => [Expected]}),
+             erlang:convert_time_unit(
+               calendar:datetime_to_gregorian_seconds(
+                 {{Ye, Mo, Da}, {Ho, Mi, Se}}) -
+                   calendar:datetime_to_gregorian_seconds(
+                     {{1970, 1, 1}, {0, 0, 0}}),
+               second,
+               microsecond)
+         end);
 
-             ?WHENFAIL(
-                io:format("expected: ~p, result: ~p~n", [Expected, Result]),
-                Result == Expected)
-         end)).
+generator(oidvector) ->
+    non_empty(list(?FUNCTION_NAME(oid))).
 
 
-%% double - 8 bytes - 15 decimal digits precision
-prop_double() ->
-    numtests(
-      ?FORALL(
-         Expected,
-         ?LET(Expected, float(inf, inf), precision(Expected, 15)),
-         begin
-             Result = pbe(#{sql => <<"select $1::double precision">>, args => [Expected]}),
+%% prop_bigint -> bigint.
+type(Property) ->
+    list_to_atom(
+      string:prefix(
+        atom_to_list(Property),
+        "prop_")).
 
-             ?WHENFAIL(
-                io:format("expected: ~p, result: ~p~n", [Expected, Result]),
-                Result == Expected)
-         end)).
+
+%% double_precision -> "double precision".
+sql_name(Type) ->
+    string:replace(atom_to_list(Type), "_", " ", all).
 
 
 precision(Value, Digits) ->
@@ -167,197 +308,6 @@ precision(Value, Digits) ->
             binary_to_float(<<Decimals/bytes, ".0">>)
     end.
 
-
-prop_bytea() ->
-    numtests(
-      ?FORALL(
-         Expected,
-         binary(),
-         begin
-             Result = pbe(#{sql => <<"select $1::bytea">>, args => [Expected]}),
-
-             ?WHENFAIL(
-                io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
-                Result == Expected)
-         end)).
-
-
-prop_boolean() ->
-    numtests(
-      ?FORALL(
-         Expected,
-         boolean(),
-         begin
-             Result = pbe(#{sql => <<"select $1::boolean">>, args => [Expected]}),
-
-             ?WHENFAIL(
-                io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
-                Result == Expected)
-         end)).
-
-
-prop_bit_varying() ->
-    numtests(
-      ?FORALL(
-         Expected,
-         bitstring(),
-         begin
-             Result = pbe(#{sql => <<"select $1::bit varying">>, args => [Expected]}),
-
-             ?WHENFAIL(
-                io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
-                Result == Expected)
-         end)).
-
-prop_time() ->
-    numtests(
-      ?FORALL(
-         Expected,
-         ?LET({Hour, Minute, Second},
-              {integer(0, 23), integer(0, 59), integer(0, 59)},
-              {Hour, Minute, Second}),
-         begin
-             Result = pbe(#{sql => <<"select $1::time">>, args => [Expected]}),
-
-             ?WHENFAIL(
-                io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
-                Result == Expected)
-         end)).
-
-
-prop_date() ->
-    numtests(
-      ?FORALL(
-         Expected,
-         ?LET({Year, Month, Day},
-              {integer(1, 2100), integer(1, 12), integer(1, 28)},
-              {Year, Month, Day}),
-         begin
-             Result = pbe(#{sql => <<"select $1::date">>, args => [Expected]}),
-
-             ?WHENFAIL(
-                io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
-                Result == Expected)
-         end)).
-
-
-prop_inet() ->
-    numtests(
-      ?FORALL(
-         Expected,
-         oneof([inet(v4), inet(v6)]),
-         begin
-             Result = pbe(#{sql => <<"select $1::inet">>, args => [Expected]}),
-
-             ?WHENFAIL(
-                io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
-                Result == Expected)
-         end)).
-
-
-inet(v4) ->
-    {integer(0, 255), integer(0, 255), integer(0, 255), integer(0, 255)};
-
-inet(v6) ->
-    {integer(0, 65_535),
-     integer(0, 65_535),
-     integer(0, 65_535),
-     integer(0, 65_535),
-     integer(0, 65_535),
-     integer(0, 65_535),
-     integer(0, 65_535),
-     integer(0, 65_535)}.
-
-
-prop_timestamp() ->
-    numtests(
-      ?FORALL(
-         Expected,
-         ?LET({{Ye, Mo, Da}, {Ho, Mi, Se}},
-
-              {{integer(1, 2100), integer(1, 12), integer(1, 28)},
-               {integer(0, 23), integer(0, 59), integer(0, 59)}},
-
-              begin
-                  erlang:convert_time_unit(
-                    calendar:datetime_to_gregorian_seconds(
-                      {{Ye, Mo, Da}, {Ho, Mi, Se}}) -
-                        calendar:datetime_to_gregorian_seconds(
-                          {{1970, 1, 1}, {0, 0, 0}}),
-                  second,
-                    microsecond)
-              end),
-         begin
-             Result = pbe(#{sql => <<"select $1::timestamp">>, args => [Expected]}),
-
-             ?WHENFAIL(
-                io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
-                Result == Expected)
-         end)).
-
-
-prop_timestamptz() ->
-    numtests(
-      ?FORALL(
-         Expected,
-         ?LET({{Ye, Mo, Da}, {Ho, Mi, Se}},
-
-              {{integer(1, 2100), integer(1, 12), integer(1, 28)},
-               {integer(0, 23), integer(0, 59), integer(0, 59)}},
-
-              begin
-                  erlang:convert_time_unit(
-                    calendar:datetime_to_gregorian_seconds(
-                      {{Ye, Mo, Da}, {Ho, Mi, Se}}) -
-                        calendar:datetime_to_gregorian_seconds(
-                          {{1970, 1, 1}, {0, 0, 0}}),
-                    second,
-                    microsecond)
-              end),
-         begin
-             Result = pbe(#{sql => <<"select $1::timestamptz">>, args => [Expected]}),
-
-             ?WHENFAIL(
-                io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
-                Result == Expected)
-         end)).
-
-
-prop_varchar() ->
-    numtests(
-      ?FORALL(
-         Expected,
-         ?LET(Expected, list(alphanumeric()), list_to_binary(Expected)),
-         begin
-             Result = pbe(#{sql => <<"select $1::varchar">>, args => [Expected]}),
-
-             ?WHENFAIL(
-                io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
-                Result == Expected)
-         end)).
-
-
-prop_uuid() ->
-    numtests(
-      ?FORALL(
-         Expected,
-         ?LET(
-            UUID,
-            bitstring(128),
-            begin
-                <<TimeLow:32, TimeMid:16, TimeHi:16, Clock:16, Node:48>> = UUID,
-                iolist_to_binary(
-                  io_lib:format(
-                    "~8.16.0b-~4.16.0b-~4.16.0b-~4.16.0b-~12.16.0b",
-                    [TimeLow, TimeMid, TimeHi, Clock, Node]))
-            end),
-         begin
-             Result = pbe(#{sql => <<"select $1::uuid">>, args => [Expected]}),
-
-             ?WHENFAIL(
-                io:format("Expected: ~p, result: ~p~n", [Expected, Result]),
-                Result == Expected)
-         end)).
 
 pbe(Arg) ->
     [{parse_complete, []}] = pgmp_connection_sync:parse(

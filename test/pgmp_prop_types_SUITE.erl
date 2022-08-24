@@ -41,114 +41,113 @@ end_per_suite(_Config) ->
 
 
 numeric_test(Config) ->
-    ct_property_test:quickcheck(
-      pgmp_prop_types:prop_numeric(),
-      Config).
+    t(?FUNCTION_NAME, Config).
 
 
 smallint_test(Config) ->
-    ct_property_test:quickcheck(
-      pgmp_prop_types:prop_smallint(),
-      Config).
+    t(?FUNCTION_NAME, Config).
 
 
 integer_test(Config) ->
-    ct_property_test:quickcheck(
-      pgmp_prop_types:prop_integer(),
-      Config).
+    t(?FUNCTION_NAME, Config).
 
 
 oid_test(Config) ->
-    ct_property_test:quickcheck(
-      pgmp_prop_types:prop_oid(),
-      Config).
+    t(?FUNCTION_NAME, Config).
 
 
 time_test(Config) ->
-    ct_property_test:quickcheck(
-      pgmp_prop_types:prop_time(),
-      Config).
+    t(?FUNCTION_NAME, Config).
 
 
 date_test(Config) ->
-    ct_property_test:quickcheck(
-      pgmp_prop_types:prop_date(),
-      Config).
+    t(?FUNCTION_NAME, Config).
 
 
 inet_test(Config) ->
-    ct_property_test:quickcheck(
-      pgmp_prop_types:prop_inet(),
-      Config).
+    t(?FUNCTION_NAME, Config).
+
+
+point_test(Config) ->
+    t(?FUNCTION_NAME, Config).
+
+
+polygon_test(Config) ->
+    t(?FUNCTION_NAME, Config).
+
+
+path_test(Config) ->
+    t(?FUNCTION_NAME, Config).
+
+
+circle_test(Config) ->
+    t(?FUNCTION_NAME, Config).
+
+
+lseg_test(Config) ->
+    t(?FUNCTION_NAME, Config).
+
+
+box_test(Config) ->
+    t(?FUNCTION_NAME, Config).
+
+
+line_test(Config) ->
+    t(?FUNCTION_NAME, Config).
 
 
 timestamp_test(Config) ->
-    ct_property_test:quickcheck(
-      pgmp_prop_types:prop_timestamp(),
-      Config).
+    t(?FUNCTION_NAME, Config).
 
 
 timestamptz_test(Config) ->
-    ct_property_test:quickcheck(
-      pgmp_prop_types:prop_timestamptz(),
-      Config).
+    t(?FUNCTION_NAME, Config).
 
 
 %% oidvector_test(Config) ->
-%%     ct_property_test:quickcheck(
-%%       pgmp_prop_types:prop_oidvector(),
-%%       Config).
+%%    t(?FUNCTION_NAME, Config).
 
 
 integer_array_test(Config) ->
-    ct_property_test:quickcheck(
-      pgmp_prop_types:prop_integer_array(),
-      Config).
+    t(?FUNCTION_NAME, Config).
 
 
 bigint_test(Config) ->
-    ct_property_test:quickcheck(
-      pgmp_prop_types:prop_bigint(),
-      Config).
+    t(?FUNCTION_NAME, Config).
 
 
 real_test(Config) ->
-    ct_property_test:quickcheck(
-      pgmp_prop_types:prop_real(),
-      Config).
+    t(?FUNCTION_NAME, Config).
 
 
-double_test(Config) ->
-    ct_property_test:quickcheck(
-      pgmp_prop_types:prop_double(),
-      Config).
+double_precision_test(Config) ->
+    t(?FUNCTION_NAME, Config).
 
 
 bytea_test(Config) ->
-    ct_property_test:quickcheck(
-      pgmp_prop_types:prop_bytea(),
-      Config).
+    t(?FUNCTION_NAME, Config).
 
 
 boolean_test(Config) ->
-    ct_property_test:quickcheck(
-      pgmp_prop_types:prop_boolean(),
-      Config).
+    t(?FUNCTION_NAME, Config).
 
 
 bit_varying_test(Config) ->
-    ct_property_test:quickcheck(
-      pgmp_prop_types:prop_bit_varying(),
-      Config).
+    t(?FUNCTION_NAME, Config).
 
 
 varchar_test(Config) ->
-    ct_property_test:quickcheck(
-      pgmp_prop_types:prop_varchar(),
-      Config).
+    t(?FUNCTION_NAME, Config).
 
 
 uuid_test(Config) ->
+    t(?FUNCTION_NAME, Config).
+
+
+t(FunctionName, Config) ->
+    Names = lists:droplast(
+              pgmp_util:split_on_snake_case(FunctionName)),
+    Property = pgmp_util:snake_case([prop | Names]),
     ct_property_test:quickcheck(
-      pgmp_prop_types:prop_uuid(),
+      pgmp_prop_types:Property(),
       Config).
