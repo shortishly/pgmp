@@ -42,6 +42,10 @@ prop_bigint() ->
     t(?FUNCTION_NAME).
 
 
+prop_money() ->
+    t(?FUNCTION_NAME).
+
+
 prop_real() ->
     t(?FUNCTION_NAME).
 
@@ -152,6 +156,9 @@ generator(integer_array) ->
     list(?FUNCTION_NAME(integer));
 
 generator(bigint) ->
+    integer(-9_223_372_036_854_775_808, +9_223_372_036_854_775_807);
+
+generator(money) ->
     integer(-9_223_372_036_854_775_808, +9_223_372_036_854_775_807);
 
 generator(real) ->

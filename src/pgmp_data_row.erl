@@ -80,6 +80,9 @@ decode(_, text, _, #{<<"typname">> := <<"bool">>}, <<"f">>) ->
 decode(_, text, _, #{<<"typname">> := <<"oid">>}, Value) ->
     binary_to_integer(Value);
 
+decode(_, text, _, #{<<"typname">> := <<"money">>}, Value) ->
+    binary_to_integer(Value);
+
 decode(_,
        binary,
        _,
@@ -235,6 +238,9 @@ decode(_, binary, _, #{<<"typname">> := Name}, <<Encoded:64/signed>>)
   when Name == <<"timestamp">>;
        Name == <<"timestamptz">> ->
     pgmp_calendar:decode(Encoded);
+
+decode(_, binary, _, #{<<"typname">> := <<"money">>}, <<Decoded:64/signed>>) ->
+    Decoded;
 
 decode(_, binary, _, #{<<"typname">> := <<"int", R/bytes>>}, Encoded) ->
     Size = binary_to_integer(R),
@@ -758,6 +764,9 @@ encode(_,
     %% Lines are represented by the linear equation Ax + By + C = 0,
     %% where A and B are not both zero.
     <<A:8/float-unit:8, B:8/float-unit:8, C:8/float-unit:8>>;
+
+encode(_, binary, _, #{<<"typname">> := <<"money">>}, Value) when is_integer(Value) ->
+    marshal({int, 64}, Value);
 
 encode(_, binary, _, #{<<"typname">> := Name}, Value)
   when Name == <<"int2">>;

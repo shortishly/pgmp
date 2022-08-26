@@ -116,6 +116,10 @@ bigint_test(Config) ->
     t(?FUNCTION_NAME, Config).
 
 
+money_test(Config) ->
+    t(?FUNCTION_NAME, Config).
+
+
 real_test(Config) ->
     t(?FUNCTION_NAME, Config).
 
