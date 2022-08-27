@@ -16,7 +16,6 @@
 -module(pgmp_config).
 
 
--export([bind/1]).
 -export([codec/1]).
 -export([database/1]).
 -export([enabled/1]).
@@ -71,12 +70,6 @@ replication(logical = Type, publication_names = Name) ->
         envy(to_binary, [?FUNCTION_NAME, Type, Name], <<"pub">>),
         <<",">>,
         [global, trim_all]).
-
-
--spec bind(parameter | result) -> binary | text.
-
-bind(Type) ->
-    envy(to_atom, [?FUNCTION_NAME, Type], binary).
 
 
 database(options = Name) ->

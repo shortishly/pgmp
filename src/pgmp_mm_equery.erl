@@ -111,7 +111,12 @@ handle_event(internal, {parse, [Name, SQL]}, _, _) ->
               marshal(int16, 0)])]})};
 
 handle_event(internal,
-             {bind, [Statement, Portal, Values]},
+             {bind,
+              [Statement,
+               Portal,
+               Values,
+               ParameterFormat,
+               ResultFormat]},
              _,
              #{cache := Cache, parameters := Parameters}) ->
     case ets:lookup(Cache, {parameter_description, Statement}) of
@@ -140,7 +145,7 @@ handle_event(internal,
                      [marshal(string, Portal),
                       marshal(string, Statement),
                       marshal(int16, 1),
-                      marshal(int16, format(pgmp_config:bind(parameter))),
+                      marshal(int16, format(ParameterFormat)),
 
                       marshal(int16, length(Values)),
 
@@ -152,7 +157,7 @@ handle_event(internal,
                             ({TypeOID, Value}, A) ->
                                 Encoded = pgmp_data_row:encode(
                                             Parameters,
-                                            [{#{format => pgmp_config:bind(parameter),
+                                            [{#{format => ParameterFormat,
                                                 type_oid => TypeOID},
                                               Value}]),
                                 [A,
@@ -164,7 +169,7 @@ handle_event(internal,
                       marshal(int16, 1),
                       marshal(
                         int16,
-                        format(pgmp_config:bind(result)))])]})}
+                        format(ResultFormat))])]})}
     end;
 
 handle_event(internal, {execute, [Portal, MaxRows]}, _, _) ->
@@ -262,7 +267,7 @@ handle_event(internal, {recv, {error_response, _} = TM}, parse, Data) ->
 handle_event(internal,
              {recv, {bind_complete, _} = Reply},
              bind,
-             #{args := [_, Portal, _]} = Data) ->
+             #{args := [_, Portal, _, _, _]} = Data) ->
     {next_state,
      unsynchronized,
      Data,

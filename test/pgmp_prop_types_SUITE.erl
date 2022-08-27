@@ -64,6 +64,14 @@ date_test(Config) ->
     t(?FUNCTION_NAME, Config).
 
 
+macaddr8_test(Config) ->
+    t(?FUNCTION_NAME, Config).
+
+
+macaddr_test(Config) ->
+    t(?FUNCTION_NAME, Config).
+
+
 inet_test(Config) ->
     t(?FUNCTION_NAME, Config).
 

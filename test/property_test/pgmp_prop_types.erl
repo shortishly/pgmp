@@ -98,6 +98,14 @@ prop_inet() ->
     t(?FUNCTION_NAME).
 
 
+prop_macaddr8() ->
+    t(?FUNCTION_NAME).
+
+
+prop_macaddr() ->
+    t(?FUNCTION_NAME).
+
+
 prop_uuid() ->
     t(?FUNCTION_NAME).
 
@@ -239,6 +247,12 @@ generator(date) ->
 
 generator(oid) ->
     integer(0, 4_294_967_295);
+
+generator(macaddr8) ->
+    binary(8);
+
+generator(macaddr) ->
+    binary(6);
 
 generator(inet) ->
     oneof([?FUNCTION_NAME(inet_v4), ?FUNCTION_NAME(inet_v6)]);

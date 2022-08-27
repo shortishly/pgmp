@@ -342,6 +342,27 @@ decode(_,
 decode(_,
        binary,
        _,
+       #{<<"typname">> := <<"tsvector">>},
+       Encoded) ->
+    pgmp_tsvector:decode(Encoded);
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"macaddr8">>},
+       <<Address:8/bytes>>) ->
+    Address;
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"macaddr">>},
+       <<Address:6/bytes>>) ->
+    Address;
+
+decode(_,
+       binary,
+       _,
        #{<<"typname">> := <<"inet">>},
        <<2:8, 32:8, 0:8, Size:8, Encoded:Size/bytes>>) ->
     list_to_tuple([Octet || <<Octet:8>> <= Encoded]);
@@ -598,13 +619,6 @@ encode(_, _, _, #{<<"typname">> := Type}, Value)
        Type == <<"xml">> ->
     (pgmp_config:codec(binary_to_atom(Type))):?FUNCTION_NAME(Value);
 
-encode(_, _, _, #{<<"typname">> := Type}, Value)
-  when Type == <<"varchar">>;
-       Type == <<"name">>;
-       Type == <<"bytea">>;
-       Type == <<"text">> ->
-    Value;
-
 encode(_,
        binary,
        _,
@@ -679,6 +693,27 @@ encode(_, binary, _, #{<<"typname">> := <<"numeric">>}, Value) ->
        end):16,
        0:16>>,
      [<<Digit:16>> || Digit <- Digits]];
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"tsvector">>},
+       Value) ->
+    pgmp_tsvector:encode(Value);
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"macaddr8">>},
+       <<Value:8/bytes>>) ->
+    Value;
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"macaddr">>},
+       <<Value:6/bytes>>) ->
+    Value;
 
 encode(_,
        binary,
@@ -773,7 +808,19 @@ encode(_, binary, _, #{<<"typname">> := Name}, Value)
        Name == <<"int4">>;
        Name == <<"int8">> ->
     <<"int", R/bytes>> = Name,
-    marshal({int, binary_to_integer(R) * 8}, Value).
+    marshal({int, binary_to_integer(R) * 8}, Value);
+
+encode(_, _, _, #{<<"typname">> := Type}, Value)
+  when Type == <<"varchar">>;
+       Type == <<"name">>;
+       Type == <<"bytea">>;
+       Type == <<"macaddr8">>;
+       Type == <<"macaddr">>;
+       Type == <<"text">> ->
+    Value;
+
+encode(_, text, _, _, Value) ->
+    Value.
 
 
 vector_send(
