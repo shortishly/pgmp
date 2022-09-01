@@ -18,6 +18,7 @@
 
 -export([is_exported/3]).
 -export([snake_case/1]).
+-export([split_on_snake_case/1]).
 -export([tl_snake_case/1]).
 
 
@@ -26,7 +27,7 @@ snake_case([_ | _] = Labels) ->
 
 
 split_on_snake_case(Name) ->
-    string:split(atom_to_list(Name), "_").
+    string:split(atom_to_list(Name), "_", all).
 
 tl_snake_case(Name) ->
     case split_on_snake_case(Name) of

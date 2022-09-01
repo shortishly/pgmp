@@ -59,7 +59,11 @@ bind(Arg) ->
     send_request(
       Arg,
       ?FUNCTION_NAME,
-      [{name, <<>>}, {portal, <<>>}, {args, []}]).
+      [{name, <<>>},
+       {portal, <<>>},
+       {args, []},
+       {parameter, binary},
+       {result, binary}]).
 
 
 describe(Arg) ->

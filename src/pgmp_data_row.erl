@@ -24,16 +24,63 @@
 -export([encode/3]).
 -export([encode/5]).
 -export([numeric_encode/1]).
+-export_type([decoded/0]).
 -import(pgmp_codec, [marshal/2]).
 -import(pgmp_codec, [size_exclusive/1]).
 -include_lib("kernel/include/logger.hrl").
 
 
+-type format() :: text | binary.
+-type type_format() :: #{format := format(), type_oid := pgmp:oid()}.
+-type encoded() :: {type_format(), binary() | null}.
+
+-type inet32() :: {pgmp:uint8(), pgmp:uint8(), pgmp:uint8(), pgmp:uint8()}.
+
+-type inet128() :: {pgmp:uint16(),
+                    pgmp:uint16(),
+                    pgmp:uint16(),
+                    pgmp:uint16(),
+                    pgmp:uint16(),
+                    pgmp:uint16(),
+                    pgmp:uint16(),
+                    pgmp:uint16()}.
+
+-type decoded() :: boolean()
+                 | integer()
+                 | bitstring()
+                 | binary()
+                 | [decoded()]
+                 | calendar:date()
+                 | calendar:time()
+                 | calendar:datetime()
+                 | '-Infinity'
+                 | 'Infinity'
+                 | 'NaN'
+                 | float()
+                 | inet32()
+                 | inet128()
+                 | pgmp_geo:point()
+                 | pgmp_geo:path()
+                 | pgmp_geo:polygon()
+                 | pgmp_geo:circle()
+                 | pgmp_geo:line()
+                 | pgmp_geo:lseg()
+                 | pgmp_geo:box().
+
+
+-spec decode(pgmp:parameters(), [encoded()]) -> [decoded()].
+
 decode(Parameters, TypeValue) ->
     ?FUNCTION_NAME(Parameters, TypeValue, pgmp_types:cache()).
 
+
+-spec decode(pgmp:parameters(), [encoded()], pgmp_types:cache()) -> [decoded()].
+
 decode(Parameters, TypeValue, Types) ->
     ?FUNCTION_NAME(Parameters, TypeValue, Types, []).
+
+
+-spec decode(pgmp:parameters(), [encoded()], pgmp_types:cache(), [decoded()]) -> [decoded()].
 
 decode(Parameters, [{_, null} | T], Types, A) ->
     ?FUNCTION_NAME(Parameters, T, Types, [null | A]);
@@ -78,6 +125,9 @@ decode(_, text, _, #{<<"typname">> := <<"bool">>}, <<"f">>) ->
     false;
 
 decode(_, text, _, #{<<"typname">> := <<"oid">>}, Value) ->
+    binary_to_integer(Value);
+
+decode(_, text, _, #{<<"typname">> := <<"money">>}, Value) ->
     binary_to_integer(Value);
 
 decode(_,
@@ -236,6 +286,9 @@ decode(_, binary, _, #{<<"typname">> := Name}, <<Encoded:64/signed>>)
        Name == <<"timestamptz">> ->
     pgmp_calendar:decode(Encoded);
 
+decode(_, binary, _, #{<<"typname">> := <<"money">>}, <<Decoded:64/signed>>) ->
+    Decoded;
+
 decode(_, binary, _, #{<<"typname">> := <<"int", R/bytes>>}, Encoded) ->
     Size = binary_to_integer(R),
     <<Decoded:Size/signed-unit:8>> = Encoded,
@@ -332,6 +385,114 @@ decode(_,
        #{<<"typname">> := <<"bytea">>},
        <<Encoded/bytes>>) ->
     Encoded;
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"tsvector">>},
+       Encoded) ->
+    pgmp_tsvector:decode(Encoded);
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"tsquery">>},
+       Encoded) ->
+    pgmp_tsquery:decode(Encoded);
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"macaddr8">>},
+       <<Address:8/bytes>>) ->
+    Address;
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"macaddr">>},
+       <<Address:6/bytes>>) ->
+    Address;
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"inet">>},
+       <<2:8, 32:8, 0:8, Size:8, Encoded:Size/bytes>>) ->
+    list_to_tuple([Octet || <<Octet:8>> <= Encoded]);
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"inet">>},
+       <<3:8, 128:8, 0:8, Size:8, Encoded:Size/bytes>>) ->
+    list_to_tuple([Component || <<Component:16>> <= Encoded]);
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"point">>},
+       <<X:8/signed-float-unit:8, Y:8/signed-float-unit:8>>) ->
+    #{x => X, y => Y};
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"path">>},
+       <<0:8, _:32, Remainder/bytes>>) ->
+    #{path => open,
+      points => [#{x => X,
+                   y => Y} || <<X:8/signed-float-unit:8,
+                                Y:8/signed-float-unit:8>> <= Remainder]};
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"path">>},
+       <<1:8, _:32, Remainder/bytes>>) ->
+    #{path => closed,
+      points => [#{x => X,
+                   y => Y} || <<X:8/signed-float-unit:8,
+                                Y:8/signed-float-unit:8>> <= Remainder]};
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"polygon">>},
+       <<_:32, Remainder/bytes>>) ->
+    [#{x => X,
+       y => Y} || <<X:8/signed-float-unit:8,
+                    Y:8/signed-float-unit:8>> <= Remainder];
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"circle">>},
+       <<X:8/signed-float-unit:8,
+         Y:8/signed-float-unit:8,
+         Radius:8/signed-float-unit:8>>) ->
+    #{x => X, y => Y, radius => Radius};
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := Type},
+       <<X1:8/signed-float-unit:8, Y1:8/signed-float-unit:8,
+         X2:8/signed-float-unit:8, Y2:8/signed-float-unit:8>>)
+  when Type == <<"lseg">>;
+       Type == <<"box">> ->
+    {#{x => X1, y => Y1}, #{x => X2, y => Y2}};
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"line">>},
+       <<A:8/signed-float-unit:8,
+         B:8/signed-float-unit:8,
+         C:8/signed-float-unit:8>>) ->
+    %% Lines are represented by the linear equation Ax + By + C = 0,
+    %% where A and B are not both zero.
+    #{a => A, b => B, c => C};
 
 decode(Parameters, Format, _TypeCache,Type, Value) ->
     #{parameters => Parameters, format => Format, type => Type, value => Value}.
@@ -512,13 +673,6 @@ encode(_, _, _, #{<<"typname">> := Type}, Value)
        Type == <<"xml">> ->
     (pgmp_config:codec(binary_to_atom(Type))):?FUNCTION_NAME(Value);
 
-encode(_, _, _, #{<<"typname">> := Type}, Value)
-  when Type == <<"varchar">>;
-       Type == <<"name">>;
-       Type == <<"bytea">>;
-       Type == <<"text">> ->
-    Value;
-
 encode(_,
        binary,
        _,
@@ -594,12 +748,140 @@ encode(_, binary, _, #{<<"typname">> := <<"numeric">>}, Value) ->
        0:16>>,
      [<<Digit:16>> || Digit <- Digits]];
 
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"tsvector">>},
+       Value) ->
+    pgmp_tsvector:encode(Value);
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"tsquery">>},
+       Value) ->
+    pgmp_tsquery:encode(Value);
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"macaddr8">>},
+       <<Value:8/bytes>>) ->
+    Value;
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"macaddr">>},
+       <<Value:6/bytes>>) ->
+    Value;
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"inet">>},
+       {_, _, _, _} = Value) ->
+    [<<2:8, 32:8, 0:8, 4:8>>, tuple_to_list(Value)];
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"inet">>},
+       {_, _, _, _, _, _, _, _} = Value) ->
+    [<<3:8,
+       128:8,
+       0:8,
+       16:8>>,
+     [<<Component:16>> || Component <- tuple_to_list(Value)]];
+
+encode(_, text, _, #{<<"typname">> := <<"inet">>}, Value) ->
+    Value;
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"point">>},
+       #{x := X, y := Y}) ->
+    <<X:8/float-unit:8, Y:8/float-unit:8>>;
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"path">>},
+       #{path := open, points := Points}) when is_list(Points) ->
+    [<<0:8, (length(Points)):32>>,
+     [<<X:8/signed-float-unit:8,
+        Y:8/signed-float-unit:8>> || #{x := X,
+                                       y := Y} <- Points]];
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"path">>},
+       #{path := closed, points := Points}) when is_list(Points) ->
+    [<<1:8, (length(Points)):32>>,
+     [<<X:8/signed-float-unit:8,
+        Y:8/signed-float-unit:8>> || #{x := X,
+                                       y := Y} <- Points]];
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"polygon">>},
+       Points) when is_list(Points) ->
+    [<<(length(Points)):32>>,
+     [<<X:8/signed-float-unit:8,
+        Y:8/signed-float-unit:8>> || #{x := X,
+                                       y := Y} <- Points]];
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"circle">>},
+       #{x := X, y := Y, radius := Radius}) ->
+    <<X:8/float-unit:8, Y:8/float-unit:8, Radius:8/float-unit:8>>;
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := Type},
+       {#{x := X1, y := Y1}, #{x := X2, y := Y2}})
+  when Type == <<"lseg">>;
+       Type == <<"box">> ->
+    <<X1:8/float-unit:8, Y1:8/float-unit:8,
+      X2:8/float-unit:8, Y2:8/float-unit:8>>;
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"line">>},
+       #{a := A, b := B, c := C})
+  when A /= 0, B /= 0 ->
+    %% Lines are represented by the linear equation Ax + By + C = 0,
+    %% where A and B are not both zero.
+    <<A:8/float-unit:8, B:8/float-unit:8, C:8/float-unit:8>>;
+
+encode(_, binary, _, #{<<"typname">> := <<"money">>}, Value) when is_integer(Value) ->
+    marshal({int, 64}, Value);
+
 encode(_, binary, _, #{<<"typname">> := Name}, Value)
   when Name == <<"int2">>;
        Name == <<"int4">>;
        Name == <<"int8">> ->
     <<"int", R/bytes>> = Name,
-    marshal({int, binary_to_integer(R) * 8}, Value).
+    marshal({int, binary_to_integer(R) * 8}, Value);
+
+encode(_, _, _, #{<<"typname">> := Type}, Value)
+  when Type == <<"varchar">>;
+       Type == <<"name">>;
+       Type == <<"bytea">>;
+       Type == <<"macaddr8">>;
+       Type == <<"macaddr">>;
+       Type == <<"text">> ->
+    Value;
+
+encode(_, text, _, _, Value) ->
+    Value.
 
 
 vector_send(

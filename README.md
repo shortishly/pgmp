@@ -48,7 +48,7 @@ the reply.
 The module `pgmp_connection_sync` wraps the above:
 
 ```erlang
-1> pgmp_connection_sync:query(#{sql => <<"select 2*3">>})).
+1> pgmp_connection_sync:query(#{sql => <<"select 2*3">>}).
 [{row_description, [<<"?column?">>]},
  {data_row, [6]},
  {command_complete, {select, 1}}]

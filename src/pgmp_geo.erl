@@ -13,30 +13,28 @@
 %% limitations under the License.
 
 
--module(pgmp_binary).
+-module(pgmp_geo).
 
 
--export([foldl/3]).
--export([repeat/4]).
-
--type mapping() :: fun((binary(), any()) -> {binary(), any()}).
-
-
--spec foldl(mapping(), any(), binary()) -> any().
-
-foldl(_, A, <<>>) ->
-    A;
-
-foldl(F, A0, Binary) ->
-    {Remainder, A1} = F(Binary, A0),
-    ?FUNCTION_NAME(F, A1, Remainder).
+-export_type([box/0]).
+-export_type([circle/0]).
+-export_type([line/0]).
+-export_type([lseg/0]).
+-export_type([path/0]).
+-export_type([point/0]).
+-export_type([polygon/0]).
 
 
--spec repeat(non_neg_integer(), binary(), mapping(), any()) -> {binary(), any()}.
+-type point() :: #{x := float(), y := float()}.
 
-repeat(0, Data, _, A) ->
-    {Data, A};
+-type path() :: #{path := closed | open, points := [point()]}.
 
-repeat(N, Data, F, A0) ->
-    {Remainder, A1} = F(Data, A0),
-    ?FUNCTION_NAME(N - 1, Remainder, F, A1).
+-type polygon() :: [point()].
+
+-type circle() :: #{x := float(), y := float(), radius := float()}.
+
+-type line() :: #{a := float(), b := float(), c := float()}.
+
+-type lseg() :: {point(), point()}.
+
+-type box() :: {point(), point()}.

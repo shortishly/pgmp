@@ -14,12 +14,12 @@
 %% limitations under the License.
 
 {<<"S">>, severity_localized}.
-{<<"V">>, severity}.
+{<<"V">>, severity, fun (Severity) -> binary_to_atom(string:lowercase(Severity)) end}.
 {<<"C">>, code}.
 {<<"M">>, message}.
 {<<"D">>, detail}.
 {<<"H">>, hint}.
-{<<"P">>, position}.
+{<<"P">>, position, fun erlang:binary_to_integer/1}.
 {<<"p">>, internal_position}.
 {<<"q">>, internal_query}.
 {<<"W">>, where}.
@@ -29,5 +29,5 @@
 {<<"d">>, data_type_name}.
 {<<"n">>, constraint_name}.
 {<<"F">>, file_name}.
-{<<"L">>, line}.
+{<<"L">>, line, fun erlang:binary_to_integer/1}.
 {<<"R">>, routine}.
