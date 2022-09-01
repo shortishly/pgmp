@@ -470,3 +470,21 @@
    111,110,0,0,1,0,5,
    114,97,116,0,0,1,0,12,
    115,97,116,0,0,1,0,4>>}.
+
+
+
+%% query(#{sql => <<"select $1::varchar::tsquery">>}).
+%% bind(#{format => text, args => [<<"fat & rat">>]}).
+%% execute(#{}).
+%%
+{['and',
+   #{operand => <<"rat">>,prefix => false,weight => 0},
+   #{operand => <<"fat">>,prefix => false,
+     weight => 0}],
+ ignored,
+ binary,
+ 3615, %% tsquery
+ <<0,0,0,3,
+   2,2,1,0,0,
+   114,97,116,0,1,0,0,
+   102,97,116,0>>}.

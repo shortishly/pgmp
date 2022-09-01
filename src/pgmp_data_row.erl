@@ -24,16 +24,63 @@
 -export([encode/3]).
 -export([encode/5]).
 -export([numeric_encode/1]).
+-export_type([decoded/0]).
 -import(pgmp_codec, [marshal/2]).
 -import(pgmp_codec, [size_exclusive/1]).
 -include_lib("kernel/include/logger.hrl").
 
 
+-type format() :: text | binary.
+-type type_format() :: #{format := format(), type_oid := pgmp:oid()}.
+-type encoded() :: {type_format(), binary() | null}.
+
+-type inet32() :: {pgmp:uint8(), pgmp:uint8(), pgmp:uint8(), pgmp:uint8()}.
+
+-type inet128() :: {pgmp:uint16(),
+                    pgmp:uint16(),
+                    pgmp:uint16(),
+                    pgmp:uint16(),
+                    pgmp:uint16(),
+                    pgmp:uint16(),
+                    pgmp:uint16(),
+                    pgmp:uint16()}.
+
+-type decoded() :: boolean()
+                 | integer()
+                 | bitstring()
+                 | binary()
+                 | [decoded()]
+                 | calendar:date()
+                 | calendar:time()
+                 | calendar:datetime()
+                 | '-Infinity'
+                 | 'Infinity'
+                 | 'NaN'
+                 | float()
+                 | inet32()
+                 | inet128()
+                 | pgmp_geo:point()
+                 | pgmp_geo:path()
+                 | pgmp_geo:polygon()
+                 | pgmp_geo:circle()
+                 | pgmp_geo:line()
+                 | pgmp_geo:lseg()
+                 | pgmp_geo:box().
+
+
+-spec decode(pgmp:parameters(), [encoded()]) -> [decoded()].
+
 decode(Parameters, TypeValue) ->
     ?FUNCTION_NAME(Parameters, TypeValue, pgmp_types:cache()).
 
+
+-spec decode(pgmp:parameters(), [encoded()], pgmp_types:cache()) -> [decoded()].
+
 decode(Parameters, TypeValue, Types) ->
     ?FUNCTION_NAME(Parameters, TypeValue, Types, []).
+
+
+-spec decode(pgmp:parameters(), [encoded()], pgmp_types:cache(), [decoded()]) -> [decoded()].
 
 decode(Parameters, [{_, null} | T], Types, A) ->
     ?FUNCTION_NAME(Parameters, T, Types, [null | A]);
@@ -345,6 +392,13 @@ decode(_,
        #{<<"typname">> := <<"tsvector">>},
        Encoded) ->
     pgmp_tsvector:decode(Encoded);
+
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"tsquery">>},
+       Encoded) ->
+    pgmp_tsquery:decode(Encoded);
 
 decode(_,
        binary,
@@ -700,6 +754,13 @@ encode(_,
        #{<<"typname">> := <<"tsvector">>},
        Value) ->
     pgmp_tsvector:encode(Value);
+
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"tsquery">>},
+       Value) ->
+    pgmp_tsquery:encode(Value);
 
 encode(_,
        binary,

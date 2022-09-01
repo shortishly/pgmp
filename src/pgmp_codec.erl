@@ -21,11 +21,117 @@
 -export([marshal/2]).
 -export([size_exclusive/1]).
 -export([size_inclusive/1]).
+-export_type([command_complete_response/0]).
 
+
+-type type() :: {byte, pos_integer()}
+              | int8
+              | int16
+              | int32
+              | int64
+              | {int, pgmp:int_bit_sizes()}
+              | clock
+              | string
+              | empty_query_response
+              | bind_complete
+              | portal_suspended
+              | no_data
+              | parse_complete
+              | notice_response
+              | error_response
+              | authentication
+              | parameter_description
+              | x_log_data
+              | tuple_data
+              | copy_data
+              | copy_both_response
+              | parameter_status
+              | backend_key_data
+              | command_complete
+              | ready_for_query
+              | row_description
+              | data_row.
 
 demarshal({Type, Encoded}) ->
     ?FUNCTION_NAME(Type, Encoded).
 
+-type x_log_begin_transaction() :: #{final_lsn := pgmp:int64(),
+                                     commit_timestamp := pgmp:int64(),
+                                     xid := pgmp:int32()}.
+
+-type x_log_logical_decoding() :: #{xid := pgmp:int32(),
+                                    flags := pgmp:int8(),
+                                    lsn := pgmp:int64(),
+                                    prefix := binary(),
+                                    content := pgmp:int32()}.
+
+-type x_log_commit() :: #{flags := pgmp:int8(),
+                          commit_lsn := pgmp:int64(),
+                          end_lsn := pgmp:int64(),
+                          commit_timestamp := pgmp:int64()}.
+
+-type x_log_origin() :: #{commit_lsn := pgmp:int64(),
+                          name := binary()}.
+
+-type x_log_relation() :: #{id := pgmp:int32(),
+                            namespace := binary(),
+                            name := binary(),
+                            replica_identity := pgmp:int8(),
+                            ncols := pgmp:int16()}.
+
+-type x_log_type() :: #{xid := pgmp:int32(),
+                        type := pgmp:int32(),
+                        namespace := binary(),
+                        name := binary()}.
+
+-type x_log_insert() :: #{relation := pgmp:int32(),
+                          tuple := [tuple_data()]}.
+
+-type x_log_update() :: #{relation := pgmp:int32(),
+                          key := [tuple_data()],
+                          new := [tuple_data()]}.
+
+-type x_log_delete() :: #{relation := pgmp:int32(),
+                          key := [tuple_data()]}.
+
+-type x_log_truncate() :: #{relations := [pgmp:int32()],
+                            options := pgmp:int8()}.
+
+-type x_log_data() :: {begin_transaction, x_log_begin_transaction()}
+                    | {logical_decoding, x_log_logical_decoding()}
+                    | {commit, x_log_commit()}
+                    | {origin, x_log_origin()}
+                    | {relation, x_log_relation()}
+                    | {type, x_log_type()}
+                    | {insert, x_log_insert()}
+                    | {update, x_log_update()}
+                    | {delete, x_log_delete()}
+                    | {truncate, x_log_truncate()}.
+
+-spec demarshal(nonempty_list(type()), binary()) -> {[any()], binary()};
+               ({byte, pos_integer()}, binary()) -> {binary(), binary()};
+               ({int, 8}, binary()) -> {pgmp:int8(), binary()};
+               (int8, binary()) -> {pgmp:int8(), binary()};
+               ({int, 16}, binary()) -> {pgmp:int16(), binary()};
+               (int16, binary()) -> {pgmp:int16(), binary()};
+               ({int, 32}, binary()) -> {pgmp:int32(), binary()};
+               (int32, binary()) -> {pgmp:int32(), binary()};
+               ({int, 64}, binary()) -> {pgmp:int64(), binary()};
+               (int64, binary()) -> {pgmp:int64(), binary()};
+               (clock, binary()) -> {pgmp:int64(), binary()};
+               (string, binary()) -> {binary(), binary()};
+               (empty_query_response, binary()) -> {[], <<>>};
+               (bind_complete, binary()) -> {[], <<>>};
+               (portal_suspended, binary()) -> {[], <<>>};
+               (no_data, binary()) -> {[], <<>>};
+               (parse_complete, binary()) -> {[], <<>>};
+               (notice_response, binary()) -> {any(), binary()};
+               (error_response, binary()) -> {any(), binary()};
+               (authentication, binary()) -> {any(), binary()};
+               (parameter_description, binary()) -> {[pgmp:int32()], binary()};
+               (x_log_data, binary()) -> {x_log_data(), binary()};
+               (tuple_data, binary()) -> {[tuple_data()], binary()};
+               (copy_data, binary()) -> {{x_log_data, x_log_data()}, binary()}.
 
 demarshal(Types, Encoded) when is_list(Types) ->
     lists:mapfoldl(fun demarshal/2, Encoded, Types);
@@ -225,6 +331,33 @@ demarshal(data_row = Type, Encoded) ->
     {Columns, Remainder} = demarshal(int16, Encoded),
     ?FUNCTION_NAME(Type, Columns, Remainder, []).
 
+-type command_complete_operation() :: insert
+                                    | delete
+                                    | select
+                                    | update
+                                    | move
+                                    | fetch
+                                    | copy.
+
+-type command_complete_response() :: {{command_complete_operation(), non_neg_integer()}, binary()}
+                                   | {atom(), binary()}.
+
+-type authentication_response() :: {authenticated, binary()}
+                                 | {kerberos, binary()}
+                                 | {{md5_password, binary()}, binary()}
+                                 | {scm_credentials, binary()}
+                                 | {gss, binary()}
+                                 | {sspi, binary()}
+                                 | {{sasl, any()}, binary()}
+                                 | {{sasl_continue, binary()}, <<>>}
+                                 | {{sasl_final, binary()}, <<>>}.
+
+-spec demarshal(command_complete, binary(), binary()) -> command_complete_response();
+               (authentication, non_neg_integer(), binary()) -> authentication_response();
+               (notice_response, binary(), [{<<_:8>>, binary()}]) -> {[{<<_:8>>, binary()}], binary()};
+               (error_response, binary(), [{<<_:8>>, binary()}]) -> {[{<<_:8>>, binary()}], binary()};
+               ([atom()], [type()], binary()) -> {#{atom() => any()}, binary()}.
+
 
 demarshal(command_complete, <<"INSERT 0 ", Rows/bytes>>, Remainder) ->
     {{insert, binary_to_integer(Rows)}, Remainder};
@@ -320,6 +453,22 @@ demarshal(Keys, Types, Encoded) when is_list(Keys), is_list(Types) ->
     {maps:from_list(lists:zip(Keys, Values)), Remainder}.
 
 
+-type row_description() :: #{field_name := binary(),
+                             table_oid := pgmp:int32(),
+                             column_number := pgmp:int16(),
+                             type_oid := pgmp:int32(),
+                             type_size := pgmp:int16(),
+                             type_modifier := pgmp:int32(),
+                             format := text | binary}.
+
+-type tuple_data() :: #{format := text, value := any()}
+                    | null.
+
+-spec demarshal(row_description, non_neg_integer(), binary(), [row_description()]) -> {[row_description(), ...], binary()};
+               (data_row, non_neg_integer(), binary(), [pgmp_data_row:decoded()]) -> {[pgmp_data_row:decoded()], binary()};
+               (tuple_data, non_neg_integer(), binary(), [tuple_data()]) -> {[tuple_data()], binary()}.
+
+
 demarshal(row_description, 0, Remainder, A) ->
     {lists:reverse(A), Remainder};
 
@@ -375,12 +524,27 @@ demarshal(tuple_data,
                    [#{format => text, value => Value} | A]).
 
 
+-spec size_inclusive(iodata()) -> iolist().
+
 size_inclusive(Data) ->
     [marshal(int32, iolist_size(Data) + 4), Data].
+
+
+-spec size_exclusive(iodata()) -> iolist().
 
 size_exclusive(Data) ->
     [marshal(int32, iolist_size(Data)), Data].
 
+-spec marshal(string, iodata()) -> iolist();
+             (byte, <<_:8>>) -> iodata();
+             (int8, pgmp:int8()) -> nonempty_binary();
+             (int16, pgmp:int16()) -> nonempty_binary();
+             (int32, pgmp:int32()) -> nonempty_binary();
+             (int64, pgmp:int32()) -> nonempty_binary();
+             ({int, 8}, pgmp:int8()) -> nonempty_binary();
+             ({int, 16}, pgmp:int16()) -> nonempty_binary();
+             ({int, 32}, pgmp:int32()) -> nonempty_binary();
+             ({int, 64}, pgmp:int64()) -> nonempty_binary().
 
 marshal(string, Value) ->
     [Value, <<0:8>>];

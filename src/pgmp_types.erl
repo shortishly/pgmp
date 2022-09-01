@@ -24,7 +24,11 @@
 -export([start_link/1]).
 -export([when_ready/1]).
 -export([write_file/1]).
+-export_type([cache/0]).
 -import(pgmp_statem, [nei/1]).
+
+
+-type cache() :: #{pgmp:oid() => #{binary() => any()}}.
 
 
 start_link() ->
@@ -67,6 +71,9 @@ write_file(Filename) ->
          end,
          [],
          cache())]).
+
+
+-spec cache() -> cache().
 
 cache() ->
     persistent_term:get(?MODULE).
