@@ -114,6 +114,10 @@ prop_varchar() ->
     t(?FUNCTION_NAME).
 
 
+prop_text() ->
+    t(?FUNCTION_NAME).
+
+
 prop_timestamp() ->
     t(?FUNCTION_NAME).
 
@@ -283,6 +287,9 @@ generator(uuid) ->
        end);
 
 generator(varchar) ->
+    ?LET(Expected, list(alphanumeric()), list_to_binary(Expected));
+
+generator(text) ->
     ?LET(Expected, list(alphanumeric()), list_to_binary(Expected));
 
 generator(Type) when Type == timestamptz;
