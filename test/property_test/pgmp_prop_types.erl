@@ -30,6 +30,38 @@ prop_oid() ->
     t(?FUNCTION_NAME).
 
 
+prop_regproc() ->
+    t(?FUNCTION_NAME).
+
+
+prop_regprocedure() ->
+    t(?FUNCTION_NAME).
+
+
+prop_regoper() ->
+    t(?FUNCTION_NAME).
+
+
+prop_regoperator() ->
+    t(?FUNCTION_NAME).
+
+
+prop_regclass() ->
+    t(?FUNCTION_NAME).
+
+
+prop_regtype() ->
+    t(?FUNCTION_NAME).
+
+
+prop_regconfig() ->
+    t(?FUNCTION_NAME).
+
+
+prop_regdictionary() ->
+    t(?FUNCTION_NAME).
+
+
 prop_oidvector() ->
     t(?FUNCTION_NAME).
 
@@ -249,7 +281,15 @@ generator(time) ->
 generator(date) ->
     {integer(1, 2100), integer(1, 12), integer(1, 28)};
 
-generator(oid) ->
+generator(OID) when OID == oid;
+                    OID == regproc;
+                    OID == regprocedure;
+                    OID == regoper;
+                    OID == regoperator;
+                    OID == regclass;
+                    OID == regtype;
+                    OID == regconfig;
+                    OID == regdictionary ->
     integer(0, 4_294_967_295);
 
 generator(macaddr8) ->
