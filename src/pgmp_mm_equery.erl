@@ -220,6 +220,12 @@ handle_event(internal,
     {keep_state, maps:without([args], Data), nei(next_named)};
 
 handle_event(internal,
+             {recv, {no_data, _}},
+             {named_statements, _},
+             #{args := [$S, _]} = Data) ->
+    {keep_state, maps:without([args], Data), nei(next_named)};
+
+handle_event(internal,
              {recv, {ready_for_query, idle}},
              {named_statements, Previous},
              Data) ->

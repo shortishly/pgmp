@@ -124,7 +124,19 @@ decode(_, binary, _, #{<<"typname">> := <<"bool">>}, <<0>>) ->
 decode(_, text, _, #{<<"typname">> := <<"bool">>}, <<"f">>) ->
     false;
 
-decode(_, text, _, #{<<"typname">> := <<"oid">>}, Value) ->
+decode(_,
+       text,
+       _,
+       #{<<"typname">> := Name},
+       Value) when Name == <<"oid">>;
+                   Name == <<"regproc">>;
+                   Name == <<"regprocedure">>;
+                   Name == <<"regoper">>;
+                   Name == <<"regoperator">>;
+                   Name == <<"regclass">>;
+                   Name == <<"regtype">>;
+                   Name == <<"regconfig">>;
+                   Name == <<"regdictionary">> ->
     binary_to_integer(Value);
 
 decode(_, text, _, #{<<"typname">> := <<"money">>}, Value) ->
@@ -133,8 +145,16 @@ decode(_, text, _, #{<<"typname">> := <<"money">>}, Value) ->
 decode(_,
        binary,
        _,
-       #{<<"typname">> := <<"oid">>},
-       <<Value:32>>) ->
+       #{<<"typname">> := Name},
+       <<Value:32>>) when Name == <<"oid">>;
+                          Name == <<"regproc">>;
+                          Name == <<"regprocedure">>;
+                          Name == <<"regoper">>;
+                          Name == <<"regoperator">>;
+                          Name == <<"regclass">>;
+                          Name == <<"regtype">>;
+                          Name == <<"regconfig">>;
+                          Name == <<"regdictionary">> ->
     Value;
 
 decode(_,
@@ -705,10 +725,34 @@ encode(_,
          _:12/bytes>> = UUID) ->
     UUID;
 
-encode(_, binary, _, #{<<"typname">> := <<"oid">>}, Value) ->
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := Name},
+       Value) when Name == <<"oid">>;
+                   Name == <<"regproc">>;
+                   Name == <<"regprocedure">>;
+                   Name == <<"regoper">>;
+                   Name == <<"regoperator">>;
+                   Name == <<"regclass">>;
+                   Name == <<"regtype">>;
+                   Name == <<"regconfig">>;
+                   Name == <<"regdictionary">> ->
     <<Value:32>>;
 
-encode(_, text, _, #{<<"typname">> := <<"oid">>}, Value) ->
+encode(_,
+       text,
+       _,
+       #{<<"typname">> := Name},
+       Value) when Name == <<"oid">>;
+                   Name == <<"regproc">>;
+                   Name == <<"regprocedure">>;
+                   Name == <<"regoper">>;
+                   Name == <<"regoperator">>;
+                   Name == <<"regclass">>;
+                   Name == <<"regtype">>;
+                   Name == <<"regconfig">>;
+                   Name == <<"regdictionary">> ->
     integer_to_binary(Value);
 
 encode(_, binary, _, #{<<"typname">> := Name}, <<Value/bits>>)

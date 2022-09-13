@@ -56,6 +56,38 @@ oid_test(Config) ->
     t(?FUNCTION_NAME, Config).
 
 
+regproc_test(Config) ->
+    t(?FUNCTION_NAME, Config).
+
+
+regprocedure_test(Config) ->
+    t(?FUNCTION_NAME, Config).
+
+
+regoper_test(Config) ->
+    t(?FUNCTION_NAME, Config).
+
+
+regoperator_test(Config) ->
+    t(?FUNCTION_NAME, Config).
+
+
+regclass_test(Config) ->
+    t(?FUNCTION_NAME, Config).
+
+
+regtype_test(Config) ->
+    t(?FUNCTION_NAME, Config).
+
+
+regconfig_test(Config) ->
+    t(?FUNCTION_NAME, Config).
+
+
+regdictionary_test(Config) ->
+    t(?FUNCTION_NAME, Config).
+
+
 time_test(Config) ->
     t(?FUNCTION_NAME, Config).
 
