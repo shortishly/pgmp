@@ -19,6 +19,12 @@ Features:
 - A [connection](src/pgmp_connection.erl) pool that is aware of the underlying
   statement state (a simple or extended query, outside or within a
   transaction block).
+  
+Notes:
+
+- [PGEC](https://github.com/shortishly/pgec) is an example OTP
+  Application [using PGMP and logical replication](https://blog.shortishly.com/2022/09/postgresql-edge-cache/), to create an Edge Cache of PostgreSQL tables with Cowboy.
+- PGMP uses [property based testing](https://blog.shortishly.com/2022/08/property-testing-a-database-driver/) with [PropEr](https://github.com/proper-testing/proper).
 
 ![main](https://github.com/shortishly/pgmp/actions/workflows/main.yml/badge.svg)
 

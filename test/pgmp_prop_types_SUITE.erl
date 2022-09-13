@@ -152,6 +152,10 @@ varchar_test(Config) ->
     t(?FUNCTION_NAME, Config).
 
 
+text_test(Config) ->
+    t(?FUNCTION_NAME, Config).
+
+
 uuid_test(Config) ->
     t(?FUNCTION_NAME, Config).
 
