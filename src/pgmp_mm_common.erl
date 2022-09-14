@@ -114,9 +114,10 @@ handle_event(internal,
     {keep_state_and_data, nei({process, TM})};
 
 handle_event(internal,
-             {process, {error_response, _} = Reply},
-              _,
-              #{from := _, replies := Rs} = Data) ->
+             {process, {Tag, _} = Reply},
+             _,
+             #{from := _, replies := Rs} = Data) when Tag == error_response;
+                                                      Tag == notice_response ->
     {keep_state,
      Data#{replies := [pgmp_error_notice_fields:map(Reply) | Rs]}};
 
