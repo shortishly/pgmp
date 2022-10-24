@@ -1,30 +1,26 @@
 # PostgreSQL Message Protocol (PGMP)
 
-An implementation of the [PostgreSQL Message
-Protocol](https://www.postgresql.org/docs/current/protocol.html) for
-[Erlang/OTP 25](https://www.erlang.org).
+An implementation of the [PostgreSQL Message Protocol][postgresql-org-protocol] for [Erlang/OTP 25][erlang-org].
 
 Features:
 
-- [Simple Query](https://www.postgresql.org/docs/current/protocol-flow.html#id-1.10.5.7.4)
-- [Extended Query](https://www.postgresql.org/docs/current/protocol-flow.html#PROTOCOL-FLOW-EXT-QUERY)
-- [Logical Streaming Replication](https://www.postgresql.org/docs/current/protocol-logical-replication.html)
+- [Simple Query][postgresql-org-simple-query].
+- [Extended Query][postgresql-org-extended-query].
+- [Logical Streaming Replication][postgresql-org-logical-streaming-replication].
 - Binary protocol (preferred) and textual when required.
-- Binary protocol for parse, bind and execute during an [Extended
-  Query](https://www.postgresql.org/docs/current/protocol-flow.html#PROTOCOL-FLOW-EXT-QUERY).
+- Binary protocol for parse, bind and execute during an [Extended Query][postgresql-org-extended-query].
 - Asynchronous requests using
-  [send_request](https://www.erlang.org/doc/man/gen_statem.html#send_request-4).
-  Available for the client to use, and used internally within the
-  implementation.
+  [send_request][erlang-org-send-request-4]. Available for the client
+  to use, and used internally within the implementation.
 - A [connection](src/pgmp_connection.erl) pool that is aware of the underlying
   statement state (a simple or extended query, outside or within a
   transaction block).
   
 Notes:
 
-- [PGEC](https://github.com/shortishly/pgec) is an example OTP
-  Application [using PGMP and logical replication](https://blog.shortishly.com/2022/09/postgresql-edge-cache/), to create an Edge Cache of PostgreSQL tables with Cowboy.
-- PGMP uses [property based testing](https://blog.shortishly.com/2022/08/property-testing-a-database-driver/) with [PropEr](https://github.com/proper-testing/proper).
+- [PGEC][github-com-pgec] is an example OTP
+  Application [using PGMP and logical replication][shortishly-com-postgresql-edge-cache], to create an Edge Cache of PostgreSQL tables with Cowboy.
+- PGMP uses [property based testing][shortishly-com-property-testing-a-database-driver] with [PropEr][github-com-proper].
 
 ![main](https://github.com/shortishly/pgmp/actions/workflows/main.yml/badge.svg)
 
@@ -36,7 +32,7 @@ which are described in the following.
 ### send_request/2 with receive_response/1
 
 You can immediately wait for a response (via
-[receive_response/1](https://www.erlang.org/doc/man/gen_statem.html#receive_response-1)). The
+[receive_response/1][erlang-org-receive-response-1]). The
 examples in the following sections use this method, purely because it
 is simpler as a command line example.
 
@@ -66,18 +62,16 @@ The module `pgmp_connection_sync` wraps the above:
 However, it is likely that you can continue doing some other important
 work, e.g., responding to other messages, while waiting for the
 response from `pgmp`. In which case using the
-[send_request/4](https://www.erlang.org/doc/man/gen_statem.html#send_request-4)
-and
-[check_response/3](https://www.erlang.org/doc/man/gen_statem.html#check_response-3)
-pattern is preferred.
+[send_request/4][erlang-org-send-request-4] and
+[check_response/3][erlang-org-check-response-3] pattern is preferred.
 
 If you're using `pgmp` within another `gen_*` behaviour (`gen_server`,
 `gen_statem`, etc), this is very likely to be the option to
 choose. So using another `gen_statem` as an example:
 
 The following `init/1` sets up some state with a [request id
-collection](https://www.erlang.org/doc/man/gen_statem.html#type-request_id_collection)
-to maintain our outstanding asynchronous requests.
+collection][erlang-org-request-id-collection] to maintain our
+outstanding asynchronous requests.
 
 ```erlang
 init([]) ->
@@ -100,9 +94,8 @@ handle_event(internal, {query, Arg}, _, #{requests := Requests} = Data) ->
 A call to any of `pgmp_connection` functions: `query/1`, `parse/1`,
 `bind/1`, `describe/1` or `execute/1` take a map of parameters. If
 that map includes both a `label` and `requests` then the request is
-made using
-[send_request/4](https://www.erlang.org/doc/man/gen_statem.html#send_request-4). The
-response will be received as an `info` message as follows:
+made using [send_request/4][erlang-org-send-request-4]. The response
+will be received as an `info` message as follows:
 
 ```erlang
 handle_event(info, Msg, _, #{requests := Existing} = Data) ->
@@ -125,7 +118,9 @@ tables.
 
 ## Simple Query
 
-An asynchronous simple query request using [receive_response](https://www.erlang.org/doc/man/gen_statem.html#receive_response-1) to wait for the response:
+An asynchronous simple query request using
+[receive_response][erlang-org-receive-response-1] to wait for the
+response:
 
 ```erlang
 1> pgmp_connection_sync:query(#{sql => <<"select 2*3">>}).
@@ -291,8 +286,7 @@ To enable replication your `postgresql.conf` must contain:
 wal_level = logical
 ```
 
-Please follow the [Quick
-Setup](https://www.postgresql.org/docs/current/logical-replication-quick-setup.html)
+Please follow the [Quick Setup][postgresql-org-log-rep-quick-setup]
 for logical replication. Only the `publication` needs to be created,
 `pgmp` will create the necessary slots and synchronise the published
 data, applying any changes thereafter automatically.
@@ -416,7 +410,8 @@ PostgreSQL table is replicated into an ETS table of the same name.
 EOT  (q)uit (p)Digits (k)ill
 ```
 
-Note that replication introspects the PostgreSQL table metadata so that `{1, 1}` (x, y) is automatically used as the composite key.
+Note that replication introspects the PostgreSQL table metadata so
+that `{1, 1}` (x, y) is automatically used as the composite key.
 
 Making some CRUD within PostgreSQL:
 
@@ -445,7 +440,7 @@ select slot_name,plugin,slot_type,active,xmin,catalog_xmin,restart_lsn from pg_r
 Any encoder or decoder for JSON/XML can be used, providing they
 implement `decode/1` and `encode/1`.
 
-To use [jsx](https://github.com/talentdeficit/jsx), apply the following configuration:
+To use [jsx][github-com-jsx], apply the following configuration:
 
 ```erlang
  {pgmp, [...
@@ -459,12 +454,31 @@ To use [jsx](https://github.com/talentdeficit/jsx), apply the following configur
 
 The implementation uses some recently introduced features of Erlang/OTP:
 
-- [socket](https://www.erlang.org/doc/man/socket.html) for all
-  communication
-- [send_request](https://www.erlang.org/doc/man/gen_statem.html#send_request-4)
-  for asynchronous request and response.
-- [change_callback_module](https://www.erlang.org/doc/man/gen_statem.html#type-action)
-  to switch between startup, various authentication implementations,
+- [socket][erlang-org-socket] for all communication
+- [send_request][erlang-org-send-request-4] for asynchronous request and response.
+- [change_callback_module][erlang-org-change-callback-module] to
+  switch between startup, various authentication implementations,
   simple and extended query modes.
-- [pbkdf2_hmac](https://www.erlang.org/doc/man/crypto.html#pbkdf2_hmac-5)
-  in [SCRAM](src/pgmp_scram.erl) authentication.
+- [pbkdf2_hmac][erlang-org-pbkdf2-hmac] in [SCRAM](src/pgmp_scram.erl)
+  authentication.
+
+
+[erlang-org-change-callback-module]: https://www.erlang.org/doc/man/gen_statem.html#type-action
+[erlang-org-check-response-3]: https://www.erlang.org/doc/man/gen_statem.html#check_response-3
+[erlang-org-pbkdf2-hmac]: https://www.erlang.org/doc/man/crypto.html#pbkdf2_hmac-5
+[erlang-org-receive-response-1]: https://www.erlang.org/doc/man/gen_statem.html#receive_response-1
+[erlang-org-request-id-collection]: https://www.erlang.org/doc/man/gen_statem.html#type-request_id_collection
+[erlang-org-send-request-4]: https://www.erlang.org/doc/man/gen_statem.html#send_request-4
+[erlang-org-socket]: https://www.erlang.org/doc/man/socket.html
+[erlang-org]: https://www.erlang.org
+[github-com-jsx]: https://github.com/talentdeficit/jsx
+[github-com-pgec]: https://github.com/shortishly/pgec
+[github-com-proper]: https://github.com/proper-testing/proper
+[postgresql-org-extended-query]: https://www.postgresql.org/docs/current/protocol-flow.html#PROTOCOL-FLOW-EXT-QUERY
+[postgresql-org-log-rep-quick-setup](https://www.postgresql.org/docs/current/logical-replication-quick-setup.html)
+[postgresql-org-logical-streaming-replication]: https://www.postgresql.org/docs/current/protocol-logical-replication.html
+[postgresql-org-protocol]: https://www.postgresql.org/docs/current/protocol.html
+[postgresql-org-simple-query]: https://www.postgresql.org/docs/current/protocol-flow.html#id-1.10.5.7.4
+[shortishly-com-postgresql-edge-cache]: https://shortishly.com/blog/postgresql-edge-cache/
+[shortishly-com-property-testing-a-database-driver]: https://shortishly.com/blog/property-testing-a-database-driver/
+

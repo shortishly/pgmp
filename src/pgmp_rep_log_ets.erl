@@ -306,7 +306,8 @@ handle_event(internal,
 handle_event(
   internal,
   {response,
-   #{label := {fetch, [#{<<"schemaname">> := Schema, <<"tablename">> := Table} | T]},
+   #{label := {fetch, [#{<<"schemaname">> := Schema,
+                         <<"tablename">> := Table}  = Publication | T]},
      reply := [{row_description, [<<"indkey">>]},
                {data_row, [Key]},
                {command_complete, {select, 1}}]}},
@@ -331,11 +332,20 @@ handle_event(
      Data#{metadata := metadata(Table, keys, Key, Metadata)},
      [nei({parse,
            #{label => Label,
-             sql => io_lib:format(
-                      "select * from ~s.~s",
-                      [Schema, Table])}}),
-      nei({fetch, T})]};
+             sql => case maps:find(<<"rowfilter">>, Publication) of
+                        {ok, RowFilter} when RowFilter /= null ->
+                            iolist_to_binary(
+                              io_lib:format(
+                                "select * from ~s.~s where ~s",
+                                [Schema, Table, RowFilter]));
 
+                        _Otherwise ->
+                            iolist_to_binary(
+                              io_lib:format(
+                                "select * from ~s.~s",
+                                [Schema, Table]))
+                    end}}),
+      nei({fetch, T})]};
 
 handle_event(internal,
              {response,
