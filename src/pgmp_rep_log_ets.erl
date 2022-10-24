@@ -306,8 +306,7 @@ handle_event(internal,
 handle_event(
   internal,
   {response,
-   #{label := {fetch, [#{<<"schemaname">> := Schema,
-                         <<"tablename">> := Table}  = Publication | T]},
+   #{label := {fetch, [#{<<"tablename">> := Table}  = Publication | T]},
      reply := [{row_description, [<<"indkey">>]},
                {data_row, [Key]},
                {command_complete, {select, 1}}]}},
@@ -330,21 +329,7 @@ handle_event(
     {next_state,
      unready,
      Data#{metadata := metadata(Table, keys, Key, Metadata)},
-     [nei({parse,
-           #{label => Label,
-             sql => case maps:find(<<"rowfilter">>, Publication) of
-                        {ok, RowFilter} when RowFilter /= null ->
-                            iolist_to_binary(
-                              io_lib:format(
-                                "select * from ~s.~s where ~s",
-                                [Schema, Table, RowFilter]));
-
-                        _Otherwise ->
-                            iolist_to_binary(
-                              io_lib:format(
-                                "select * from ~s.~s",
-                                [Schema, Table]))
-                    end}}),
+     [nei({parse, #{label => Label, sql => pub_fetch_sql(Publication)}}),
       nei({fetch, T})]};
 
 handle_event(internal,
@@ -548,3 +533,27 @@ metadata(Table, Key, Value, Metadata) ->
         #{} ->
             Metadata#{Table => #{Key => Value}}
     end.
+
+
+pub_fetch_sql(#{<<"schemaname">> := Schema,
+                <<"tablename">> := Table} = Publication) ->
+    ["select ",
+     pub_fetch_columns(Publication),
+     " from ",
+     Schema,
+     ".",
+     Table,
+     case maps:find(<<"rowfilter">>, Publication) of
+        {ok, RowFilter} when RowFilter /= null ->
+             [" where ", RowFilter];
+
+        _Otherwise ->
+             []
+     end].
+
+
+pub_fetch_columns(#{<<"attnames">> := Attributes}) ->
+    lists:join(",", Attributes);
+
+pub_fetch_columns(#{}) ->
+    "*".
