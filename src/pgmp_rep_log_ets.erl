@@ -372,6 +372,14 @@ handle_event(internal,
                           logical,
                           max_rows)}})};
 
+
+handle_event(internal,
+             {response, #{label := {table, _},
+                          reply := [{command_complete, {select, 0}}]}},
+             execute,
+             Data) ->
+    {next_state, unready, Data};
+
 handle_event(internal,
              {response, #{label := {table, Table} = Label,
                           reply := [{row_description, Columns} | T]}},

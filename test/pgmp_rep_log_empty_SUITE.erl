@@ -13,7 +13,7 @@
 %% limitations under the License.
 
 
--module(pgmp_rep_log_SUITE).
+-module(pgmp_rep_log_empty_SUITE).
 
 
 -compile(export_all).
@@ -56,27 +56,6 @@ init_per_suite(Config) ->
 
     [{command_complete, 'begin'}] = pgmp_connection_sync:query(#{sql => "begin"}),
 
-
-    [{parse_complete, []}] = pgmp_connection_sync:parse(
-                               #{sql => io_lib:format(
-                                          "insert into ~s (v) values ($1) returning *",
-                                          [Table])}),
-
-    lists:map(
-      fun
-          (_) ->
-              [{bind_complete, []}] = pgmp_connection_sync:bind(
-                                        #{args => [alpha(5)]}),
-
-              [{row_description, _},
-               {data_row, Row},
-               {command_complete,
-                {insert, 1}}] =  pgmp_connection_sync:execute(#{}),
-
-              list_to_tuple(Row)
-      end,
-      lists:seq(1, 50)),
-
     [{parse_complete,[]}] =  pgmp_connection_sync:parse(
                                #{sql => "select pubname,schemaname,tablename "
                                  "from pg_catalog.pg_publication_tables "
@@ -105,84 +84,6 @@ init_per_suite(Config) ->
      {publication, Publication},
      {table, Table},
      {replica, binary_to_atom(Table)} | Config].
-
-
-update_test(Config) ->
-    Manager = ?config(manager, Config),
-    Table = ?config(table, Config),
-    Replica = ?config(replica, Config),
-
-    {reply, ok} = gen_statem:receive_response(
-                    pgmp_rep_log_ets:when_ready(
-                      #{server_ref => Manager})),
-
-    {K, _} = Existing = pick_one(ets:tab2list(Replica)),
-    ct:log("existing: ~p~n", [Existing]),
-
-    [{command_complete, 'begin'}] = pgmp_connection_sync:query(#{sql => "begin"}),
-
-    [{parse_complete, []}] = pgmp_connection_sync:parse(
-                               #{sql => io_lib:format(
-                                          "update ~s set v = $2 where k = $1 returning *",
-                                          [Table])}),
-
-    V = alpha(5),
-
-    [{bind_complete, []}] = pgmp_connection_sync:bind(
-                              #{args => [K, V]}),
-
-    [{row_description, _},
-     {data_row, [K, V] = Updated},
-     {command_complete,
-      {update, 1}}] =  pgmp_connection_sync:execute(#{}),
-
-    ct:log("updated: ~p~n", [Updated]),
-
-    [{command_complete, commit}] = pgmp_connection_sync:query(#{sql => "commit"}),
-
-    wait_for(
-      [list_to_tuple(Updated)],
-      fun () ->
-              ets:lookup(Replica, K)
-      end).
-
-
-delete_test(Config) ->
-    Manager = ?config(manager, Config),
-    Table = ?config(table, Config),
-    Replica = ?config(replica, Config),
-
-    {reply, ok} = gen_statem:receive_response(
-                    pgmp_rep_log_ets:when_ready(
-                      #{server_ref => Manager})),
-
-    {K, V} = Existing = pick_one(ets:tab2list(Replica)),
-    ct:log("existing: ~p~n", [Existing]),
-
-    [{command_complete, 'begin'}] = pgmp_connection_sync:query(#{sql => "begin"}),
-
-    [{parse_complete, []}] = pgmp_connection_sync:parse(
-                               #{sql => io_lib:format(
-                                          "delete from ~s where k = $1 returning *",
-                                          [Table])}),
-
-    [{bind_complete, []}] = pgmp_connection_sync:bind(
-                              #{args => [K]}),
-
-    [{row_description, _},
-     {data_row, [K, V] = Deleted},
-     {command_complete,
-      {delete, 1}}] =  pgmp_connection_sync:execute(#{}),
-
-    ct:log("deleted: ~p~n", [Deleted]),
-
-    [{command_complete, commit}] = pgmp_connection_sync:query(#{sql => "commit"}),
-
-    wait_for(
-      [],
-      fun () ->
-              ets:lookup(Replica, K)
-      end).
 
 
 insert_test(Config) ->
