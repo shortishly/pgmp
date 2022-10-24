@@ -475,7 +475,7 @@ The implementation uses some recently introduced features of Erlang/OTP:
 [github-com-pgec]: https://github.com/shortishly/pgec
 [github-com-proper]: https://github.com/proper-testing/proper
 [postgresql-org-extended-query]: https://www.postgresql.org/docs/current/protocol-flow.html#PROTOCOL-FLOW-EXT-QUERY
-[postgresql-org-log-rep-quick-setup](https://www.postgresql.org/docs/current/logical-replication-quick-setup.html)
+[postgresql-org-log-rep-quick-setup]: https://www.postgresql.org/docs/current/logical-replication-quick-setup.html
 [postgresql-org-logical-streaming-replication]: https://www.postgresql.org/docs/current/protocol-logical-replication.html
 [postgresql-org-protocol]: https://www.postgresql.org/docs/current/protocol.html
 [postgresql-org-simple-query]: https://www.postgresql.org/docs/current/protocol-flow.html#id-1.10.5.7.4
