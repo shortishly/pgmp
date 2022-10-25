@@ -271,7 +271,7 @@ pgmp_connection_sync:execute(#{}).
 
 ## Logical Replication
 
-Tables with single column (primary) or composite (multiple columns)
+Tables with single (primary) or multiple columns (composite)
 keys are supported. When replication is started, a snapshot of each
 table in the publication is made from a transaction identifier. On
 completion, streaming replication causes each change to be immediately
@@ -481,4 +481,3 @@ The implementation uses some recently introduced features of Erlang/OTP:
 [postgresql-org-simple-query]: https://www.postgresql.org/docs/current/protocol-flow.html#id-1.10.5.7.4
 [shortishly-com-postgresql-edge-cache]: https://shortishly.com/blog/postgresql-edge-cache/
 [shortishly-com-property-testing-a-database-driver]: https://shortishly.com/blog/property-testing-a-database-driver/
-
