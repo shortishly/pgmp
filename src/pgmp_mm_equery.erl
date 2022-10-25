@@ -285,7 +285,7 @@ handle_event(internal,
 handle_event(internal,
              {recv, {error_response, _} = Reply},
              bind,
-             #{args := [Portal, _, _], cache := Cache} = Data) ->
+             #{args := [_, Portal, _, _, _], cache := Cache} = Data) ->
     ets:delete(Cache, {parameter_description, Portal}),
     ets:delete(Cache, {row_description, Portal}),
     {next_state,

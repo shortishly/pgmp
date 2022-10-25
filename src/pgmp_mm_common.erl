@@ -107,13 +107,17 @@ handle_event(internal, terminate, _, _) ->
     {keep_state_and_data,
      nei({send, ["X", size_inclusive([])]})};
 
-handle_event(internal, {recv, {notice_response, _} = TM}, query, _) ->
+handle_event(internal,
+             {recv, {notice_response, _} = TM},
+             State,
+             _) when State == query; State == execute ->
     {keep_state_and_data, nei({process, TM})};
 
 handle_event(internal,
-             {process, {error_response, _} = Reply},
-              _,
-              #{from := _, replies := Rs} = Data) ->
+             {process, {Tag, _} = Reply},
+             _,
+             #{from := _, replies := Rs} = Data) when Tag == error_response;
+                                                      Tag == notice_response ->
     {keep_state,
      Data#{replies := [pgmp_error_notice_fields:map(Reply) | Rs]}};
 

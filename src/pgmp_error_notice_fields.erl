@@ -27,8 +27,9 @@ start_link() ->
     gen_statem:start_link(?MODULE, [], []).
 
 
-map({error_response, ErrorNoticeFields}) ->
-    {error_response,
+map({Tag, ErrorNoticeFields}) when Tag == error_response;
+                                   Tag == notice_response ->
+    {Tag,
      lists:foldl(
        fun
            ({K, V}, A) ->

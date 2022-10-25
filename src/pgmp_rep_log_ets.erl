@@ -306,7 +306,7 @@ handle_event(internal,
 handle_event(
   internal,
   {response,
-   #{label := {fetch, [#{<<"schemaname">> := Schema, <<"tablename">> := Table} | T]},
+   #{label := {fetch, [#{<<"tablename">> := Table}  = Publication | T]},
      reply := [{row_description, [<<"indkey">>]},
                {data_row, [Key]},
                {command_complete, {select, 1}}]}},
@@ -329,13 +329,8 @@ handle_event(
     {next_state,
      unready,
      Data#{metadata := metadata(Table, keys, Key, Metadata)},
-     [nei({parse,
-           #{label => Label,
-             sql => io_lib:format(
-                      "select * from ~s.~s",
-                      [Schema, Table])}}),
+     [nei({parse, #{label => Label, sql => pub_fetch_sql(Publication)}}),
       nei({fetch, T})]};
-
 
 handle_event(internal,
              {response,
@@ -371,6 +366,14 @@ handle_event(internal,
             max_rows => pgmp_config:replication(
                           logical,
                           max_rows)}})};
+
+
+handle_event(internal,
+             {response, #{label := {table, _},
+                          reply := [{command_complete, {select, 0}}]}},
+             execute,
+             Data) ->
+    {next_state, unready, Data};
 
 handle_event(internal,
              {response, #{label := {table, Table} = Label,
@@ -530,3 +533,27 @@ metadata(Table, Key, Value, Metadata) ->
         #{} ->
             Metadata#{Table => #{Key => Value}}
     end.
+
+
+pub_fetch_sql(#{<<"schemaname">> := Schema,
+                <<"tablename">> := Table} = Publication) ->
+    ["select ",
+     pub_fetch_columns(Publication),
+     " from ",
+     Schema,
+     ".",
+     Table,
+     case maps:find(<<"rowfilter">>, Publication) of
+        {ok, RowFilter} when RowFilter /= null ->
+             [" where ", RowFilter];
+
+        _Otherwise ->
+             []
+     end].
+
+
+pub_fetch_columns(#{<<"attnames">> := Attributes}) ->
+    lists:join(",", Attributes);
+
+pub_fetch_columns(#{}) ->
+    "*".
