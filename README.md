@@ -493,6 +493,7 @@ The implementation uses some recently introduced features of Erlang/OTP:
 [github-com-jsx]: https://github.com/talentdeficit/jsx
 [github-com-pgec]: https://github.com/shortishly/pgec
 [github-com-proper]: https://github.com/proper-testing/proper
+[pgmp]: https://github.com/shortishly/pgmp
 [postgresql-org-15-release]: https://www.postgresql.org/about/news/postgresql-15-released-2526/
 [postgresql-org-extended-query]: https://www.postgresql.org/docs/current/protocol-flow.html#PROTOCOL-FLOW-EXT-QUERY
 [postgresql-org-log-rep-col-lists]: https://www.postgresql.org/docs/15/logical-replication-col-lists.html
