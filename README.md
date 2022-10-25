@@ -1,12 +1,16 @@
 # PostgreSQL Message Protocol (PGMP)
 
-An implementation of the [PostgreSQL Message Protocol][postgresql-org-protocol] for [Erlang/OTP 25][erlang-org].
+An implementation of the [PostgreSQL Message
+Protocol][postgresql-org-protocol] for [Erlang/OTP 25][erlang-org].
 
 Features:
 
 - [Simple Query][postgresql-org-simple-query].
 - [Extended Query][postgresql-org-extended-query].
-- [Logical Streaming Replication][postgresql-org-logical-streaming-replication].
+- [Logical Streaming
+  Replication][postgresql-org-logical-streaming-replication] including
+  [column lists][postgresql-org-log-rep-col-lists] and [row
+  filters][postgresql-org-rep-row-filter].
 - Binary protocol (preferred) and textual when required.
 - Binary protocol for parse, bind and execute during an [Extended Query][postgresql-org-extended-query].
 - Asynchronous requests using
@@ -18,9 +22,12 @@ Features:
   
 Notes:
 
-- [PGEC][github-com-pgec] is an example OTP
-  Application [using PGMP and logical replication][shortishly-com-postgresql-edge-cache], to create an Edge Cache of PostgreSQL tables with Cowboy.
-- PGMP uses [property based testing][shortishly-com-property-testing-a-database-driver] with [PropEr][github-com-proper].
+- [PGEC][github-com-pgec] is an example OTP Application [using PGMP
+  and logical replication][shortishly-com-postgresql-edge-cache], to
+  create an Edge Cache of [PostgreSQL][postgresql-org] tables with Cowboy.
+- PGMP uses [property based
+  testing][shortishly-com-property-testing-a-database-driver] with
+  [PropEr][github-com-proper].
 
 ![main](https://github.com/shortishly/pgmp/actions/workflows/main.yml/badge.svg)
 
@@ -278,7 +285,7 @@ completion, streaming replication causes each change to be immediately
 applied onto a local ETS table replica.
 
 Concurrent publications are supported each using their own replication
-slot within PostgreSQL.
+slot within [PostgreSQL][postgresql-org].
 
 To enable replication your `postgresql.conf` must contain:
 
@@ -344,7 +351,7 @@ create table xy (x integer primary key, y text);
 insert into xy values (1, 'foo');
 ```
 
-Create a PostgreSQL publication for that table:
+Create a [PostgreSQL][postgresql-org] publication for that table:
 
 ```sql
 create publication xy for table xy;
@@ -370,12 +377,13 @@ The current state of the table is replicated into an ETS table also called `xy`:
 EOT  (q)uit (p)Digits (k)ill
 ```
 
-Introspection on the PostgreSQL metadata is done automatically by
-`pgmp` so that `x` is used as the primary key for the replicated ETS
-table.
+Introspection on the [PostgreSQL][postgresql-org] metadata is done
+automatically by `pgmp` so that `x` is used as the primary key for the
+replicated ETS table.
 
-Thereafter, CRUD changes on the underlying PostgreSQL table will be
-automatically pushed to `pgmp` and reflected in the ETS table.
+Thereafter, CRUD changes on the underlying
+[PostgreSQL][postgresql-org] table will be automatically pushed to
+`pgmp` and reflected in the ETS table.
 
 ### Composite Key
 
@@ -386,7 +394,7 @@ create table xyz (x integer, y integer, z integer, primary key (x, y));
 insert into xyz values (1, 1, 3);
 ```
 
-Create a PostgreSQL publication for that table:
+Create a [PostgreSQL][postgresql-org] publication for that table:
 
 ```sql
 create publication xyz for table xyz;
@@ -402,7 +410,8 @@ With `pgmp` configured for replication, the stanza:
 
 Where `replication_logical_publication_names` is a comma separated
 list of publication names for `pgmp` to replicate. The contents of the
-PostgreSQL table is replicated into an ETS table of the same name.
+[PostgreSQL][postgresql-org] table is replicated into an ETS table of
+the same name.
 
 ```erlang
 1> ets:i(xyz).
@@ -410,10 +419,11 @@ PostgreSQL table is replicated into an ETS table of the same name.
 EOT  (q)uit (p)Digits (k)ill
 ```
 
-Note that replication introspects the PostgreSQL table metadata so
-that `{1, 1}` (x, y) is automatically used as the composite key.
+Note that replication introspects the [PostgreSQL][postgresql-org]
+table metadata so that `{1, 1}` (x, y) is automatically used as the
+composite key.
 
-Making some CRUD within PostgreSQL:
+Making some CRUD within [PostgreSQL][postgresql-org]:
 
 ```sql
 insert into xyz values (1, 2, 3), (1, 3, 5), (1, 4, 5);
@@ -434,6 +444,15 @@ select slot_name,plugin,slot_type,active,xmin,catalog_xmin,restart_lsn from pg_r
  pgmp_xy   | pgoutput | logical   | t      |      |    533287257 | A1/CEAA6AA8
 (2 rows)
 ```
+
+### PostgreSQL version 15 Logical Replication Features
+
+The logical replication features in the [PostgreSQL 15
+release][postgresql-org-15-release], are: [row
+filters][postgresql-org-rep-row-filter] and [column
+lists][postgresql-org-log-rep-col-lists]. Their usage with
+[pgmp][pgmp] are described in this
+[article][shortishly-com-pgmp-logical-replication-in-postgresql-fifteen].
 
 ## JSON/XML
 
@@ -474,10 +493,15 @@ The implementation uses some recently introduced features of Erlang/OTP:
 [github-com-jsx]: https://github.com/talentdeficit/jsx
 [github-com-pgec]: https://github.com/shortishly/pgec
 [github-com-proper]: https://github.com/proper-testing/proper
+[postgresql-org-15-release]: https://www.postgresql.org/about/news/postgresql-15-released-2526/
 [postgresql-org-extended-query]: https://www.postgresql.org/docs/current/protocol-flow.html#PROTOCOL-FLOW-EXT-QUERY
+[postgresql-org-log-rep-col-lists]: https://www.postgresql.org/docs/15/logical-replication-col-lists.html
 [postgresql-org-log-rep-quick-setup]: https://www.postgresql.org/docs/current/logical-replication-quick-setup.html
 [postgresql-org-logical-streaming-replication]: https://www.postgresql.org/docs/current/protocol-logical-replication.html
 [postgresql-org-protocol]: https://www.postgresql.org/docs/current/protocol.html
+[postgresql-org-rep-row-filter]: https://www.postgresql.org/docs/15/logical-replication-row-filter.html
 [postgresql-org-simple-query]: https://www.postgresql.org/docs/current/protocol-flow.html#id-1.10.5.7.4
+[postgresql-org]: https://www.postgresql.org/
+[shortishly-com-pgmp-logical-replication-in-postgresql-fifteen]: https://shortishly.com/blog/pgmp-log-rep-postgresql-fifteen/
 [shortishly-com-postgresql-edge-cache]: https://shortishly.com/blog/postgresql-edge-cache/
 [shortishly-com-property-testing-a-database-driver]: https://shortishly.com/blog/property-testing-a-database-driver/
