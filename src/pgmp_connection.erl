@@ -37,7 +37,7 @@ start_link() ->
     gen_statem:start_link({local, ?MODULE},
                           ?MODULE,
                           [],
-                          pgmp_config:options(?MODULE)).
+                          envy_gen:options(?MODULE)).
 
 
 query(Arg) ->

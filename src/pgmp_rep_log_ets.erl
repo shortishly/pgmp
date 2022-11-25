@@ -36,7 +36,7 @@
 
 
 start_link(Arg) ->
-    gen_statem:start_link(?MODULE, [Arg], pgmp_config:options(?MODULE)).
+    gen_statem:start_link(?MODULE, [Arg], envy_gen:options(?MODULE)).
 
 
 snapshot(Arg) ->
@@ -324,7 +324,7 @@ handle_event(
                      _Composite ->
                          1
                  end},
-                public,
+                protected,
                 named_table])},
     {next_state,
      unready,
