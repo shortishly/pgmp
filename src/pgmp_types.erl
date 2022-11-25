@@ -39,7 +39,7 @@ start_link(Arg) ->
     gen_statem:start_link({local, ?MODULE},
                           ?MODULE,
                           [Arg],
-                          pgmp_config:options(?MODULE)).
+                          envy_gen:options(?MODULE)).
 
 
 when_ready(Arg) ->

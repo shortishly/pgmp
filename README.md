@@ -16,15 +16,13 @@ Features:
 - Asynchronous requests using
   [send_request][erlang-org-send-request-4]. Available for the client
   to use, and used internally within the implementation.
-- A [connection](src/pgmp_connection.erl) pool that is aware of the underlying
-  statement state (a simple or extended query, outside or within a
-  transaction block).
+- A statement aware [connection](src/pgmp_connection.erl) pool
+  (simple or extended query, outside or within a transaction block).
   
 Notes:
 
 - [PGEC][github-com-pgec] is an example OTP Application [using PGMP
-  and logical replication][shortishly-com-postgresql-edge-cache], to
-  create an Edge Cache of [PostgreSQL][postgresql-org] tables with Cowboy.
+  and logical replication][shortishly-com-postgresql-edge-cache].
 - PGMP uses [property based
   testing][shortishly-com-property-testing-a-database-driver] with
   [PropEr][github-com-proper].
@@ -33,15 +31,13 @@ Notes:
 
 ## Asynchronous Requests
 
-There are two mechanisms for making asynchronous requests to `pmgp`
-which are described in the following.
+The following two sections show how to make an asynchronous request.
 
 ### send_request/2 with receive_response/1
 
 You can immediately wait for a response (via
-[receive_response/1][erlang-org-receive-response-1]). The
-examples in the following sections use this method, purely because it
-is simpler as a command line example.
+[receive_response/1][erlang-org-receive-response-1]). For simplicity,
+the following examples use this method:
 
 ```erlang
 1> gen_statem:receive_response(pgmp_connection:query(#{sql => <<"select 2*3">>})).
@@ -66,15 +62,12 @@ The module `pgmp_connection_sync` wraps the above:
 
 ### send_request/4 with check_response/3
 
-However, it is likely that you can continue doing some other important
-work, e.g., responding to other messages, while waiting for the
-response from `pgmp`. In which case using the
-[send_request/4][erlang-org-send-request-4] and
-[check_response/3][erlang-org-check-response-3] pattern is preferred.
+The [send_request/4][erlang-org-send-request-4] and
+[check_response/3][erlang-org-check-response-3] pattern allows you to
+respond to other messages rather than blocking. Use this option, when writing
+another `gen_*` behaviour (`gen_server`, `gen_statem`, etc) is calling `pgmp`.
 
-If you're using `pgmp` within another `gen_*` behaviour (`gen_server`,
-`gen_statem`, etc), this is very likely to be the option to
-choose. So using another `gen_statem` as an example:
+So using another `gen_statem` as an example:
 
 The following `init/1` sets up some state with a [request id
 collection][erlang-org-request-id-collection] to maintain our
@@ -336,8 +329,8 @@ make shell
 ### Replication Process Overview
 
 A replication slot is created by
-[pgmp_mm_rep_log](src/pgmp_mm_rep_log.erl), from which a transactional
-snapshot is created by the database. Using this snapshot,
+[pgmp_mm_rep_log](src/pgmp_mm_rep_log.erl), from which a snapshot is
+created by the database. Using this snapshot,
 [pgmp_rep_log_ets](src/pgmp_rep_log_ets.erl) retrieves all data from
 the tables in the publication, in a single transaction (using extended
 query with batched execute). Once the initial data has been collected,
@@ -366,7 +359,7 @@ Configure `pgmp` to replicate the `xy` publication, via the stanza:
 ```
 
 You should restart `pgmp` if you change any of the publication names in
-[dev.config](/dev.config), or if you create the publication in PSQL
+[dev.config](/dev.config), or if you create the publication in SQL
 after `pgmp` has started.
 
 The current state of the table is replicated into an ETS table also called `xy`:
@@ -431,7 +424,7 @@ update xyz set z = 4 where x = 1 and y = 1;
 delete from xyz where x = 1 and y = 3;
 ```
 
-The changes are streamed to `pgmp` and applied to the ETS table automatically.
+Changes are applied to the ETS table in real-time.
 
 Replication slots can be viewed via:
 

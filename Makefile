@@ -58,7 +58,10 @@ dep_envy = git https://github.com/shortishly/envy.git
 dep_phrase = git https://github.com/shortishly/phrase.git
 
 dep_beaming_commit = 0.1.0
-dep_envy_commit = 0.5.0
+dep_envy_commit = 0.7.2
 dep_phrase_commit = 0.1.0
 
 include erlang.mk
+
+
+app:: rebar.config

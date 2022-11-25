@@ -33,7 +33,7 @@
 
 
 start_link(Arg) ->
-    gen_statem:start_link(?MODULE, [Arg], pgmp_config:options(?MODULE)).
+    gen_statem:start_link(?MODULE, [Arg], envy_gen:options(?MODULE)).
 
 
 recv(#{tag := Tag, message := Message} = Arg) ->

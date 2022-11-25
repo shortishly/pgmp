@@ -19,149 +19,121 @@
 -export([codec/1]).
 -export([database/1]).
 -export([enabled/1]).
--export([options/1]).
 -export([pg/1]).
 -export([pool/1]).
 -export([protocol/1]).
 -export([replication/2]).
 -export([timeout/1]).
+-import(envy, [envy/1]).
 
 
 timeout(Name) ->
-    envy(to_integer_or_atom, [Name, timeout], infinity).
+    envy(#{caller => ?MODULE,
+           names => [Name, ?FUNCTION_NAME],
+           default => infinity}).
 
 
 enabled(Name) ->
-    envy(to_boolean, [Name, ?FUNCTION_NAME], true).
+    envy(#{caller => ?MODULE,
+           names => [Name, ?FUNCTION_NAME],
+           default => true}).
 
 
 codec(Type) ->
-    envy(to_atom, [?FUNCTION_NAME, Type], pgmp_identity).
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Type],
+           default => pgmp_identity}).
 
 
 pg(scope = Name) ->
-    envy(to_atom, [?FUNCTION_NAME, Name], pgmp);
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name],
+           default => pgmp});
 
 pg(group = Name) ->
-    envy(to_atom, [?FUNCTION_NAME, Name], mm).
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name],
+           default => mm}).
 
 
 protocol(major = Name) ->
-    envy(to_integer, [?FUNCTION_NAME, Name], 3);
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name],
+           default => 3});
 
 protocol(minor = Name) ->
-    envy(to_integer, [?FUNCTION_NAME, Name], 0).
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name],
+           default => 0}).
 
 
 replication(logical = Type, module = Name) ->
-    envy(to_atom, [?FUNCTION_NAME, Type, Name], pgmp_rep_log_ets);
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Type, Name],
+           default => pgmp_rep_log_ets});
 
 replication(logical = Type, slot_prefix = Name) ->
-    envy(to_binary, [?FUNCTION_NAME, Type, Name], <<"pgmp">>);
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Type, Name],
+           default => <<"pgmp">>});
 
 replication(logical = Type, proto_version = Name) ->
-    envy(to_integer, [?FUNCTION_NAME, Type, Name], 2);
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Type, Name],
+           default => 2});
 
 replication(logical = Type, max_rows = Name) ->
-    envy(to_integer, [?FUNCTION_NAME, Type, Name], 5_000);
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Type, Name],
+           default => 5_000});
 
 replication(logical = Type, publication_names = Name) ->
       binary:split(
-        envy(to_binary, [?FUNCTION_NAME, Type, Name], <<"pub">>),
+        envy(#{caller => ?MODULE,
+               names => [?FUNCTION_NAME, Type, Name],
+               default => <<"pub">>}),
         <<",">>,
         [global, trim_all]).
 
 
 database(options = Name) ->
-    envy(to_list, [?FUNCTION_NAME, Name]);
+    envy(#{type => list,
+           caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name]});
 
 database(hostname = Name) ->
-    envy(to_list, [?FUNCTION_NAME, Name], "localhost");
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name],
+           default => "localhost"});
 
 database(port = Name) ->
-    envy(to_integer, [?FUNCTION_NAME, Name], 5432);
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name],
+           default => 5432});
 
 database(user = Name) ->
-    envy(to_binary, [?FUNCTION_NAME, Name], os:getenv("USER"));
+    envy(#{type => binary,
+           caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name],
+           default => os:getenv("USER")});
 
 database(password = Name) ->
-    envy(to_binary, [?FUNCTION_NAME, Name], <<"">>);
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name],
+           default => <<"">>});
 
 database(replication = Name) ->
-    envy(to_binary, [?FUNCTION_NAME, Name], <<"false">>);
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name],
+           default => <<"false">>});
 
 database(name = Name) ->
-    envy(to_binary, [?FUNCTION_NAME, Name], ?FUNCTION_NAME(user)).
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name],
+           default => ?FUNCTION_NAME(user)}).
+
 
 pool(max = Name) ->
-    envy(to_integer, [?FUNCTION_NAME, Name], 5).
-
-
-options(M) ->
-    case debug_options(M, [log, trace]) of
-        [] ->
-            [];
-
-        Options ->
-            [{debug, Options}]
-    end.
-
-debug_options(M, Options) ->
-    ?FUNCTION_NAME(M, Options, []).
-
-
-debug_options(M, [log = Option | Options], A) ->
-    case envy(to_boolean, [M, Option], false) of
-        true ->
-            try
-                ?FUNCTION_NAME(
-                   M,
-                   Options,
-                   [{log, envy(to_integer, [M, Option, n])} | A])
-            catch
-                error:badarg ->
-                    ?FUNCTION_NAME(
-                       M,
-                       Options,
-                       [log | A])
-
-            end;
-
-        false ->
-            ?FUNCTION_NAME(M, Options, A)
-    end;
-
-debug_options(M, [Option | Options], A) ->
-    ?FUNCTION_NAME(
-       M,
-       Options,
-       [Option || envy(to_boolean, [M, Option], false)] ++ A);
-
-debug_options(_, [], A) ->
-    A.
-
-
-envy(To, Names) ->
-    case envy:get_env(pgmp, pgmp_util:snake_case(Names), [os_env, app_env]) of
-        undefined ->
-            error(badarg, [To, Names]);
-
-        Value ->
-            any:To(Value)
-    end.
-
-
-envy(To, Names, Default) ->
-    try
-        envy:To(pgmp, pgmp_util:snake_case(Names), default(Default))
-
-    catch
-        error:badarg ->
-            Default
-    end.
-
-
-default(Default) ->
-    %% Enable all configuration to be overriden by OS environment
-    %% variables, very useful for Docker.
-    [os_env, app_env, {default, Default}].
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name],
+           default => 5}).
