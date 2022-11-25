@@ -29,7 +29,7 @@
 
 timeout(Name) ->
     envy(#{caller => ?MODULE,
-           names => [Name, timeout],
+           names => [Name, ?FUNCTION_NAME],
            default => infinity}).
 
 

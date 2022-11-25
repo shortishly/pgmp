@@ -20,19 +20,26 @@
 -export([join/1]).
 -export([leave/1]).
 -export([which_groups/0]).
+-include_lib("kernel/include/logger.hrl").
 
 
 leave(Group) ->
+    ?LOG_DEBUG(#{group => Group}),
     pg:leave(pgmp_config:pg(scope), Group, self()).
 
 
 join(Group) ->
+    ?LOG_DEBUG(#{group => Group}),
     pg:join(pgmp_config:pg(scope), Group, self()).
 
 
 get_members(Group) ->
-    pg:get_members(pgmp_config:pg(scope), Group).
+    Scope = pgmp_config:pg(scope),
+    ?LOG_DEBUG(#{scope => Scope, group => Group}),
+    pg:get_members(Scope, Group).
 
 
 which_groups() ->
-    pg:which_groups(pgmp_config:pg(scope)).
+    Scope = pgmp_config:pg(scope),
+    ?LOG_DEBUG(#{scope => Scope}),
+    pg:which_groups(Scope).
