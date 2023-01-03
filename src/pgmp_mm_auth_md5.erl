@@ -30,14 +30,28 @@ callback_mode() ->
 handle_event({call, _}, {request, _}, _, _) ->
     {keep_state_and_data, postpone};
 
-handle_event(internal, {recv, {authentication, authenticated}}, _, Data) ->
-    {next_state, authenticated, Data, pop_callback_module};
+handle_event(internal,
+             {recv = EventName, {authentication = Tag, authenticated = Type}},
+             _,
+             Data) ->
+    {next_state,
+     authenticated,
+     Data,
+     [pop_callback_module,
+      nei({telemetry,
+           EventName,
+           #{count => 1},
+           #{tag => Tag, type => Type}})]};
 
-handle_event(internal, {recv, {error_response, Errors}}, _, Data) ->
+handle_event(internal,
+             {recv = EventName, {error_response = Tag, Errors}},
+             _,
+             Data) ->
     {next_state,
      startup_failure,
      Data#{errors => Errors},
-     pop_callback_module};
+     [pop_callback_module,
+      nei({telemetry, EventName, #{count => 1}, #{tag => Tag}})]};
 
 handle_event(internal,
              {md5_password, <<Salt:4/bytes>>},

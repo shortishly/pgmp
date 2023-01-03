@@ -55,12 +55,15 @@ handle_event(internal, bootstrap_complete, State, Data) ->
 
 handle_event(internal,
              {recv, {ready_for_query, _} = TM},
-             sync,
+             sync = Action,
              #{from := From} = Data) ->
     %% sync is different, unlike the other requests ready_for_query is
     %% the reply, as well as the marker for being ready for the next
     %% query.
-    {next_state, TM, Data, {reply, From, TM}};
+    {next_state,
+     TM,
+     Data,
+     [nei({span_stop, Action}), {reply, From, TM}]};
 
 handle_event(internal, {recv, {ready_for_query, _} = TM}, _, Data) ->
     {next_state, TM, Data};
@@ -120,41 +123,82 @@ handle_event(internal, {query, [SQL]}, _, _) ->
     {keep_state_and_data,
      nei({send, ["Q", size_inclusive([marshal(string, SQL)])]})};
 
-handle_event(internal, {recv, {Tag, _} = TM}, query, _)
+handle_event(internal,
+             {recv = EventName,
+              {command_complete = Tag, {Command, Rows}} = TM},
+             query,
+             #{span := #{metadata := Metadata,
+                         measurements := Measurements} = Span} = Data)
+  when is_atom(Command),
+       is_integer(Rows) ->
+    {keep_state,
+     Data#{span := Span#{metadata := Metadata#{command => Command},
+                         measurements := Measurements#{rows => Rows}}},
+     [nei({telemetry,
+           EventName,
+           #{count => 1, rows => Rows},
+           #{tag => Tag, command => Command}}),
+      nei({process, TM}),
+      nei(complete)]};
+
+handle_event(internal,
+             {recv = EventName, {Tag, _} = TM},
+             query,
+             _)
   when Tag == empty_query_response;
        Tag == error_response;
        Tag == command_complete ->
-    {keep_state_and_data, [nei({process, TM}), nei(complete)]};
-
-handle_event(internal, {recv, {row_description = Tag, Types}}, query, Data) ->
-    {keep_state,
-     Data#{types => Types},
-     nei({process, {Tag, field_names(Types)}})};
+    {keep_state_and_data,
+     [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
+      nei({process, TM}),
+      nei(complete)]};
 
 handle_event(internal,
-             {recv, {data_row = Tag, Columns}},
+             {recv = EventName,
+              {row_description = Tag, Types}},
+             query,
+             Data) ->
+    {keep_state,
+     Data#{types => Types},
+     [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
+      nei({process, {Tag, field_names(Types)}})]};
+
+handle_event(internal,
+             {recv = EventName, {data_row = Tag, Columns}},
              query,
              #{parameters := Parameters,
                types_ready := true,
                types := Types}) ->
     {keep_state_and_data,
-     nei({process,
-          {Tag, decode(Parameters, lists:zip(Types, Columns))}})};
+     [nei({telemetry,
+           EventName,
+           #{count => 1},
+           #{tag => Tag, types_ready => true}}),
+
+      nei({process, {Tag, decode(Parameters, lists:zip(Types, Columns))}})]};
 
 handle_event(internal,
-             {recv, {data_row = Tag, Columns}},
+             {recv = EventName, {data_row = Tag, Columns}},
              query,
              #{parameters := Parameters,
                types_ready := false,
                types := Types}) ->
     {keep_state_and_data,
-     nei({process,
-          {Tag, decode(Parameters, lists:zip(Types, Columns), #{})}})};
+     [nei({telemetry,
+           EventName,
+           #{count => 1},
+           #{tag => Tag, types_ready => false}}),
 
-handle_event(internal, complete, _, #{replies := Replies, from := From} = Data) ->
+      nei({process, {Tag, decode(Parameters, lists:zip(Types, Columns), #{})}})]};
+
+handle_event(internal,
+             complete,
+             Action,
+             #{replies := Replies, from := From} = Data) ->
     {keep_state,
      maps:without([args, from, replies, types], Data),
-     {reply, From, lists:reverse(Replies)}};
+     [{reply, From, lists:reverse(Replies)},
+      nei({span_stop, Action})]};
 
 handle_event(EventType, EventContent, State, Data) ->
     pgmp_mm_common:handle_event(EventType,

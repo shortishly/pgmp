@@ -45,7 +45,10 @@ send_request(Arg) ->
 
 init([Arg]) ->
     process_flag(trap_exit, true),
-    {ok, disconnected, Arg#{requests => gen_statem:reqids_new()}}.
+    {ok,
+     disconnected,
+     Arg#{requests => gen_statem:reqids_new(),
+          telemetry => #{db => #{system => postgresql}}}}.
 
 
 callback_mode() ->
@@ -64,30 +67,60 @@ handle_event({call, {Peer, _}}, {send, _}, _, Data) ->
      Data#{peer => Peer},
      [postpone, nei(open)]};
 
-handle_event(internal, open, _, Data) ->
+handle_event(internal,
+             {telemetry, EventName, Measurements},
+             _,
+             _) ->
+    {keep_state_and_data,
+     nei({telemetry, EventName, Measurements, #{}})};
+
+handle_event(internal,
+             {telemetry, EventName, Measurements, Metadata},
+             _,
+             Data) ->
+    ok = telemetry:execute(
+           [pgmp, socket, EventName],
+           Measurements,
+           maps:merge(
+             maps:with([peer, socket, telemetry], Data),
+             Metadata)),
+    keep_state_and_data;
+
+handle_event(internal, open = EventName, _, Data) ->
     case socket:open(inet, stream, default) of
         {ok, Socket} ->
-            {keep_state, Data#{socket => Socket}, nei(connect)};
+            {keep_state,
+             Data#{socket => Socket},
+             [nei({telemetry, EventName, #{count => 1}}),
+              nei(connect)]};
 
         {error, Reason} ->
             {stop, Reason}
     end;
 
-handle_event(internal, {send, Data}, _, #{socket := Socket}) ->
+handle_event(internal, {send = EventName, Data}, _, #{socket := Socket}) ->
     case socket:send(Socket, Data) of
         ok ->
-            keep_state_and_data;
+            {keep_state_and_data,
+             nei({telemetry,
+                  EventName,
+                  #{bytes => iolist_size(Data)}})};
 
         {error, Reason} ->
             {stop, Reason}
     end;
 
-handle_event(internal, recv, _, #{socket := Socket, partial := Partial} = Data) ->
+handle_event(internal,
+             recv = EventName,
+             _,
+             #{socket := Socket, partial := Partial} = Data) ->
     case socket:recv(Socket, 0, nowait) of
         {ok, Received} ->
             {keep_state,
              Data#{partial := <<>>},
-             [nei({recv, iolist_to_binary([Partial, Received])}), nei(recv)]};
+             [nei({telemetry, EventName, #{bytes => iolist_size(Received)}}),
+              nei({recv, iolist_to_binary([Partial, Received])}),
+              nei(recv)]};
 
         {select, {select_info, _, _}} ->
             keep_state_and_data;
@@ -104,7 +137,12 @@ handle_event(info,
         {ok, Received} ->
             {keep_state,
              Data#{partial := <<>>},
-             [nei({recv, iolist_to_binary([Partial, Received])}), nei(recv)]};
+             [nei({telemetry,
+                   recv,
+                   #{bytes => iolist_size(Received)},
+                   #{handle => Handle}}),
+              nei({recv, iolist_to_binary([Partial, Received])}),
+              nei(recv)]};
 
         {select, {select_info, _, _}} ->
             keep_state_and_data;
@@ -148,7 +186,7 @@ handle_event(internal, {recv, Partial}, _, #{partial := <<>>} = Data) ->
     {keep_state, Data#{partial := Partial}, nei(recv)};
 
 handle_event(internal,
-             {tag_msg, Tag, Message},
+             {tag_msg = EventName, Tag, Message},
              _,
              #{peer := Peer, requests := Requests} = Data) ->
     {keep_state,
@@ -156,17 +194,36 @@ handle_event(internal,
                          #{server_ref => Peer,
                            tag => pgmp_message_tags:name(backend, Tag),
                            message => Message,
-                           requests => Requests})}};
+                           requests => Requests})},
+     nei({telemetry,
+          EventName,
+          #{count => 1, bytes => iolist_size(Message)},
+          #{tag => pgmp_message_tags:name(backend, Tag)}})};
 
-handle_event(internal, connect, _, #{socket := Socket} = Data) ->
-    case socket:connect(
-           Socket,
-           #{family => inet,
-             port => pgmp_config:database(port),
-             addr => addr()}) of
+handle_event(internal, connect, _, _) ->
+    {keep_state_and_data,
+     nei({connect,
+          #{family => inet,
+            port => pgmp_config:database(port),
+            addr => addr()}})};
 
+handle_event(internal,
+             {connect = EventName,
+              #{family := Family, port := Port, addr := Addr} = SockAddr},
+             _,
+             #{socket := Socket, telemetry := Telemetry} = Data) ->
+
+    case socket:connect(Socket, SockAddr) of
         ok ->
-            {next_state, connected, Data#{partial => <<>>}, nei(recv)};
+            {next_state,
+             connected,
+             Data#{partial => <<>>,
+                   telemetry :=
+                       Telemetry#{net => #{peer => #{name => Addr,
+                                                     port => Port},
+                                           sock => #{family => Family}}}},
+             [nei({telemetry, EventName, #{count => 1}}),
+              nei(recv)]};
 
         {error, Reason} ->
             {stop, Reason}

@@ -101,14 +101,18 @@ handle_event(internal, {describe_portal, Portal}, unsynchronized, Data) ->
      Data#{args => Args},
      [nei({describe, Args}), nei(flush)]};
 
-handle_event(internal, {parse, [Name, SQL]}, _, _) ->
+handle_event(internal, {parse = EventName, [Name, SQL]}, _, _) ->
     {keep_state_and_data,
-     nei({send,
-          ["P",
-           size_inclusive(
-             [marshal(string, Name),
-              marshal(string, SQL),
-              marshal(int16, 0)])]})};
+     [nei({telemetry,
+           EventName,
+           #{count => 1},
+           #{args => #{name => Name, sql => SQL}}}),
+      nei({send,
+           ["P",
+            size_inclusive(
+              [marshal(string, Name),
+               marshal(string, SQL),
+               marshal(int16, 0)])]})]};
 
 handle_event(internal,
              {bind,
@@ -172,64 +176,90 @@ handle_event(internal,
                         format(ResultFormat))])]})}
     end;
 
-handle_event(internal, {execute, [Portal, MaxRows]}, _, _) ->
+handle_event(internal, {execute = EventName, [Portal, MaxRows]}, _, _) ->
     {keep_state_and_data,
-     nei({send,
-          ["E",
-           size_inclusive(
-             [marshal(string, Portal),
-              marshal(int32, MaxRows)])]})};
+     [nei({telemetry,
+           EventName,
+           #{count => 1},
+           #{args => #{portal => Portal, max_rows => MaxRows}}}),
+
+      nei({send,
+           ["E",
+            size_inclusive(
+              [marshal(string, Portal),
+               marshal(int32, MaxRows)])]})]};
 
 handle_event(internal,
-             {recv, {ready_for_query, _} = TM},
+             {recv = EventName, {ready_for_query = Tag, _} = TM},
              State,
              Data)
   when State == unsynchronized;
        State == error ->
-    {next_state, TM, Data, pop_callback_module};
+    {next_state,
+     TM,
+     Data,
+     [pop_callback_module,
+      nei({telemetry,
+           EventName,
+           #{count => 1},
+           #{tag => Tag}})]};
 
 handle_event(internal,
-             {recv, {data_row = Tag, Columns}},
+             {recv = EventName, {data_row = Tag, Columns}},
              execute,
              #{parameters := Parameters, types := Types}) ->
     {keep_state_and_data,
-     nei({process, {Tag, decode(Parameters, lists:zip(Types, Columns))}})};
+     [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
+      nei({process, {Tag, decode(Parameters, lists:zip(Types, Columns))}})]};
 
 handle_event(internal,
-             {recv, {parse_complete, _}},
+             {recv = EventName, {parse_complete = Tag, _}},
              {named_statements, _},
              #{args := [Statement, _]} = Data) ->
     Args = [$S, Statement],
     {keep_state,
      Data#{args := Args},
-     [nei({describe, Args}), nei(flush)]};
+     [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
+      nei({describe, Args}),
+      nei(flush)]};
 
 handle_event(internal,
-             {recv, {parameter_description = Tag, Decoded}},
+             {recv = EventName, {parameter_description = Tag, Decoded}},
              {named_statements, _},
              #{args := [$S, Statement],
                cache := Cache}) ->
     ets:insert(Cache, {{Tag, Statement}, Decoded}),
-    keep_state_and_data;
+    {keep_state_and_data,
+     nei({telemetry, EventName, #{count => 1}, #{tag => Tag}})};
 
 handle_event(internal,
-             {recv, {row_description = Tag, Decoded}},
+             {recv = EventName, {row_description = Tag, Decoded}},
              {named_statements, _},
              #{args := [$S, Statement], cache := Cache} = Data) ->
     ets:insert(Cache, {{Tag, Statement}, Decoded}),
-    {keep_state, maps:without([args], Data), nei(next_named)};
+    {keep_state,
+     maps:without([args], Data),
+     [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
+      nei(next_named)]};
 
 handle_event(internal,
-             {recv, {no_data, _}},
+             {recv = EventName, {no_data = Tag, _}},
              {named_statements, _},
              #{args := [$S, _]} = Data) ->
-    {keep_state, maps:without([args], Data), nei(next_named)};
+    {keep_state,
+     maps:without([args], Data),
+     [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
+      nei(next_named)]};
 
 handle_event(internal,
-             {recv, {ready_for_query, idle}},
+             {recv = EventName, {ready_for_query = Tag, idle}},
              {named_statements, Previous},
              Data) ->
-    {next_state, Previous, Data, pop_callback_module};
+    {next_state,
+     Previous,
+     Data,
+     [pop_callback_module,
+      nei({telemetry, EventName, #{count => 1}, #{tag => Tag}})]};
 
 handle_event(internal,
              next_named,
@@ -247,14 +277,15 @@ handle_event(internal,
     end;
 
 handle_event(internal,
-             {recv, {parse_complete, _} = TM},
-             parse,
+             {recv = EventName, {parse_complete = Tag, _} = TM},
+             parse = Action,
              #{args := [Statement, _]} = Data) ->
     {next_state,
      unsynchronized,
      Data,
-     [nei({process, TM}),
-      nei(complete),
+     [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
+      nei({process, TM}),
+      nei({complete, Action}),
       nei({describe_statement, Statement}),
       nei({sync_when_named, Statement})]};
 
@@ -264,48 +295,61 @@ handle_event(internal, {sync_when_named, <<>>}, _, _) ->
 handle_event(internal, {sync_when_named, _}, _, _) ->
     {keep_state_and_data, nei(sync)};
 
-handle_event(internal, {recv, {error_response, _} = TM}, parse, Data) ->
+handle_event(internal,
+             {recv = EventName, {error_response = Tag, _} = TM},
+             parse = Action,
+             Data) ->
     {next_state,
      error,
      Data,
-     [nei({process, TM}), nei(complete), nei(sync)]};
+     [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
+      nei({process, TM}),
+      nei({complete, Action}),
+      nei(sync)]};
 
 handle_event(internal,
-             {recv, {bind_complete, _} = Reply},
-             bind,
+             {recv = EventName, {bind_complete = Tag, _} = Reply},
+             bind = Action,
              #{args := [_, Portal, _, _, _]} = Data) ->
     {next_state,
      unsynchronized,
      Data,
-     [nei({process, Reply}),
-      nei(complete),
+     [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
+      nei({process, Reply}),
+      nei({complete, Action}),
       nei({describe_portal, Portal}),
       nei({sync_when_named, Portal})]};
 
 handle_event(internal,
-             {recv, {error_response, _} = Reply},
-             bind,
+             {recv = EventName, {error_response = Tag, _} = Reply},
+             bind = Action,
              #{args := [_, Portal, _, _, _], cache := Cache} = Data) ->
     ets:delete(Cache, {parameter_description, Portal}),
     ets:delete(Cache, {row_description, Portal}),
     {next_state,
      error,
      Data,
-     [nei({process, Reply}), nei(complete), nei(sync)]};
+     [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
+      nei({process, Reply}),
+      nei({complete, Action}),
+      nei(sync)]};
 
 handle_event(internal,
-             {recv, {error_response, _} = Reply},
-             execute,
+             {recv = EventName, {error_response = Tag, _} = Reply},
+             execute = Action,
              #{args := [Portal, _], cache := Cache} = Data) ->
     ets:delete(Cache, {parameter_description, Portal}),
     ets:delete(Cache, {row_description, Portal}),
     {next_state,
      error,
      Data,
-     [nei({process, Reply}), nei(complete), nei(sync)]};
+     [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
+      nei({process, Reply}),
+      nei({complete, Action}),
+      nei(sync)]};
 
 handle_event(internal,
-             {recv, {data_row = Tag, Columns}},
+             {recv = EventName, {data_row = Tag, Columns}},
              execute,
              #{args := [Portal, _],
                parameters := Parameters,
@@ -313,90 +357,148 @@ handle_event(internal,
     [{_, Types}] = ets:lookup(Cache, {row_description, Portal}),
     {keep_state,
      Data#{types => Types},
-     [nei({process, {row_description, field_names(Types)}}),
+     [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
+      nei({process, {row_description, field_names(Types)}}),
       nei({process, {Tag, decode(Parameters, lists:zip(Types, Columns))}})]};
 
-handle_event(internal, {recv, {Tag, _} = Reply}, execute, Data)
+handle_event(internal,
+             {recv = EventName,
+              {command_complete = Tag, {Command, Rows}} = Reply},
+             execute = Action,
+             #{span := #{metadata := Metadata,
+                         measurements := Measurements} = Span} = Data)
+  when is_atom(Command),
+       is_integer(Rows) ->
+    {next_state,
+     unsynchronized,
+     Data#{span := Span#{metadata := Metadata#{command => Command},
+                         measurements := Measurements#{rows => Rows}}},
+     [nei({telemetry,
+           EventName,
+           #{count => 1, rows => Rows},
+           #{tag => Tag, command => Command}}),
+      nei({process, Reply}),
+      nei({complete, Action})]};
+
+handle_event(internal,
+             {recv = EventName, {Tag, _} = Reply},
+             execute = Action,
+             Data)
   when Tag == portal_suspended;
        Tag == empty_query_response;
        Tag == command_complete ->
     {next_state,
      unsynchronized,
      Data,
-     [nei({process, Reply}), nei(complete)]};
+     [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
+      nei({process, Reply}),
+      nei({complete, Action})]};
 
-handle_event(internal, {recv, {Tag, _} = Reply}, describe, _)
+handle_event(internal, {recv = EventName, {Tag, _} = Reply}, describe, _)
   when Tag == parameter_description ->
-    {keep_state_and_data, nei({process, Reply})};
+    {keep_state_and_data,
+     [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
+      nei({process, Reply})]};
 
-handle_event(internal, {recv, {error_response, _} = Reply}, describe, Data) ->
+handle_event(internal,
+             {recv = EventName, {error_response = Tag, _} = Reply},
+             describe = Action,
+             Data) ->
     {next_state,
      error,
      Data,
-     [nei({process, Reply}), nei(complete), nei(sync)]};
+     [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
+      nei({process, Reply}),
+      nei({complete, Action}),
+      nei(sync)]};
 
-handle_event(internal, {recv, {Tag, _} = Reply}, describe, Data)
+handle_event(internal,
+             {recv = EventName, {Tag, _} = Reply},
+             describe = Action,
+             Data)
   when Tag == row_description;
        Tag == no_data  ->
     {next_state,
      unsynchronized,
      Data,
-     [nei({process, Reply}), nei(complete)]};
+     [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
+      nei({process, Reply}),
+      nei({complete, Action})]};
 
 handle_event(internal,
-             {recv, {parameter_description = Tag, Decoded}},
+             {recv = EventName, {parameter_description = Tag, Decoded}},
              describe_statement,
              #{args := [$S, Statement],
                cache := Cache}) ->
     ets:insert(Cache, {{Tag, Statement}, Decoded}),
-    keep_state_and_data;
+    {keep_state_and_data,
+     nei({telemetry, EventName, #{count => 1}, #{tag => Tag}})};
 
 handle_event(internal,
-             {recv, {row_description = Tag, Decoded}},
+             {recv = EventName, {row_description = Tag, Decoded}},
              describe_statement,
              #{args := [$S, Statement],
                cache := Cache} = Data) ->
     ets:insert(Cache, {{Tag, Statement}, Decoded}),
-    {next_state, unsynchronized, Data};
+    {next_state,
+     unsynchronized,
+     Data,
+     nei({telemetry, EventName, #{count => 1}, #{tag => Tag}})};
 
 handle_event(internal,
-             {recv, {no_data, _}},
+             {recv = EventName, {no_data = Tag, _}},
              describe_statement,
              #{args := [$S, _]} = Data) ->
-    {next_state, unsynchronized, Data};
+    {next_state,
+     unsynchronized,
+     Data,
+     nei({telemetry, EventName, #{count => 1}, #{tag => Tag}})};
 
 handle_event(internal,
-             {recv, {parameter_description = Tag, Decoded}},
+             {recv = EventName, {parameter_description = Tag, Decoded}},
              describe_portal,
              #{args := [$P, Portal],
                cache := Cache}) ->
     ets:insert(Cache, {{Tag, Portal}, Decoded}),
-    keep_state_and_data;
+    {keep_state_and_data,
+     nei({telemetry, EventName, #{count => 1}, #{tag => Tag}})};
 
 handle_event(internal,
-             {recv, {row_description = Tag, Decoded}},
+             {recv = EventName, {row_description = Tag, Decoded}},
              describe_portal,
              #{args := [$P, Portal],
                cache := Cache} = Data) ->
     ets:insert(Cache, {{Tag, Portal}, Decoded}),
-    {next_state, unsynchronized, Data};
+    {next_state,
+     unsynchronized,
+     Data,
+     nei({telemetry, EventName, #{count => 1}, #{tag => Tag}})};
 
 handle_event(internal,
-             {recv, {no_data, _}},
+             {recv = EventName, {no_data = Tag, _}},
              describe_portal,
              #{args := [$P, _]} = Data) ->
-    {next_state, unsynchronized, Data};
+    {next_state,
+     unsynchronized,
+     Data,
+     nei({telemetry, EventName, #{count => 1}, #{tag => Tag}})};
 
 handle_event(internal,
-             {recv, {error_response, _}},
+             {recv = EventName, {error_response = Tag, _}},
              describe_portal,
              #{args := [$P, _]} = Data) ->
-    {next_state, error, Data};
+    {next_state,
+     error,
+     Data,
+     nei({telemetry, EventName, #{count => 1}, #{tag => Tag}})};
 
-handle_event(internal, complete, _, #{replies := Replies, from := From} = Data) ->
+handle_event(internal,
+             {complete, Action},
+             _,
+             #{replies := Replies, from := From} = Data) ->
     {keep_state,
      maps:without([from, replies], Data),
-     {reply, From, lists:reverse(Replies)}};
+     [{reply, From, lists:reverse(Replies)}, nei({span_stop, Action})]};
 
 handle_event(enter, _, unsynchronized, Data) ->
     {keep_state, maps:without([args, types], Data)};
