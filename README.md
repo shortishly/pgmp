@@ -684,12 +684,7 @@ measurements: #{count => 1}
 metadata: #{socket => <0.747.0>, tag => parse_complete}
 ```
 
-#### Middleman Span
-
-Spans are available for `bind`, `describe`, `execute`, `parse`,
-`query` and `sync`.
-
-##### Middleman Span: Parse
+#### Middleman Span: Parse
 
 Executing the following `parse` statement:
 
@@ -718,7 +713,7 @@ metadata: #{args => #{name => <<>>,
             socket => <0.1178.0>}
 ```
 
-##### Middleman Span: Bind
+#### Middleman Span: Bind
 
 With the following `bind` statement
 
@@ -755,7 +750,7 @@ metadata: #{args => #{format => #{parameter => binary,
             socket => <0.1178.0>}
 ```
 
-##### Middleman Span: Execute
+#### Middleman Span: Execute
 
 With the following `execute` statement:
 
