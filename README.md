@@ -504,7 +504,7 @@ telemetry:attach_many(
    []).
 ```
 
-#### Connect
+#### Socket: Connect
 
 A measurement of the count of socket `connect` events. The metadata
 includes the remote address/port together with the `peer` (middleman)
@@ -522,7 +522,7 @@ metadata: #{peer => <0.907.0>,
                         sock => #{family => inet}}}}
 ```
 
-#### Open
+#### Socket: Open
 
 A measurement of the count of socket `open` events. The metadata does
 not include the address or port at this stage, but does include the
@@ -536,7 +536,7 @@ metadata: #{peer => <0.907.0>,
             telemetry => #{db => #{system => postgresql}}}
 ```
 
-#### Recv
+#### Socket: Recv
 
 A measurement of the number of bytes received on this socket.
 
@@ -552,7 +552,7 @@ metadata: #{handle => #Ref<0.772806049.528482305.230978>,
                         sock => #{family => inet}}}}
 ```
 
-#### Send
+#### Socket: Send
 
 A measurement of the number of bytes sent on this socket.
 
@@ -568,7 +568,7 @@ metadata: #{peer => <0.907.0>,
                         sock => #{family => inet}}}}
 ```
 
-#### TagMsg
+#### Socket: TagMsg
 
 A measurement of the number of tagged messages received on this
 socket, with the number of encoded message bytes in the packet which
