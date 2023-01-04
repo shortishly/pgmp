@@ -464,16 +464,19 @@ To use [jsx][github-com-jsx], apply the following configuration:
 Instrumentation is provided via [Telemetry][telemetry] to plug into a
 monitoring system of your choice.
 
-For example, to observe the data that is available, you can attach a
-simple logger in a terminal:
+Telemetry may be configured using application properties, please refer
+to [dev.config](/dev.config) for an example.
 
 ```erlang
-Logger = fun (EventName, Measurements, Metadata, Config) ->
-  logger:alert(#{event_name => EventName,
-                 measurements => Measurements,
-                 metadata => Metadata,
-                 config => Config})
-end.
+%% telemetry function must have arity 4.
+{telemetry_module, pgmp_telemetry_logger},
+{telemetry_function, handle},
+
+%% consult the filename, attaching all events found:
+{telemetry_event_names, "priv/telemetry.terms"},
+
+%% final supplied parameter to the telemetry handler
+{telemetry_config, {hello,world}},
 ```
 
 Then use one or more of the `attach_many` calls to `telemetry` in the
@@ -484,13 +487,13 @@ following sections to observe instrumentation events.
 Low level socket operations are observed by attaching to the following
 events:
 
-- [pgmp, socket, connect],
-- [pgmp, socket, open],
-- [pgmp, socket, recv],
-- [pgmp, socket, send],
+- [pgmp, socket, connect]
+- [pgmp, socket, open]
+- [pgmp, socket, recv]
+- [pgmp, socket, send]
 - [pgmp, socket, tag_msg]
 
-Attaching to the `logger` defined above:
+For debug, attaching in an Erlang shell:
 
 ```erlang
 telemetry:attach_many(
@@ -500,7 +503,7 @@ telemetry:attach_many(
    [pgmp, socket, recv],
    [pgmp, socket, send],
    [pgmp, socket, tag_msg]],
-   Logger,
+   fun pgmp_telemetry_logger:handle/4,
    []).
 ```
 
@@ -593,26 +596,26 @@ middleman.
 
 Simple events:
 
-- [pgmp, mm, execute],
-- [pgmp, mm, parse],
-- [pgmp, mm, recv],
+- [pgmp, mm, execute]
+- [pgmp, mm, parse]
+- [pgmp, mm, recv]
 
 Spans for the major SQL commands:
 
-- [pgmp, mm, bind, start],
-- [pgmp, mm, bind, stop],
-- [pgmp, mm, describe, start],
-- [pgmp, mm, describe, stop],
-- [pgmp, mm, execute, start],
-- [pgmp, mm, execute, stop],
-- [pgmp, mm, parse, start],
-- [pgmp, mm, parse, stop],
-- [pgmp, mm, query, start],
-- [pgmp, mm, query, stop],
-- [pgmp, mm, sync, stop],
-- [pgmp, mm, sync, stop]],
+- [pgmp, mm, bind, start]
+- [pgmp, mm, bind, stop]
+- [pgmp, mm, describe, start]
+- [pgmp, mm, describe, stop]
+- [pgmp, mm, execute, start]
+- [pgmp, mm, execute, stop]
+- [pgmp, mm, parse, start]
+- [pgmp, mm, parse, stop]
+- [pgmp, mm, query, start]
+- [pgmp, mm, query, stop]
+- [pgmp, mm, sync, stop]
+- [pgmp, mm, sync, stop]
 
-Using the example `logger` from above:
+For debug, attaching in an Erlang shell:
 
 ```erlang
 telemetry:attach_many(
@@ -638,7 +641,7 @@ telemetry:attach_many(
 
    [pgmp, mm, sync, stop],
    [pgmp, mm, sync, stop]],
-  Logger,
+  fun pgmp_telemetry_logger:handle/4,
   []).
 ```
 
@@ -787,15 +790,15 @@ metadata: #{args => #{max_rows => 0,
 
 Logical replication is observed by attaching to the following events:
 
-- [pgmp, mm, rep, begin_transaction],
-- [pgmp, mm, rep, insert],
-- [pgmp, mm, rep, update],
-- [pgmp, mm, rep, delete],
-- [pgmp, mm, rep, truncate],
-- [pgmp, mm, rep, commit],
+- [pgmp, mm, rep, begin_transaction]
+- [pgmp, mm, rep, insert]
+- [pgmp, mm, rep, update]
+- [pgmp, mm, rep, delete]
+- [pgmp, mm, rep, truncate]
+- [pgmp, mm, rep, commit]
 - [pgmp, mm, rep, keepalive]
 
-Using the `logger` defined above:
+For debug, attaching in an Erlang shell:
 
 ```erlang
 telemetry:attach_many(
@@ -807,7 +810,7 @@ telemetry:attach_many(
    [pgmp, mm, rep, truncate],
    [pgmp, mm, rep, commit],
    [pgmp, mm, rep, keepalive]],
-  Logger,
+  fun pgmp_telemetry_logger:handle/4,
   []).
 ```
 

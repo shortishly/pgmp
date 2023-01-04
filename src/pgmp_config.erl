@@ -23,6 +23,7 @@
 -export([pool/1]).
 -export([protocol/1]).
 -export([replication/2]).
+-export([telemetry/1]).
 -export([timeout/1]).
 -import(envy, [envy/1]).
 
@@ -137,3 +138,19 @@ pool(max = Name) ->
     envy(#{caller => ?MODULE,
            names => [?FUNCTION_NAME, Name],
            default => 5}).
+
+
+telemetry(Name) when Name == module; Name == function ->
+    envy(#{caller => ?MODULE,
+           type => atom,
+           names =>[?FUNCTION_NAME, Name]});
+
+telemetry(event_names = Name) ->
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name],
+           default => filename:join(pgmp:priv_dir(), "telemetry.terms")});
+
+telemetry(config = Name) ->
+    envy:get_env(pgmp,
+                 pgmp_util:snake_case([?FUNCTION_NAME, Name]),
+                 [app_env, {default, []}]).
