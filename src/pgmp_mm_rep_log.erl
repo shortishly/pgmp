@@ -93,12 +93,14 @@ handle_event(internal,
              _,
              _) ->
     {keep_state_and_data,
-     nei({optional_callback,
-          Change,
-          maps:with([commit_timestamp,
-                     final_lsn,
-                     xid,
-                     x_log], Arg)})};
+     [nei({optional_callback,
+           Change,
+           maps:with([commit_timestamp,
+                      final_lsn,
+                      xid,
+                      x_log], Arg)}),
+
+      nei({rep_telemetry, Change, #{count => 1}})]};
 
 handle_event(internal,
              {insert = Change,
@@ -109,11 +111,13 @@ handle_event(internal,
              #{relations := Relations, parameters := Parameters}) ->
     #{Relation := #{columns := Columns, name := Table}} = Relations,
     {keep_state_and_data,
-     nei({callback,
-          Change,
-          #{relation => Table,
-            x_log => XLog,
-            tuple => row_tuple(Parameters, Columns, Values)}})};
+     [nei({callback,
+           Change,
+           #{relation => Table,
+             x_log => XLog,
+             tuple => row_tuple(Parameters, Columns, Values)}}),
+
+      nei({rep_telemetry, Change, #{count => 1}, #{relation => Table}})]};
 
 handle_event(internal,
              {update = Change,
@@ -124,11 +128,13 @@ handle_event(internal,
              #{relations := Relations, parameters := Parameters}) ->
     #{Relation := #{columns := Columns, name := Table}} = Relations,
     {keep_state_and_data,
-     nei({callback,
-          Change,
-          #{relation => Table,
-            x_log => XLog,
-            tuple => row_tuple(Parameters, Columns, Values)}})};
+     [nei({callback,
+           Change,
+           #{relation => Table,
+             x_log => XLog,
+             tuple => row_tuple(Parameters, Columns, Values)}}),
+
+      nei({rep_telemetry, Change, #{count => 1}, #{relation => Table}})]};
 
 handle_event(internal,
              {delete = Change,
@@ -137,11 +143,13 @@ handle_event(internal,
              #{relations := Relations, parameters := Parameters}) ->
     #{Relation := #{columns := Columns, name := Table}} = Relations,
     {keep_state_and_data,
-     nei({callback,
-          Change,
-          #{relation => Table,
-            x_log => XLog,
-            tuple => row_tuple(Parameters, Columns, Values)}})};
+     [nei({callback,
+           Change,
+           #{relation => Table,
+             x_log => XLog,
+             tuple => row_tuple(Parameters, Columns, Values)}}),
+
+      nei({rep_telemetry, Change, #{count => 1}, #{relation => Table}})]};
 
 handle_event(internal,
              {truncate = Change,
@@ -157,16 +165,20 @@ handle_event(internal,
               end,
               Truncates),
     {keep_state_and_data,
-     nei({callback, Change, #{relations => Names, x_log => XLog}})};
+     [nei({callback, Change, #{relations => Names, x_log => XLog}}),
+
+      nei({rep_telemetry, Change, #{count => 1}, #{relations => Names}})]};
 
 handle_event(internal, {commit = Change, Arg}, _, _) ->
     {keep_state_and_data,
-     nei({optional_callback,
-          Change,
-          maps:with([commit_lsn,
-                     commit_timestamp,
-                     end_lsn],
-                    Arg)})};
+     [nei({optional_callback,
+           Change,
+           maps:with([commit_lsn,
+                      commit_timestamp,
+                      end_lsn],
+                     Arg)}),
+
+      nei({rep_telemetry, Change, #{count => 1}})]};
 
 handle_event(internal,
              {relation, #{id := Id} = Relation},
@@ -176,7 +188,7 @@ handle_event(internal,
      Data#{relations := Relations#{Id => maps:without([id], Relation)}}};
 
 handle_event(internal,
-             {keepalive,
+             {keepalive = Change,
               #{clock := Clock,
                 end_wal := EndWAL,
                 reply := true}},
@@ -184,7 +196,9 @@ handle_event(internal,
              #{wal := WAL} = Data) ->
     {keep_state,
      Data#{wal := WAL#{clock := Clock, received := EndWAL}},
-     nei(ping)};
+     [nei(ping),
+
+      nei({rep_telemetry, Change, #{count => 1}})]};
 
 handle_event(internal, {keepalive, _}, _, _) ->
     keep_state_and_data;
@@ -390,6 +404,23 @@ handle_event(internal,
                 AppliedWAL:64,
                 Clock:64,
                 (b(Reply)):8>>])]})};
+
+handle_event(internal, {rep_telemetry, EventName, Measurements}, _, _) ->
+    {keep_state_and_data, nei({rep_telemetry, EventName, Measurements, #{}})};
+
+handle_event(internal,
+             {rep_telemetry, EventName, Measurements, Metadata},
+             _,
+             Data) ->
+    {keep_state_and_data,
+     nei({telemetry,
+          [rep, EventName],
+          maps:merge(
+            Measurements,
+            maps:with([wal], Data)),
+          maps:merge(
+            Metadata,
+            maps:with([identify_system, replication_slot], Data))})};
 
 handle_event(EventType, EventContent, State, Data) ->
     pgmp_mm_common:handle_event(EventType,

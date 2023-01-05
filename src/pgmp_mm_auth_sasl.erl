@@ -42,22 +42,30 @@ handle_event(internal, {recv, {error_response, Errors}}, _, Data) ->
 %%
 
 handle_event(internal,
-             {sasl, [<<"SCRAM-SHA-256">> = Mechanism | _]},
+             {sasl = EventName, [<<"SCRAM-SHA-256">> = Mechanism | _]},
              _,
              Data) ->
     {keep_state,
      Data#{sasl => #{mechanism => Mechanism}},
-     nei({send,
-          ["p",
-           size_inclusive(
-             [marshal(string, Mechanism), marshal(int32, -1)])]})};
+     [nei({telemetry, EventName, #{count => 1}, #{mechanism => Mechanism}}),
+
+      nei({send,
+           ["p",
+            size_inclusive(
+              [marshal(string, Mechanism), marshal(int32, -1)])]})]};
 
 handle_event(internal,
-             {recv, {authentication, {Action, Encoded}}},
+             {recv = EventName, {authentication = Tag, {Action, Encoded}}},
              _,
              #{sasl := #{mechanism := <<"SCRAM-SHA-256">>}})
   when Action == sasl_continue; Action == sasl_final ->
-    {keep_state_and_data, nei({Action, Encoded, pgmp_scram:decode(Encoded)})};
+    {keep_state_and_data,
+     [nei({telemetry,
+           EventName,
+           #{count => 1},
+           #{tag => Tag, action => Action}}),
+
+      nei({Action, Encoded, pgmp_scram:decode(Encoded)})]};
 
 handle_event(internal,
              {sasl_final, _, #{v := V}},

@@ -35,11 +35,16 @@ data({call, From}, #{args := Args}, Data) ->
 
 
 actions({call, _} = Call, Arg, Data) ->
-    [command(Call, Arg, Data) | post_actions(Call, Arg, Data)].
+    [span_start(Call, Arg, Data),
+     command(Call, Arg, Data) | post_actions(Call, Arg, Data)].
 
 
 command(_, #{action := Action, args := Args}, _) ->
     nei({Action, Args}).
+
+
+span_start(_, #{action := Action}, _) ->
+    nei({?FUNCTION_NAME, Action}).
 
 
 post_actions(_, #{action := Action}, _) ->
@@ -89,14 +94,16 @@ handle_event(internal,
     keep_state_and_data;
 
 handle_event(internal,
-             {send, Message},
+             {send = EventName, Message},
              _,
              #{requests := Requests, socket := Socket} = Data) ->
     {keep_state,
      Data#{requests := pgmp_socket:send(
                          #{server_ref => Socket,
                            data => Message,
-                           requests => Requests})}};
+                           requests => Requests})},
+     nei({telemetry, EventName, #{message => Message}})};
+
 handle_event(internal,
              {recv, {parameter_status, {K, V}}},
              _,
@@ -132,7 +139,7 @@ handle_event(enter,
              _,
              {ready_for_query, State},
              #{requests := Requests,
-              config := #{group := _}} = Data) ->
+               config := #{group := _}} = Data) ->
     {keep_state,
      maps:with(
        [ancestors,
@@ -166,4 +173,86 @@ handle_event(enter,
        Data)};
 
 handle_event(enter, _, _, _) ->
+    keep_state_and_data;
+
+handle_event(internal,
+             {span_start, Action},
+              _,
+             Data) ->
+    StartTime = erlang:monotonic_time(),
+    Metadata = maps:with([args], Data),
+    {keep_state,
+     Data#{span => #{start_time => StartTime,
+                     measurements => #{},
+                     metadata => Metadata}},
+     nei({telemetry,
+          [Action, start],
+          #{monotonic_time => StartTime},
+          Metadata})};
+
+handle_event(internal,
+             {span_stop, Action},
+             _,
+             #{span := #{start_time := StartTime,
+                         measurements := Measurements,
+                         metadata := Metadata}} = Data) ->
+    StopTime = erlang:monotonic_time(),
+    {keep_state,
+     maps:without([span], Data),
+     nei({telemetry,
+          [Action, stop],
+          maps:merge(
+            #{duration => StopTime - StartTime,
+              monotonic_time => StopTime},
+            Measurements),
+          Metadata})};
+
+handle_event(internal,
+             {telemetry, EventName, Measurements},
+             _,
+             _) ->
+    {keep_state_and_data,
+     nei({telemetry, EventName, Measurements, #{}})};
+
+handle_event(internal,
+             {telemetry, EventName, Measurements, Metadata},
+             _,
+             _) when is_atom(EventName) ->
+    {keep_state_and_data,
+     nei({telemetry, [EventName], Measurements, Metadata})};
+
+handle_event(internal,
+             {telemetry, EventName, Measurements, Metadata},
+             _,
+             Data) ->
+    ok = telemetry:execute(
+           [pgmp, mm] ++ EventName,
+           Measurements,
+           maps:merge(
+             maps:with([socket], Data),
+             args(EventName, Metadata))),
     keep_state_and_data.
+
+args([bind | _],
+     #{args := [Statement,
+                Portal,
+                Values,
+                ParameterFormat,
+                ResultFormat]} = Metadata) ->
+    Metadata#{args := #{statement => Statement,
+                        portal => Portal,
+                        values => Values,
+                        format => #{parameter => ParameterFormat,
+                                    result => ResultFormat}}};
+
+args([execute | _], #{args := [Portal, MaxRows]} = Metadata) ->
+    Metadata#{args := #{portal => Portal, max_rows => MaxRows}};
+
+args([parse | _], #{args := [Name, SQL]} = Metadata) ->
+    Metadata#{args := #{name => Name, sql => SQL}};
+
+args([query | _], #{args := [SQL]} = Metadata) ->
+    Metadata#{args := #{sql => SQL}};
+
+args(_, Metadata) ->
+    Metadata.

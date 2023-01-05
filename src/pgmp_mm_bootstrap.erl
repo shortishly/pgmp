@@ -63,7 +63,7 @@ handle_event(internal,
     end;
 
 handle_event(internal,
-             join,
+             join = EventName,
              _,
              #{requests := Requests,
                config := #{group := Group}} = Data) ->
@@ -71,7 +71,11 @@ handle_event(internal,
     {keep_state,
      Data#{requests := pgmp_connection:join(
                          #{group => Group,
-                           requests => Requests})}};
+                           requests => Requests})},
+     nei({telemetry,
+          EventName,
+          #{count => 1},
+          #{group => Group}})};
 
 handle_event(internal, join, _, #{config := #{}}) ->
     keep_state_and_data;
@@ -104,31 +108,41 @@ handle_event(internal, startup, _, _) ->
     {keep_state_and_data, nei({startup, #{}})};
 
 handle_event(internal,
-             {startup, KV},
+             {startup = EventName, KV},
              _,
              #{config := #{identity := #{user := User},
                            database := Database,
                            replication := Replication}}) ->
     {keep_state_and_data,
-     nei({send,
-          size_inclusive(
-            [marshal(int32, version()),
-             maps:fold(
-               fun
-                   (K, V, A) ->
-                       [marshal(string, K), marshal(string, V) | A]
-               end,
-               [],
-               maps:merge(
-                 #{<<"user">> => User(),
-                   <<"database">> => Database(),
-                   <<"replication">> => Replication()},
-                 KV)),
-             marshal(byte, <<0>>)])})};
+     [nei({send,
+           size_inclusive(
+             [marshal(int32, version()),
+              maps:fold(
+                fun
+                    (K, V, A) ->
+                        [marshal(string, K), marshal(string, V) | A]
+                end,
+                [],
+                maps:merge(
+                  #{<<"user">> => User(),
+                    <<"database">> => Database(),
+                    <<"replication">> => Replication()},
+                  KV)),
+              marshal(byte, <<0>>)])}),
+      nei({telemetry,
+           EventName,
+           #{count => 1},
+           #{user => User(),
+             database => Database()}})]};
 
-handle_event(internal, {recv, {authentication, authenticated}}, State, Data)
+handle_event(internal,
+             {recv = EventName,
+              {authentication = Tag, authenticated = Type}}, State, Data)
   when State == unready; State == starting ->
-    {next_state, authenticated, Data};
+    {next_state,
+     authenticated,
+     Data,
+     nei({telemetry, EventName, #{count => 1}, #{tag => Tag, type => Type}})};
 
 handle_event(internal, {recv, {error_response, Reason}}, unready, _) ->
     {stop, Reason};
@@ -139,30 +153,41 @@ handle_event(internal,
              #{config := #{replication := Replication}} = Data) ->
     {next_state, TM, Data, nei({replication, Replication()})};
 
-handle_event(internal, {replication, Type}, _, _) ->
+handle_event(internal, {replication = EventName, Type}, _, _) ->
     {keep_state_and_data,
      [{change_callback_module, bootstrap_complete_callback_module(Type)},
+      nei({telemetry, EventName, #{count => 1}, #{type => Type}}),
       nei(bootstrap_complete)]};
 
 handle_event(internal,
-             {recv, {authentication, {sasl, _} = SASL}},
+             {recv = EventName,
+              {authentication = Tag,
+               {sasl = Type, _} = SASL}},
              _,
              _) ->
     {keep_state_and_data,
-     [{push_callback_module, pgmp_mm_auth_sasl}, nei(SASL)]};
+     [{push_callback_module, pgmp_mm_auth_sasl},
+      nei({telemetry, EventName, #{count => 1}, #{tag => Tag, type => Type}}),
+      nei(SASL)]};
 
 handle_event(internal,
-             {recv, {authentication, {md5_password, _} = MD5}},
+             {recv = EventName,
+              {authentication = Tag,
+               {md5_password = Type, _} = MD5}},
              _,
              _) ->
     {keep_state_and_data,
-     [{push_callback_module, pgmp_mm_auth_md5}, nei(MD5)]};
+     [{push_callback_module, pgmp_mm_auth_md5},
+      nei({telemetry, EventName, #{count => 1}, #{tag => Tag, type => Type}}),
+      nei(MD5)]};
 
 handle_event(internal,
-             {recv, {backend_key_data, [PID, Key]}},
+             {recv = EventName, {backend_key_data = Tag, [PID, Key]}},
              _,
              Data) ->
-    {keep_state, Data#{backend => #{pid => PID, key => Key}}};
+    {keep_state,
+     Data#{backend => #{pid => PID, key => Key}},
+     nei({telemetry, EventName, #{count => 1}, #{tag => Tag}})};
 
 handle_event(internal,
              {response, #{label := pgmp_types, reply := ready}},

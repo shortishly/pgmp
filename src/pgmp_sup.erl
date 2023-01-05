@@ -39,6 +39,7 @@ configuration() ->
 
 children() ->
     [worker(#{m => pg, args => [pgmp_config:pg(scope)]}),
+     worker(pgmp_telemetry),
      worker(pgmp_message_tags),
      worker(pgmp_error_notice_fields),
      supervisor(#{m => pgmp_int_sup, args => [config()]}),

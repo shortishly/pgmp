@@ -20,7 +20,8 @@ PROJECT_VERSION = ${shell git describe --tags}
 DEPS = \
 	envy \
 	phrase \
-	recon
+	recon \
+	telemetry
 
 SHELL_DEPS = \
 	beaming \
@@ -56,10 +57,12 @@ PLT_APPS = \
 dep_beaming = git https://github.com/shortishly/beaming.git
 dep_envy = git https://github.com/shortishly/envy.git
 dep_phrase = git https://github.com/shortishly/phrase.git
+dep_telemetry = git https://github.com/beam-telemetry/telemetry.git
 
 dep_beaming_commit = 0.1.0
 dep_envy_commit = 0.7.2
 dep_phrase_commit = 0.1.0
+dep_telemetry_commit = v1.1.0
 
 include erlang.mk
 
