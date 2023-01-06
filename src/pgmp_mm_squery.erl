@@ -27,6 +27,7 @@
 -import(pgmp_mm_common, [data/3]).
 -import(pgmp_mm_common, [field_names/1]).
 -import(pgmp_statem, [nei/1]).
+-include("pgmp_types.hrl").
 -include_lib("kernel/include/logger.hrl").
 
 
@@ -68,11 +69,11 @@ handle_event(internal,
 handle_event(internal, {recv, {ready_for_query, _} = TM}, _, Data) ->
     {next_state, TM, Data};
 
-handle_event({call, _} = Call,
-             {request, #{action := Action} = Arg},
-             {ready_for_query, _},
-             Data)
-  when Action == query; Action == sync ->
+handle_event(
+  {call, _} = Call,
+  {request, #{action := query = Action, args := [<<?TYPE_SQL>>]} = Arg},
+  {ready_for_query, _},
+  #{types_ready := false} = Data) ->
     {next_state,
      Action,
      data(Call, Arg, Data),
@@ -83,8 +84,10 @@ handle_event({call, _},
              {ready_for_query, _} = ReadyForQuery,
              #{types_ready := false} = Data)
   when Action == parse;
+       Action == query;
        Action == describe;
        Action == bind;
+       Action == sync;
        Action == execute ->
     {next_state, {waiting_for_types, ReadyForQuery}, Data, postpone};
 
@@ -100,6 +103,16 @@ handle_event({call, _} = Call,
      Action,
      data(Call, Arg, Data),
      [{push_callback_module, pgmp_mm_equery} | actions(Call, Arg, Data)]};
+
+handle_event({call, _} = Call,
+             {request, #{action := Action} = Arg},
+             {ready_for_query, _},
+             Data)
+  when Action == query; Action == sync ->
+    {next_state,
+     Action,
+     data(Call, Arg, Data),
+     actions(Call, Arg, Data)};
 
 handle_event({call, _}, {request, _}, _, _) ->
     {keep_state_and_data, postpone};
