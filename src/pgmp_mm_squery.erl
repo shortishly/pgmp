@@ -142,6 +142,17 @@ handle_event(internal,
       nei(complete)]};
 
 handle_event(internal,
+             {recv = EventName, {error_response = Tag, _} = TM},
+             query,
+             #{span := #{metadata := Metadata} = Span} = Data) ->
+    {Tag, Detail} = pgmp_error_notice_fields:map(TM),
+    {keep_state,
+     Data#{span := Span#{metadata := Metadata#{Tag => Detail}}},
+     [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
+      nei({process, TM}),
+      nei(complete)]};
+
+handle_event(internal,
              {recv = EventName, {Tag, _} = TM},
              query,
              _)

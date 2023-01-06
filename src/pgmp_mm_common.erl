@@ -207,6 +207,9 @@ handle_event(internal,
             Measurements),
           Metadata})};
 
+handle_event(internal, {span_stop, _}, _, _) ->
+    keep_state_and_data;
+
 handle_event(internal,
              {telemetry, EventName, Measurements},
              _,

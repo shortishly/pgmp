@@ -42,7 +42,9 @@ configuration(Children) ->
 
 
 children(Arg) ->
-    [worker(#{m => M, args => [Arg#{supervisor => self()}]}) || M <- workers()].
+    [worker(#{m => M,
+              restart => transient,
+              args => [Arg#{supervisor => self()}]}) || M <- workers()].
 
 
 workers() ->
