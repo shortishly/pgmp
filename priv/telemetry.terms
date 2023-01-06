@@ -21,6 +21,7 @@
 [pgmp, socket, tag_msg].
 
 [pgmp, mm, execute].
+[pgmp, mm, join],
 [pgmp, mm, parse].
 [pgmp, mm, recv].
 
