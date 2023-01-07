@@ -21,6 +21,7 @@
 -export([init/1]).
 -export([send/1]).
 -export([start_link/1]).
+-export([terminate/3]).
 -import(pgmp_statem, [nei/1]).
 -include_lib("kernel/include/inet.hrl").
 -include_lib("kernel/include/logger.hrl").
@@ -228,6 +229,13 @@ handle_event(internal,
         {error, Reason} ->
             {stop, Reason}
     end.
+
+
+terminate(_Reason, _State, #{socket := Socket}) ->
+    _ = socket:close(Socket);
+
+terminate(_Reason, _State, _Data) ->
+    ok.
 
 
 addr() ->

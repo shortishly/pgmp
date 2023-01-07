@@ -26,6 +26,7 @@
 -export([write_file/1]).
 -export_type([cache/0]).
 -import(pgmp_statem, [nei/1]).
+-include("pgmp_types.hrl").
 
 
 -type cache() :: #{pgmp:oid() => #{binary() => any()}}.
@@ -106,7 +107,7 @@ handle_event({call, From}, when_ready, ready, _) ->
 handle_event(internal, refresh, _, #{requests := Requests} = Data) ->
     {keep_state,
      Data#{requests := pgmp_connection:query(
-                         #{sql=> <<"select * from pg_catalog.pg_type">>,
+                         #{sql=> <<?TYPE_SQL>>,
                            label => types,
                            requests => Requests})}};
 
