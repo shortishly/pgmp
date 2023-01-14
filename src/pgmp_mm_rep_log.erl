@@ -411,7 +411,7 @@ handle_event(internal, {rep_telemetry, EventName, Measurements}, _, _) ->
 handle_event(internal,
              {rep_telemetry, EventName, Measurements, Metadata},
              _,
-             Data) ->
+             #{config := #{publication := Publication}} = Data) ->
     {keep_state_and_data,
      nei({telemetry,
           [rep, EventName],
@@ -419,7 +419,7 @@ handle_event(internal,
             Measurements,
             maps:with([wal], Data)),
           maps:merge(
-            Metadata,
+            Metadata#{publication => Publication},
             maps:with([identify_system, replication_slot], Data))})};
 
 handle_event(EventType, EventContent, State, Data) ->
