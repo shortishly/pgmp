@@ -224,6 +224,7 @@ decode(_,
        _,
        #{<<"typname">> := Type}, Value)
   when Type == <<"xml">>;
+       Type == <<"jsonb">>;
        Type == <<"json">> ->
     (pgmp_config:codec(binary_to_atom(Type))):?FUNCTION_NAME(Value);
 
@@ -690,6 +691,7 @@ encode(#{<<"integer_datetimes">> := <<"on">>},
 
 encode(_, _, _, #{<<"typname">> := Type}, Value)
   when Type == <<"json">>;
+       Type == <<"jsonb">>;
        Type == <<"xml">> ->
     (pgmp_config:codec(binary_to_atom(Type))):?FUNCTION_NAME(Value);
 
