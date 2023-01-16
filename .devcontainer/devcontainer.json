@@ -1,0 +1,6 @@
+{
+    "name": "pgmp",
+    "dockerComposeFile": "compose.yaml",
+    "service": "pgmp",
+    "remoteUser": "vscode"
+}
