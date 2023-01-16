@@ -3,7 +3,7 @@
 
     "dockerFile": "Dockerfile",
 
-    "postStartCommand": "docker-compose start",
+    "postStartCommand": "docker compose up -d",
 
     "features": {
         "ghcr.io/devcontainers/features/sshd:1": {
