@@ -1,0 +1,33 @@
+services:
+  prometheus:
+    image:
+      prom/prometheus
+    ports:
+      - 9090:9090
+    volumes:
+      - ./example/prometheus.yml:/etc/prometheus/prometheus.yml
+    pull_policy:
+      always
+  postgres:
+    image:
+      postgres:15
+    environment:
+      PGUSER: postgres
+      POSTGRES_PASSWORD: postgres
+    command:
+      -c wal_level=logical
+    ports:
+      - 5432:5432
+    volumes:
+      - db:/var/lib/postgresql/data
+      - ./example/init.sql:/docker-entrypoint-initdb.d/create_tables.sql
+    healthcheck:
+      test: /usr/bin/pg_isready
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    pull_policy:
+      always
+volumes:
+  db:
+    driver: local
