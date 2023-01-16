@@ -96,7 +96,14 @@ handle_event(internal, open = EventName, _, Data) ->
               nei(connect)]};
 
         {error, Reason} ->
-            {stop, Reason}
+            {next_state,
+             limbo,
+             Data,
+             {state_timeout,
+              timer:seconds(
+                backoff:rand_increment(
+                  pgmp_config:backoff(rand_increment))),
+              {backoff, #{action => EventName, reason => Reason}}}}
     end;
 
 handle_event(internal, {send = EventName, Data}, _, #{socket := Socket}) ->
@@ -227,8 +234,18 @@ handle_event(internal,
               nei(recv)]};
 
         {error, Reason} ->
-            {stop, Reason}
-    end.
+            {next_state,
+             limbo,
+             Data,
+             {state_timeout,
+              timer:seconds(
+                backoff:rand_increment(
+                  pgmp_config:backoff(rand_increment))),
+              {backoff, #{action => EventName, reason => Reason}}}}
+    end;
+
+handle_event(state_timeout, {backoff, #{reason := Reason}}, limbo, _) ->
+    {stop, Reason}.
 
 
 terminate(_Reason, _State, #{socket := Socket}) ->
@@ -243,8 +260,13 @@ addr() ->
 
 
 addr(Hostname) ->
-    {ok, #hostent{h_addr_list = Addresses}} = inet:gethostbyname(Hostname),
-    pick_one(Addresses).
+    case inet:gethostbyname(Hostname) of
+        {ok, #hostent{h_addr_list = Addresses}} ->
+            pick_one(Addresses);
+
+        {error, _} = Error ->
+            Error
+    end.
 
 
 pick_one(L) ->

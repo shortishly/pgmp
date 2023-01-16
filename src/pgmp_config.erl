@@ -16,6 +16,7 @@
 -module(pgmp_config).
 
 
+-export([backoff/1]).
 -export([codec/1]).
 -export([database/1]).
 -export([enabled/1]).
@@ -27,6 +28,11 @@
 -export([timeout/1]).
 -import(envy, [envy/1]).
 
+
+backoff(rand_increment = Name) ->
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name],
+           default => 1}).
 
 timeout(Name) ->
     envy(#{caller => ?MODULE,

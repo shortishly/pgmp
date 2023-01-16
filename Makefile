@@ -18,6 +18,7 @@ PROJECT_DESCRIPTION = PostgreSQL Message Protocol
 PROJECT_VERSION = ${shell git describe --tags}
 
 DEPS = \
+	backoff \
 	envy \
 	phrase \
 	recon \
@@ -41,6 +42,7 @@ SHELL_OPTS = \
 PLT_APPS = \
 	any \
 	asn1 \
+	backoff \
 	compiler \
 	crypto \
 	inets \
@@ -59,6 +61,7 @@ dep_envy = git https://github.com/shortishly/envy.git
 dep_phrase = git https://github.com/shortishly/phrase.git
 dep_telemetry = git https://github.com/beam-telemetry/telemetry.git
 
+dep_backoff_commit = 1.1.6
 dep_beaming_commit = 0.1.0
 dep_envy_commit = 0.7.2
 dep_phrase_commit = 0.1.0
