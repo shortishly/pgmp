@@ -1,6 +1,9 @@
 {
+    "name": "pgmp",
+
     "dockerFile": "Dockerfile",
-    "extensions": [],
+
+    "postStartCommand": "docker-compose start",
 
     "features": {
         "ghcr.io/devcontainers/features/sshd:1": {
