@@ -1,1 +1,2 @@
-FROM erlang:25.2
+FROM ghcr.io/shortishly/docker-erlang:25.1
+
