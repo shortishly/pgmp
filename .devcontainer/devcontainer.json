@@ -1,4 +1,9 @@
 {
     "dockerFile": "Dockerfile",
-    "extensions": []
+    "extensions": [],
+
+    "features": {
+        "ghcr.io/devcontainers/features/sshd:1": {
+            "version": "latest"
+        }
 }
