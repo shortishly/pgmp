@@ -5,11 +5,6 @@
 
     "postStartCommand": "docker compose up -d",
 
-    "remoteEnv": {
-        "PGMP_DATABASE_USER": "postgres",
-        "PGMP_DATABASE_PASSWORD": "postgres"
-    },
-
     "features": {
         "ghcr.io/devcontainers/features/sshd:1": {
             "version": "latest"

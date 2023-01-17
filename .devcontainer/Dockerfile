@@ -1,1 +1,4 @@
 FROM erlang:25.2
+
+ENV PGMP_DATABASE_USER="postgres"
+ENV PGMP_DATABASE_PASSWORD="postgres"
