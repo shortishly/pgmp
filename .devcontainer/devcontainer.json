@@ -6,9 +6,7 @@
     "postStartCommand": "docker compose up -d",
 
     "features": {
-        "ghcr.io/devcontainers/features/sshd:1": {
-            "version": "latest"
-        },
+        "ghcr.io/devcontainers/features/sshd:1": {},
 
         "ghcr.io/devcontainers/features/common-utils:2": {},
 
