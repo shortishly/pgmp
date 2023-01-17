@@ -290,12 +290,15 @@ handle_event(internal,
 handle_event(internal,
              {response,
               #{label := #{module := ?MODULE,
-                           connection := _Connection,
+                           connection := Connection,
                            from := {'DOWN', _Monitor, process, Owner, _Info}},
                 reply := ok}},
              _,
-             #{monitors := Monitors} = Data) ->
-    {keep_state, Data#{monitors := maps:without([Owner], Monitors)}};
+             #{monitors := Monitors,
+               reservations := Reservations} = Data) ->
+    {keep_state,
+     Data#{monitors := maps:without([Owner], Monitors),
+           reservations := maps:without([Connection], Reservations)}};
 
 handle_event(internal,
              {response,
@@ -340,24 +343,21 @@ handle_event(internal,
     end;
 
 handle_event(info,
-             {'DOWN', _Monitor, process, Owner, _Info} = Down,
+             {'DOWN', _Monitor, process, Owner, _Info},
              _,
              #{monitors := Monitors,
-               requests := Requests,
+               reservations := Reservations,
+               connections := Connections,
                owners := Owners} = Data)
   when is_map_key(Owner, Monitors),
        is_map_key(Owner, Owners) ->
     #{Owner := Connection} = Owners,
+    ok = gen_statem:stop(Connection),
     {keep_state,
      Data#{monitors := maps:without([Owner], Monitors),
-           requests := gen_statem:send_request(
-                         Connection,
-                         {request, #{action => sync, args => []}},
-                         #{module => ?MODULE,
-                           connection => Connection,
-                           from => Down},
-                         Requests)}};
-
+           owners := maps:without([Owner], Owners),
+           reservations := maps:without([Connection], Reservations),
+           connections := maps:without([Connection], Connections)}};
 
 handle_event(info,
              {'DOWN', _Monitor, process, Owner, _Info},

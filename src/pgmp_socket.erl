@@ -159,6 +159,9 @@ handle_event(info,
             {stop, Reason}
     end;
 
+handle_event(info, {'DOWN', _, process, Peer, noproc}, _, #{peer := Peer}) ->
+    stop;
+
 handle_event(info, Msg, _, #{requests := Existing} = Data) ->
     case gen_statem:check_response(Msg, Existing, true) of
         {{reply, Reply}, Label, Updated} ->
