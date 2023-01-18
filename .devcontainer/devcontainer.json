@@ -7,7 +7,7 @@
 
     "containerEnv": {
         "PGMP_DATABASE_USER": "postgres",
-        "PGMP_DATABASE_PASSWORD", "postgres"
+        "PGMP_DATABASE_PASSWORD": "postgres"
     },
 
     "forwardPorts": [5432],
