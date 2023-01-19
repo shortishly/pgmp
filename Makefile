@@ -26,6 +26,7 @@ DEPS = \
 
 SHELL_DEPS = \
 	beaming \
+	jsx \
 	sync
 
 TEST_DEPS = \
