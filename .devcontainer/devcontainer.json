@@ -1,6 +1,39 @@
 {
     "name": "pgmp",
-    "dockerComposeFile": "compose.yaml",
-    "service": "pgmp",
-    "remoteUser": "vscode"
+
+    "dockerFile": "Dockerfile",
+
+    "postStartCommand": "docker compose up -d",
+
+    "containerEnv": {
+        "PGMP_DATABASE_USER": "postgres",
+        "PGMP_DATABASE_PASSWORD": "postgres"
+    },
+
+    "forwardPorts": [5432],
+
+    "hostRequirements": {
+        "cpus": 2,
+        "memory": "4gb",
+        "storage": "32gb"
+    },
+
+    "customizations": {
+        "codespaces": {
+            "openFiles": [
+                "README.md",
+                "Makefile",
+                "src/pgmp_app.erl",
+                "src/pgmp_sup.erl"
+            ]
+        }
+    },
+
+    "features": {
+        "ghcr.io/devcontainers/features/sshd:1": {},
+
+        "ghcr.io/devcontainers/features/common-utils:2": {},
+
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    }
 }

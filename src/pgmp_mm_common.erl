@@ -61,6 +61,12 @@ terminate(_Reason, _State, _Data) ->
     ok.
 
 
+handle_event(internal,
+             {response, #{label := pgmp_types, reply := ready}},
+             _,
+             #{types_ready := false} = Data) ->
+    {keep_state, Data#{types_ready := true}};
+
 handle_event({call, From}, {recv, {Tag, _} = TM}, _, _) ->
     {Decoded, <<>>} = demarshal(TM),
     {keep_state_and_data, [{reply, From, ok}, nei({recv, {Tag, Decoded}})]};

@@ -1,3 +1,10 @@
+# Docker Compose
+
+To run a local PostgreSQL using [docker compose][docker-compose-file]:
+
+Save the following in `compose.yaml`:
+
+```yaml
 services:
   postgres:
     image:
@@ -21,3 +28,12 @@ services:
 volumes:
   db:
     driver: local
+```
+
+Run:
+
+```shell
+docker compose up -d
+```
+
+[docker-compose-file]: https://docs.docker.com/compose/compose-file/

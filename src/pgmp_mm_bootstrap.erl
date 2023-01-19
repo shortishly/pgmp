@@ -189,12 +189,6 @@ handle_event(internal,
      Data#{backend => #{pid => PID, key => Key}},
      nei({telemetry, EventName, #{count => 1}, #{tag => Tag}})};
 
-handle_event(internal,
-             {response, #{label := pgmp_types, reply := ready}},
-             _,
-             #{types_ready := false} = Data) ->
-    {keep_state, Data#{types_ready := true}};
-
 handle_event(EventType, EventContent, State, Data) ->
     pgmp_mm_common:handle_event(EventType,
                                 EventContent,
