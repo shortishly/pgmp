@@ -19,7 +19,7 @@ Create a codespace for pgmp:
 gh codespace create \
     --repo $(gh repo view \
         --json nameWithOwner \
-        --jq .nameWithOwner)
+        --jq .nameWithOwner) \
     --branch develop \
     --machine basicLinux32gb
 ```
@@ -31,7 +31,7 @@ gh codespace ssh \
     --codespace $(gh codespace ls \
         --repo $(gh repo view \
             --json nameWithOwner \
-            --jq .nameWithOwner)
+            --jq .nameWithOwner) \
         --json name \
         --jq '.[].name')
 ```
@@ -116,7 +116,7 @@ gh codespace delete \
     --codespace $(gh codespace ls \
         --repo $(gh repo view \
             --json nameWithOwner \
-            --jq .nameWithOwner)
+            --jq .nameWithOwner) \
         --json name \
         --jq '.[].name')
 ```
