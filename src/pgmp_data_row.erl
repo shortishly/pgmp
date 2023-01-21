@@ -516,6 +516,10 @@ decode(_,
     #{a => A, b => B, c => C};
 
 decode(Parameters, Format, _TypeCache,Type, Value) ->
+    ?LOG_WARNING(#{parameters => Parameters,
+                   format => Format,
+                   type => Type,
+                   value => Value}),
     #{parameters => Parameters, format => Format, type => Type, value => Value}.
 
 
