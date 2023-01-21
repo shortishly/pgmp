@@ -34,7 +34,7 @@ init([]) ->
 
 
 configuration() ->
-    {#{intensity => 5}, children()}.
+    {pgmp_config:sup_flags(?MODULE), children()}.
 
 
 children() ->
