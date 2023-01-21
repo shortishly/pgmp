@@ -38,7 +38,10 @@ init([Arg]) ->
 
 
 configuration(Children) ->
-    {#{intensity => length(Children), strategy => one_for_all}, Children}.
+    {maps:merge(
+       #{strategy => one_for_all},
+       pgmp_config:sup_flags(?MODULE)),
+     Children}.
 
 
 children(Arg) ->

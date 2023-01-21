@@ -32,9 +32,10 @@ init([Arg]) ->
 
 
 configuration(Children) ->
-    {#{intensity => length(Children),
-       auto_shutdown => any_significant,
-       strategy => one_for_all},
+    {maps:merge(
+       #{auto_shutdown => any_significant,
+         strategy => one_for_all},
+       pgmp_config:sup_flags(?MODULE)),
      Children}.
 
 children(Arg) ->

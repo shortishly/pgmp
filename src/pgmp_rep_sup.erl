@@ -55,7 +55,10 @@ init([Arg]) ->
 
 
 configuration(Children) ->
-    {#{auto_shutdown => all_significant}, Children}.
+    {maps:merge(
+       #{auto_shutdown => all_significant},
+       pgmp_config:sup_flags(?MODULE)),
+     Children}.
 
 
 children(#{config := Config} = Arg) ->

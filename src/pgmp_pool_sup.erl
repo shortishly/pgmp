@@ -32,7 +32,10 @@ init([Arg]) ->
 
 
 configuration(Children) ->
-    {#{strategy => simple_one_for_one}, Children}.
+    {maps:merge(
+       #{strategy => simple_one_for_one},
+       pgmp_config:sup_flags(?MODULE)),
+     Children}.
 
 
 children(Arg) ->
