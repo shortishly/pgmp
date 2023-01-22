@@ -24,6 +24,7 @@
 -import(pgmp_codec, [demarshal/1]).
 -import(pgmp_codec, [size_inclusive/1]).
 -import(pgmp_statem, [nei/1]).
+-include_lib("kernel/include/logger.hrl").
 
 
 field_names(Types) ->
@@ -71,6 +72,7 @@ handle_event({call, From}, {recv, {Tag, _} = TM}, _, _) ->
     {Decoded, <<>>} = demarshal(TM),
     {keep_state_and_data, [{reply, From, ok}, nei({recv, {Tag, Decoded}})]};
 
+
 handle_event(info, Msg, _, #{requests := Existing} = Data) ->
     case gen_statem:check_response(Msg, Existing, true) of
         {{reply, Reply}, Label, Updated} ->
@@ -78,12 +80,21 @@ handle_event(info, Msg, _, #{requests := Existing} = Data) ->
              Data#{requests := Updated},
              nei({response, #{label => Label, reply => Reply}})};
 
+        {{error, {Reason, _}}, Label, UpdatedRequests}
+          when Reason == noproc;
+               Reason == normal,
+               Label == pgmp_connection;
+               Label == pgmp_socket ->
+            {stop,
+             normal,
+             Data#{requests := UpdatedRequests}};
+
         {{error, {Reason, ServerRef}}, Label, UpdatedRequests} ->
-                {stop,
-                 #{reason => Reason,
-                   server_ref => ServerRef,
-                   label => Label},
-                 Data#{requests := UpdatedRequests}}
+            {stop,
+             #{reason => Reason,
+               server_ref => ServerRef,
+               label => Label},
+             Data#{requests := UpdatedRequests}}
     end;
 
 handle_event(internal,
@@ -240,7 +251,13 @@ handle_event(internal,
            maps:merge(
              maps:with([socket], Data),
              args(EventName, Metadata))),
-    keep_state_and_data.
+    keep_state_and_data;
+
+handle_event(internal, {recv, {error_response, _} = TM}, _, _) ->
+    {Tag, Message} = pgmp_error_notice_fields:map(TM),
+    ?LOG_WARNING(#{tag => Tag, message  => Message}),
+    stop.
+
 
 args([bind | _],
      #{args := [Statement,

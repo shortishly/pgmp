@@ -144,9 +144,6 @@ handle_event(internal,
      Data,
      nei({telemetry, EventName, #{count => 1}, #{tag => Tag, type => Type}})};
 
-handle_event(internal, {recv, {error_response, Reason}}, unready, _) ->
-    {stop, Reason};
-
 handle_event(internal,
              {recv, {ready_for_query, _} = TM},
              authenticated,

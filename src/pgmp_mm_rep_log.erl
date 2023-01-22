@@ -294,6 +294,14 @@ handle_event(internal, identify_system, _, _) ->
     {keep_state_and_data, nei({query, <<"IDENTIFY_SYSTEM">>})};
 
 handle_event(internal,
+             {recv, {command_complete, {copy, 0}}},
+             _,
+             _) ->
+    %% Sent during DB shutdown to indicate that the replication
+    %% process is finishing.
+    stop;
+
+handle_event(internal,
              {recv, {command_complete, Command}},
              _,
              Data) when Command == identify_system;

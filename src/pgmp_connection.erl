@@ -174,7 +174,7 @@ handle_event({call, {Owner, _} = From},
 
     {next_state,
      NextState,
-     Data#{connections := maps:without([Connection], Connections),
+     Data#{connections := Connections#{Connection := reserved},
            outstanding := Outstanding#{Connection => [From]},
            monitors := Monitors#{Owner => erlang:monitor(process, Owner)},
            requests := gen_statem:send_request(
@@ -204,6 +204,7 @@ handle_event({call, {Connection, _} = From},
              {join, [_Group]},
              drained,
              #{connections := Connections} = Data) ->
+    _ = erlang:monitor(process, Connection),
     {next_state,
      available,
      Data#{connections := Connections#{Connection => idle}},
@@ -239,6 +240,7 @@ handle_event({call, {Connection, _} = From},
              {join,  [_Group]},
              _,
              #{connections := Connections} = Data) ->
+    _ = erlang:monitor(process, Connection),
     {keep_state,
      Data#{connections := Connections#{Connection => idle}},
      {reply, From, ok}};
@@ -319,7 +321,7 @@ handle_event(internal,
     {keep_state,
      Data#{owners := maps:without([Owner], Owners),
            reservations := maps:without([Connection], Reservations),
-           connections := maps:without([Connection], Connections)}};
+           connections := Connections#{Connection => limbo}}};
 
 handle_event(internal,
              {response,
@@ -357,7 +359,7 @@ handle_event(info,
      Data#{monitors := maps:without([Owner], Monitors),
            owners := maps:without([Owner], Owners),
            reservations := maps:without([Connection], Reservations),
-           connections := maps:without([Connection], Connections)}};
+           connections := Connections#{Connection => limbo}}};
 
 handle_event(info,
              {'DOWN', _Monitor, process, Owner, _Info},
@@ -366,12 +368,83 @@ handle_event(info,
   when is_map_key(Owner, Monitors) ->
     {keep_state, Data#{monitors := maps:without([Owner], Monitors)}};
 
+handle_event(info,
+             {'DOWN', _Monitor, process, Connection, _Info},
+             available,
+             #{connections := Connections,
+               reservations := Reservations,
+               monitors := Monitors,
+               owners := Owners} = Data)
+  when is_map_key(Connection, Connections),
+       is_map_key(Connection, Reservations),
+       map_size(Connections) > 1 ->
+    #{Connection := Owner} = Reservations,
+    #{Owner := Monitor} = Monitors,
+    true = erlang:demonitor(Monitor, [flush]),
+    {keep_state,
+     Data#{connections := maps:without([Connection], Connections),
+           owners := maps:without([Owner], Owners),
+           monitors := maps:without([Owner], Monitors),
+           reservations := maps:without([Connection], Reservations)}};
+
+handle_event(info,
+             {'DOWN', _Monitor, process, Connection, _Info},
+             _,
+             #{connections := Connections,
+               reservations := Reservations,
+               monitors := Monitors,
+               owners := Owners} = Data)
+  when is_map_key(Connection, Connections),
+       is_map_key(Connection, Reservations) ->
+    #{Connection := Owner} = Reservations,
+    #{Owner := Monitor} = Monitors,
+    true = erlang:demonitor(Monitor, [flush]),
+    {next_state,
+     drained,
+     Data#{connections := maps:without([Connection], Connections),
+           owners := maps:without([Owner], Owners),
+           monitors := maps:without([Owner], Monitors),
+           reservations := maps:without([Connection], Reservations)}};
+
+handle_event(info,
+             {'DOWN', _Monitor, process, Connection, _Info},
+             available,
+             #{connections := Connections} = Data)
+  when is_map_key(Connection, Connections),
+       map_size(Connections) > 1 ->
+    {keep_state,
+     Data#{connections := maps:without([Connection], Connections)}};
+
+handle_event(info,
+             {'DOWN', _Monitor, process, Connection, _Info},
+             _,
+             #{connections := Connections} = Data)
+  when is_map_key(Connection, Connections) ->
+    {next_state,
+     drained,
+     Data#{connections := maps:without([Connection], Connections)}};
+
+handle_event(info, {'DOWN', _, process, _, _} = Down, State, Data) ->
+    ?LOG_ERROR(#{down => Down, state => State, data => Data}),
+    keep_state_and_data;
+
 handle_event(info, Msg, _, #{requests := Existing} = Data) ->
     case gen_statem:check_response(Msg, Existing, true) of
         {{reply, Reply}, Label, Updated} ->
             {keep_state,
              Data#{requests := Updated},
              nei({response, #{label => Label, reply => Reply}})};
+
+        {{error, {Reason, _}}, pgmp_socket, UpdatedRequests}
+          when Reason == noproc; Reason == normal ->
+            {stop,
+             normal,
+             Data#{requests := UpdatedRequests}};
+
+        {{error, {normal, _}}, #{module := ?MODULE}, UpdatedRequests} ->
+            {stop,
+             normal,
+             Data#{requests := UpdatedRequests}};
 
         {{error, {Reason, ServerRef}}, Label, UpdatedRequests} ->
                 {stop,
@@ -380,12 +453,8 @@ handle_event(info, Msg, _, #{requests := Existing} = Data) ->
                    label => Label},
                  Data#{requests := UpdatedRequests}};
 
-        no_request ->
-            ?LOG_ERROR(#{msg => Msg, data => Data}),
-            keep_state_and_data;
-
-        no_reply ->
-            ?LOG_ERROR(#{msg => Msg, data => Data}),
+        Otherwise ->
+            ?LOG_ERROR(#{reason => Otherwise, msg => Msg, data => Data}),
             keep_state_and_data
     end.
 

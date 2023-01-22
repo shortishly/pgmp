@@ -34,7 +34,6 @@ start_child(Pub) ->
       supervisor(#{id => Pub,
                    m => pgmp_rep_log_sup,
                    restart => transient,
-                   significant => true,
                    args => [Arg#{config := Config#{publication => Pub}}]})).
 
 
@@ -43,15 +42,13 @@ terminate_child(Pub) ->
 
 
 init([Arg]) ->
-    {ok,
-     configuration(
-       case pgmp_config:enabled(pgmp_replication) of
-           true ->
-               children(Arg);
+    case pgmp_config:enabled(pgmp_replication) of
+        true ->
+            {ok, configuration(children(Arg))};
 
-           false ->
-               []
-       end)}.
+        false ->
+            ignore
+    end.
 
 
 configuration(Children) ->

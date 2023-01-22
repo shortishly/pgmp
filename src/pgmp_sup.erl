@@ -43,9 +43,7 @@ children() ->
      worker(pgmp_message_tags),
      worker(pgmp_error_notice_fields),
      supervisor(#{m => pgmp_int_sup, args => [config()]}),
-     supervisor(#{m => pgmp_rep_sup,
-                  restart => transient,
-                  args => [config()]})].
+     supervisor(#{m => pgmp_rep_sup, args => [config()]})].
 
 
 config() ->
