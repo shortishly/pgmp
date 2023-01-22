@@ -99,11 +99,15 @@ handle_event(internal, open = EventName, _, Data) ->
             {next_state,
              limbo,
              Data,
-             {state_timeout,
-              timer:seconds(
-                backoff:rand_increment(
-                  pgmp_config:backoff(rand_increment))),
-              {backoff, #{action => EventName, reason => Reason}}}}
+             [nei({telemetry,
+                   error,
+                   #{event => EventName, reason => Reason}}),
+
+              {state_timeout,
+               timer:seconds(
+                 backoff:rand_increment(
+                   pgmp_config:backoff(rand_increment))),
+               {backoff, #{action => EventName, reason => Reason}}}]}
     end;
 
 handle_event(internal, {send = EventName, Data}, _, #{socket := Socket}) ->
@@ -240,15 +244,19 @@ handle_event(internal,
             {next_state,
              limbo,
              Data,
-             {state_timeout,
-              timer:seconds(
-                backoff:rand_increment(
-                  pgmp_config:backoff(rand_increment))),
-              {backoff, #{action => EventName, reason => Reason}}}}
+             [nei({telemetry,
+                   error,
+                   #{event => EventName, reason => Reason}}),
+
+              {state_timeout,
+               timer:seconds(
+                 backoff:rand_increment(
+                   pgmp_config:backoff(rand_increment))),
+               {backoff, #{action => EventName, reason => Reason}}}]}
     end;
 
-handle_event(state_timeout, {backoff, #{reason := Reason}}, limbo, _) ->
-    {stop, Reason}.
+handle_event(state_timeout, {backoff, _}, limbo, _) ->
+    stop.
 
 
 terminate(_Reason, _State, #{socket := Socket}) ->
