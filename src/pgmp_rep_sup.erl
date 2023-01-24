@@ -42,13 +42,15 @@ terminate_child(Pub) ->
 
 
 init([Arg]) ->
-    case pgmp_config:enabled(pgmp_replication) of
-        true ->
-            {ok, configuration(children(Arg))};
+    {ok,
+     configuration(
+       case pgmp_config:enabled(pgmp_replication) of
+           true ->
+               children(Arg);
 
-        false ->
-            ignore
-    end.
+           false ->
+               []
+       end)}.
 
 
 configuration(Children) ->
