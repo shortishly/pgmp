@@ -237,13 +237,15 @@ handle_event(internal,
 handle_event(internal,
              {response,
               #{label := snapshot,
-                reply :=  {error, no_tables}}},
+                reply :=  {error, Reason}}},
              waiting_for_snapshot_completion,
              _) ->
-    stop;
+    {stop, Reason};
 
 handle_event(internal,
-             {response, #{label := snapshot, reply :=  ok}},
+             {response,
+              #{label := snapshot,
+                reply :=  ok}},
              waiting_for_snapshot_completion,
              Data) ->
     {next_state,

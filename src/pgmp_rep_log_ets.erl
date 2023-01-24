@@ -236,8 +236,14 @@ handle_event(internal,
              {response, #{label := sync_publication_tables,
                           reply := [{command_complete, {select, 0}}]}},
              _,
-             #{stream := Stream}) ->
-    {stop_and_reply, normal, {reply, Stream, {error, no_tables}}};
+             #{stream := Stream} = Data) ->
+    %% There are no publication tables to sync, initiate streaming
+    %% replication.
+    %%
+    {next_state,
+     ready,
+     maps:without([stream], Data),
+     {reply, Stream, ok}};
 
 handle_event(internal,
              {response, #{label := sync_publication_tables,
