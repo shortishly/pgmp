@@ -33,8 +33,6 @@ start_child(Pub) ->
       ?MODULE,
       supervisor(#{id => Pub,
                    m => pgmp_rep_log_sup,
-                   restart => transient,
-                   significant => true,
                    args => [Arg#{config := Config#{publication => Pub}}]})).
 
 
@@ -55,10 +53,7 @@ init([Arg]) ->
 
 
 configuration(Children) ->
-    {maps:merge(
-       #{auto_shutdown => all_significant},
-       pgmp_config:sup_flags(?MODULE)),
-     Children}.
+    {pgmp_config:sup_flags(?MODULE), Children}.
 
 
 children(#{config := Config} = Arg) ->
@@ -68,8 +63,6 @@ children(#{config := Config} = Arg) ->
               supervisor(
                 #{id => Pub,
                   m => pgmp_rep_log_sup,
-                  restart => transient,
-                  significant => true,
                   args => [Arg#{config := Config#{publication => Pub}}]})
       end,
       pgmp_config:replication(logical, publication_names)).

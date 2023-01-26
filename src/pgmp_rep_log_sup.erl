@@ -33,19 +33,14 @@ init([Arg]) ->
 
 configuration(Children) ->
     {maps:merge(
-       #{auto_shutdown => any_significant,
-         strategy => one_for_all},
+       #{strategy => one_for_all},
        pgmp_config:sup_flags(?MODULE)),
      Children}.
 
 children(Arg) ->
     [supervisor(#{m => pgmp_rep_log_stream_sup,
-                  restart => transient,
-                  significant => true,
                   args => [Arg]}),
 
      worker(#{m => pgmp_config:replication(logical, module),
               id => manager,
-              restart => transient,
-              significant => true,
               args => [Arg]})].

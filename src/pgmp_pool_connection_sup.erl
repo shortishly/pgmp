@@ -39,14 +39,16 @@ init([Arg]) ->
 
 configuration(Children) ->
     {maps:merge(
-       #{strategy => one_for_all},
+       #{auto_shutdown => any_significant,
+         strategy => one_for_all},
        pgmp_config:sup_flags(?MODULE)),
      Children}.
 
 
 children(Arg) ->
     [worker(#{m => M,
-              restart => transient,
+              restart => temporary,
+              significant => true,
               args => [Arg#{supervisor => self()}]}) || M <- workers()].
 
 

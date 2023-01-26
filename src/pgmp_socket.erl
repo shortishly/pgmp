@@ -87,6 +87,24 @@ handle_event(internal,
              Metadata)),
     keep_state_and_data;
 
+handle_event(internal,
+             {error, #{event := EventName,  reason := Reason}},
+             _,
+             Data) ->
+    {next_state,
+     limbo,
+     Data,
+     [nei({telemetry,
+           error,
+           #{count => 1},
+           #{event => EventName, reason => Reason}}),
+
+      {state_timeout,
+       timer:seconds(
+         backoff:rand_increment(
+           pgmp_config:backoff(rand_increment))),
+       {backoff, #{action => EventName, reason => Reason}}}]};
+
 handle_event(internal, open = EventName, _, Data) ->
     case socket:open(inet, stream, default) of
         {ok, Socket} ->
@@ -96,14 +114,8 @@ handle_event(internal, open = EventName, _, Data) ->
               nei(connect)]};
 
         {error, Reason} ->
-            {next_state,
-             limbo,
-             Data,
-             {state_timeout,
-              timer:seconds(
-                backoff:rand_increment(
-                  pgmp_config:backoff(rand_increment))),
-              {backoff, #{action => EventName, reason => Reason}}}}
+            {keep_state_and_data,
+             nei({error, #{reason => Reason, event => EventName}})}
     end;
 
 handle_event(internal, {send = EventName, Data}, _, #{socket := Socket}) ->
@@ -115,7 +127,8 @@ handle_event(internal, {send = EventName, Data}, _, #{socket := Socket}) ->
                   #{bytes => iolist_size(Data)}})};
 
         {error, Reason} ->
-            {stop, Reason}
+            {keep_state_and_data,
+             nei({error, #{reason => Reason, event => EventName}})}
     end;
 
 handle_event(internal,
@@ -134,7 +147,8 @@ handle_event(internal,
             keep_state_and_data;
 
         {error, Reason} ->
-            {stop, Reason}
+            {keep_state_and_data,
+             nei({error, #{reason => Reason, event => EventName}})}
     end;
 
 handle_event(info,
@@ -156,7 +170,8 @@ handle_event(info,
             keep_state_and_data;
 
         {error, Reason} ->
-            {stop, Reason}
+            {keep_state_and_data,
+             nei({error, #{reason => Reason, event => recv}})}
     end;
 
 handle_event(info, {'DOWN', _, process, Peer, noproc}, _, #{peer := Peer}) ->
@@ -237,18 +252,12 @@ handle_event(internal,
               nei(recv)]};
 
         {error, Reason} ->
-            {next_state,
-             limbo,
-             Data,
-             {state_timeout,
-              timer:seconds(
-                backoff:rand_increment(
-                  pgmp_config:backoff(rand_increment))),
-              {backoff, #{action => EventName, reason => Reason}}}}
+            {keep_state_and_data,
+             nei({error, #{reason => Reason, event => EventName}})}
     end;
 
-handle_event(state_timeout, {backoff, #{reason := Reason}}, limbo, _) ->
-    {stop, Reason}.
+handle_event(state_timeout, {backoff, _}, limbo, _) ->
+    stop.
 
 
 terminate(_Reason, _State, #{socket := Socket}) ->
