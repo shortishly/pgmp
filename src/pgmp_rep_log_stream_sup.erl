@@ -34,8 +34,8 @@ init([#{ancestors := Ancestors} = Arg]) ->
 
 configuration(Children) ->
     {maps:merge(
-       #{auto_shutdown => any_significant,
-         strategy => one_for_all},
+       #{strategy => one_for_all,
+         auto_shutdown => any_significant},
        pgmp_config:sup_flags(?MODULE)),
      Children}.
 
@@ -43,10 +43,11 @@ configuration(Children) ->
 replication() ->
     <<"database">>.
 
+
 children(Arg) ->
     [worker(#{m => M,
-              restart => transient,
               significant => true,
+              restart => temporary,
               args => [Arg#{supervisor => self()}]}) || M <- workers()].
 
 

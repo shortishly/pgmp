@@ -39,10 +39,8 @@ configuration(Children) ->
 
 children(Arg) ->
     [supervisor(#{m => pgmp_rep_log_stream_sup,
-                  restart => transient,
                   args => [Arg]}),
 
      worker(#{m => pgmp_config:replication(logical, module),
               id => manager,
-              restart => transient,
               args => [Arg]})].
