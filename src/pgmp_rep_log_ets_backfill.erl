@@ -185,12 +185,12 @@ handle_event(internal,
              Data) ->
     {next_state, unready, Data, nei({describe, #{type => $P, label => Label}})};
 
-
 handle_event(internal,
              {response, #{label := {table, Table},
                           reply := [{row_description, Columns}]}},
              describe,
-             #{metadata := Metadata} = Data) ->
+             #{config := #{publication := Publication},
+               metadata := Metadata} = Data) ->
     {next_state,
      unready,
      Data#{metadata := metadata(
@@ -201,7 +201,25 @@ handle_event(internal,
                            atom_to_binary(Table),
                            oids,
                            [OID || #{type_oid := OID} <- Columns],
-                           Metadata))}};
+                           Metadata))},
+     nei({notify,
+          pgmp_pg:get_members([pgmp_rep_log_ets, Publication, notifications]),
+          #{action => add, relation => atom_to_binary(Table)}})};
+
+handle_event(internal, {notify, [], _}, _, _) ->
+    keep_state_and_data;
+
+handle_event(internal,
+             {notify, [Recipient | Recipients], Arg},
+             _,
+             #{requests := Requests} = Data) ->
+    {keep_state,
+     Data#{requests := gen_statem:send_request(
+                         Recipient,
+                         {notify, Arg},
+                         #{notify => Recipient},
+                         Requests)},
+     nei({notify, Recipients, Arg})};
 
 handle_event(internal, {Action, _}, _, _)
   when Action == query;
