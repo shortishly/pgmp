@@ -144,29 +144,64 @@ handle_event(internal,
 handle_event(
   internal,
   {response,
-   #{label := {fetch, [#{<<"tablename">> := Table} | T]},
+   #{label := {fetch, [#{<<"tablename">> := Table} = Publication | T]},
      reply := [{row_description, [<<"indkey">>]},
                {data_row, [Key]},
                {command_complete, {select, 1}}]}},
   execute,
   #{metadata := Metadata} = Data) ->
-    _ = ets:new(
-          binary_to_atom(Table),
-          [{keypos,
-            case Key of
-                [Primary] ->
-                    Primary;
+    Label = {table,
+             ets:new(
+               binary_to_atom(Table),
+               [{keypos,
+                 case Key of
+                     [Primary] ->
+                         Primary;
 
-                _Composite ->
-                    1
-            end},
-           protected,
-           named_table]),
+                     _Composite ->
+                         1
+                 end},
+                protected,
+                named_table])},
     {next_state,
      unready,
      Data#{metadata := metadata(Table, keys, Key, Metadata)},
-     [nei({fetch, T})]};
+     [nei({parse, #{label => Label, sql => pub_fetch_sql(Publication)}}),
+      nei({fetch, T})]};
 
+handle_event(internal,
+             {response,
+              #{label := {table, _} = Label,
+                reply := [{parse_complete, []}]}},
+             parse,
+             Data) ->
+    {next_state, unready, Data, nei({bind, #{label => Label}})};
+
+handle_event(internal,
+             {response,
+              #{label := {table, _} = Label,
+                reply := [{bind_complete, []}]}},
+             bind,
+             Data) ->
+    {next_state, unready, Data, nei({describe, #{type => $P, label => Label}})};
+
+
+handle_event(internal,
+             {response, #{label := {table, Table},
+                          reply := [{row_description, Columns}]}},
+             describe,
+             #{metadata := Metadata} = Data) ->
+    {next_state,
+     unready,
+     Data#{metadata := metadata(
+                         atom_to_binary(Table),
+                         columns,
+                         [FieldName || #{field_name := FieldName} <- Columns],
+                         metadata(
+                           atom_to_binary(Table),
+                           oids,
+                           [OID || #{type_oid := OID} <- Columns],
+                           Metadata))}};
 
 handle_event(internal, {Action, _}, _, _)
   when Action == query;
@@ -174,6 +209,9 @@ handle_event(internal, {Action, _}, _, _)
        Action == bind;
        Action == describe;
        Action == execute ->
+    {keep_state_and_data, postpone};
+
+handle_event(internal, {fetch, _}, _, _) ->
     {keep_state_and_data, postpone};
 
 handle_event(info, Msg, _, #{requests := Existing} = Data) ->
@@ -190,3 +228,27 @@ handle_event(info, Msg, _, #{requests := Existing} = Data) ->
                    label => Label},
                  Data#{requests := UpdatedRequests}}
     end.
+
+
+pub_fetch_sql(#{<<"schemaname">> := Schema,
+                <<"tablename">> := Table} = Publication) ->
+    ["select ",
+     pub_fetch_columns(Publication),
+     " from ",
+     Schema,
+     ".",
+     Table,
+     case maps:find(<<"rowfilter">>, Publication) of
+        {ok, RowFilter} when RowFilter /= null ->
+             [" where ", RowFilter];
+
+        _Otherwise ->
+             []
+     end].
+
+
+pub_fetch_columns(#{<<"attnames">> := Attributes}) ->
+    lists:join(",", Attributes);
+
+pub_fetch_columns(#{}) ->
+    "*".
