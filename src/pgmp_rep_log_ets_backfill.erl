@@ -1,0 +1,192 @@
+%% Copyright (c) 2023 Peter Morgan <peter.james.morgan@gmail.com>
+%%
+%% Licensed under the Apache License, Version 2.0 (the "License");
+%% you may not use this file except in compliance with the License.
+%% You may obtain a copy of the License at
+%%
+%% http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS,
+%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%% See the License for the specific language governing permissions and
+%% limitations under the License.
+
+
+-module(pgmp_rep_log_ets_backfill).
+
+
+-export([callback_mode/0]).
+-export([handle_event/4]).
+-import(pgmp_rep_log_ets_common, [metadata/4]).
+-import(pgmp_statem, [nei/1]).
+-include_lib("kernel/include/logger.hrl").
+
+
+callback_mode() ->
+    handle_event_function.
+
+
+handle_event({call, _}, _, _, _) ->
+    {keep_state_and_data, postpone};
+
+handle_event(internal, {relation, _Name} = Label, _, _) ->
+    {keep_state_and_data,
+     nei({parse,
+          #{label => Label,
+             sql => <<"select * from pg_catalog.pg_publication_tables "
+                     "where pubname = $1 and tablename = $2">>}})};
+
+handle_event(internal,
+             {response,
+              #{label := {relation, Relation} = Label,
+                reply := [{parse_complete, []}]}},
+             parse,
+             #{config := #{publication := Publication}} = Data) ->
+    {next_state,
+     unready,
+     Data,
+     nei({bind, #{label => Label, args => [Publication, Relation]}})};
+
+handle_event(internal,
+             {response,
+              #{label := {relation, _} = Label,
+                reply := [{bind_complete, []}]}},
+             bind,
+             Data) ->
+    {next_state,
+     unready,
+     Data,
+     nei({execute, #{label => Label}})};
+
+handle_event(internal,
+             {response, #{label := {relation, _},
+                          reply := [{row_description, Columns} | T]}},
+             execute,
+             Data) ->
+    {command_complete, {select, _}} = lists:last(T),
+    {next_state,
+     unready,
+     Data,
+     nei({fetch,
+          lists:map(
+            fun
+                ({data_row, Values}) ->
+                    maps:from_list(lists:zip(Columns, Values))
+            end,
+            lists:droplast(T))})};
+
+handle_event(internal,
+             {Action, Arg},
+             unready,
+             #{requests := Requests} = Data)
+  when Action == query;
+       Action == parse;
+       Action == bind;
+       Action == describe;
+       Action == execute ->
+    {next_state,
+     Action,
+     Data#{requests := pgmp_connection:Action(
+                         Arg#{requests => Requests})}};
+
+
+handle_event(internal,
+             {fetch, []},
+             unready,
+             Data) ->
+    {next_state,
+     ready,
+     Data,
+     pop_callback_module};
+
+handle_event(internal,
+             {fetch, _} = Label,
+             unready,
+             _) ->
+    {keep_state_and_data,
+     nei({parse,
+          #{label => Label,
+            sql => <<"select i.indkey from pg_catalog.pg_index i"
+                     ", pg_catalog.pg_namespace n"
+                     ", pg_catalog.pg_class c"
+                     " where "
+                     "i.indrelid = c.oid"
+                     " and "
+                     "c.relnamespace = n.oid"
+                     " and "
+                     "n.nspname = $1"
+                     " and "
+                     "c.relname = $2">>}})};
+
+handle_event(internal,
+             {response,
+              #{label := {fetch, [#{<<"schemaname">> := Schema, <<"tablename">> := Table} | _]} = Label,
+                reply := [{parse_complete, []}]}},
+             parse,
+             Data) ->
+    {next_state,
+     unready,
+     Data,
+     nei({bind, #{label => Label, args => [Schema, Table]}})};
+
+handle_event(internal,
+             {response,
+              #{label := {fetch, _} = Label,
+                reply := [{bind_complete, []}]}},
+             bind,
+             Data) ->
+    {next_state,
+     unready,
+     Data,
+     nei({execute, #{label => Label}})};
+
+handle_event(
+  internal,
+  {response,
+   #{label := {fetch, [#{<<"tablename">> := Table} | T]},
+     reply := [{row_description, [<<"indkey">>]},
+               {data_row, [Key]},
+               {command_complete, {select, 1}}]}},
+  execute,
+  #{metadata := Metadata} = Data) ->
+    _ = ets:new(
+          binary_to_atom(Table),
+          [{keypos,
+            case Key of
+                [Primary] ->
+                    Primary;
+
+                _Composite ->
+                    1
+            end},
+           protected,
+           named_table]),
+    {next_state,
+     unready,
+     Data#{metadata := metadata(Table, keys, Key, Metadata)},
+     [nei({fetch, T})]};
+
+
+handle_event(internal, {Action, _}, _, _)
+  when Action == query;
+       Action == parse;
+       Action == bind;
+       Action == describe;
+       Action == execute ->
+    {keep_state_and_data, postpone};
+
+handle_event(info, Msg, _, #{requests := Existing} = Data) ->
+    case gen_statem:check_response(Msg, Existing, true) of
+        {{reply, Reply}, Label, Updated} ->
+            {keep_state,
+             Data#{requests := Updated},
+             nei({response, #{label => Label, reply => Reply}})};
+
+        {{error, {Reason, ServerRef}}, Label, UpdatedRequests} ->
+                {stop,
+                 #{reason => Reason,
+                   server_ref => ServerRef,
+                   label => Label},
+                 Data#{requests := UpdatedRequests}}
+    end.
