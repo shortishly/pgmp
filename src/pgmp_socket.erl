@@ -184,12 +184,8 @@ handle_event(info, Msg, _, #{requests := Existing} = Data) ->
              Data#{requests := Updated},
              nei({response, #{label => Label, reply => Reply}})};
 
-        {{error, {Reason, ServerRef}}, Label, UpdatedRequests} ->
-                {stop,
-                 #{reason => Reason,
-                   server_ref => ServerRef,
-                   label => Label},
-                 Data#{requests := UpdatedRequests}}
+        {{error, {Reason, _}}, _, UpdatedRequests} ->
+            {stop, Reason, Data#{requests := UpdatedRequests}}
     end;
 
 handle_event(internal, {response, #{label := pgmp_mm, reply :=  ok}}, _, _) ->

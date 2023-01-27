@@ -80,21 +80,8 @@ handle_event(info, Msg, _, #{requests := Existing} = Data) ->
              Data#{requests := Updated},
              nei({response, #{label => Label, reply => Reply}})};
 
-        {{error, {Reason, _}}, Label, UpdatedRequests}
-          when Reason == noproc;
-               Reason == normal,
-               Label == pgmp_connection;
-               Label == pgmp_socket ->
-            {stop,
-             normal,
-             Data#{requests := UpdatedRequests}};
-
-        {{error, {Reason, ServerRef}}, Label, UpdatedRequests} ->
-            {stop,
-             #{reason => Reason,
-               server_ref => ServerRef,
-               label => Label},
-             Data#{requests := UpdatedRequests}}
+        {{error, {Reason, _}}, _, UpdatedRequests} ->
+            {stop, Reason, Data#{requests := UpdatedRequests}}
     end;
 
 handle_event(internal,
@@ -253,9 +240,27 @@ handle_event(internal,
              args(EventName, Metadata))),
     keep_state_and_data;
 
-handle_event(internal, {recv, {error_response, _} = TM}, _, _) ->
+handle_event(internal, {recv, {error_response, _} = TM}, _, Data) ->
     {Tag, Message} = pgmp_error_notice_fields:map(TM),
     ?LOG_WARNING(#{tag => Tag, message  => Message}),
+    {next_state,
+     limbo,
+     Data,
+     [nei({telemetry,
+           error,
+           #{count => 1},
+           maps:merge(
+             #{event => Tag},
+             maps:with(
+               [code, message, severity],
+               Message))}),
+      {state_timeout,
+       timer:seconds(
+         backoff:rand_increment(
+           pgmp_config:backoff(rand_increment))),
+       {backoff, #{action => Tag, reason => Message}}}]};
+
+handle_event(state_timeout, {backoff, _}, limbo, _) ->
     stop.
 
 
