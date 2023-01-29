@@ -24,7 +24,12 @@
 -export([start_link/1]).
 -export([when_ready/1]).
 -export([write_file/1]).
+-export_type([cache/0]).
 -import(pgmp_statem, [nei/1]).
+-include("pgmp_types.hrl").
+
+
+-type cache() :: #{pgmp:oid() => #{binary() => any()}}.
 
 
 start_link() ->
@@ -35,7 +40,7 @@ start_link(Arg) ->
     gen_statem:start_link({local, ?MODULE},
                           ?MODULE,
                           [Arg],
-                          pgmp_config:options(?MODULE)).
+                          envy_gen:options(?MODULE)).
 
 
 when_ready(Arg) ->
@@ -68,6 +73,9 @@ write_file(Filename) ->
          [],
          cache())]).
 
+
+-spec cache() -> cache().
+
 cache() ->
     persistent_term:get(?MODULE).
 
@@ -99,7 +107,7 @@ handle_event({call, From}, when_ready, ready, _) ->
 handle_event(internal, refresh, _, #{requests := Requests} = Data) ->
     {keep_state,
      Data#{requests := pgmp_connection:query(
-                         #{sql=> <<"select * from pg_catalog.pg_type">>,
+                         #{sql=> <<?TYPE_SQL>>,
                            label => types,
                            requests => Requests})}};
 

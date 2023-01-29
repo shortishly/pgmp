@@ -1,4 +1,4 @@
-%% Copyright (c) 2022 Peter Morgan <peter.james.morgan@gmail.com>
+%% Copyright (c) 2023 Peter Morgan <peter.james.morgan@gmail.com>
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -13,15 +13,15 @@
 %% limitations under the License.
 
 
--module(pgmp_replication_logical).
+-module(pgmp_telemetry_logger).
 
 
--type result() :: ok | {error, term()}.
+-export([handle/4]).
+-include_lib("kernel/include/logger.hrl").
 
--callback snapshot(Id :: binary()) -> result().
--callback begin_transaction() -> result().
--callback insert(Table :: binary(), Row :: tuple()) -> result().
--callback update(Table :: binary(), Row :: tuple()) -> result().
--callback delete(Table :: binary(), Row :: tuple()) -> result().
--callback truncate(Table :: [binary()]) -> result().
--callback commit() -> result().
+%% An example telemetry handler
+handle(EventName, Measurements, Metadata, Config) ->
+    ?LOG_INFO(#{event_name => EventName,
+                measurements => Measurements,
+                metadata => Metadata,
+                config => Config}).

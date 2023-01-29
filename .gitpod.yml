@@ -1,0 +1,7 @@
+---
+image: erlang:25.2
+vscode:
+  extensions:
+    - erlang-ls.erlang-ls
+tasks:
+  - init: make

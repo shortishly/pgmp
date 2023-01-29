@@ -13,24 +13,18 @@
 %% limitations under the License.
 
 
--module(pgmp_interactive_connection_sup).
+-module(pgmp_pool_sup).
 
 
 -behaviour(supervisor).
 -export([init/1]).
+-export([start_child/0]).
 -export([start_link/1]).
--import(pgmp_sup, [worker/1]).
+-import(pgmp_sup, [supervisor/1]).
 
 
-start_link(#{config := Config} = Arg) ->
-    supervisor:start_link(
-      ?MODULE,
-      [Arg#{config := Config#{replication => fun replication/0,
-                              group => interactive}}]).
-
-
-replication() ->
-    <<"false">>.
+start_link(Arg) ->
+    supervisor:start_link({local, ?MODULE}, ?MODULE, [Arg]).
 
 
 init([Arg]) ->
@@ -38,12 +32,17 @@ init([Arg]) ->
 
 
 configuration(Children) ->
-    {#{intensity => length(Children), strategy => one_for_all}, Children}.
+    {maps:merge(
+       #{strategy => simple_one_for_one},
+       pgmp_config:sup_flags(?MODULE)),
+     Children}.
 
 
 children(Arg) ->
-    [worker(#{m => M, args => [Arg#{supervisor => self()}]}) || M <- workers()].
+    [supervisor(#{m => pgmp_pool_connection_sup,
+                  restart => temporary,
+                  args => [Arg#{supervisor => self()}]})].
 
 
-workers() ->
-    [pgmp_socket, pgmp_mm].
+start_child() ->
+    supervisor:start_child(?MODULE, []).

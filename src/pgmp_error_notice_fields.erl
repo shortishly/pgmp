@@ -18,7 +18,7 @@
 
 -export([callback_mode/0]).
 -export([init/1]).
--export([name/1]).
+-export([map/1]).
 -export([start_link/0]).
 -include_lib("stdlib/include/ms_transform.hrl").
 
@@ -27,14 +27,25 @@ start_link() ->
     gen_statem:start_link(?MODULE, [], []).
 
 
-name(Id) ->
-    case ets:lookup(?MODULE, Id) of
-        [{_, Name}] ->
-            Name;
+map({Tag, ErrorNoticeFields}) when Tag == error_response;
+                                   Tag == notice_response ->
+    {Tag,
+     lists:foldl(
+       fun
+           ({K, V}, A) ->
+               case ets:lookup(?MODULE, K) of
+                   [{_, Name, Mapping}] ->
+                       A#{Name => Mapping(V)};
 
-        [] ->
-            error(badarg, [Id])
-    end.
+                   [{_, Name}] ->
+                       A#{Name => V};
+
+                   [] ->
+                       A#{K => V}
+               end
+       end,
+       #{},
+      ErrorNoticeFields)}.
 
 
 init([]) ->

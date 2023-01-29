@@ -13,26 +13,28 @@
 %% limitations under the License.
 
 
--module(pgmp_database_sup).
+-module(pgmp_geo).
 
 
--behaviour(supervisor).
--export([init/1]).
--export([start_link/0]).
--import(pgmp_sup, [supervisor/1]).
+-export_type([box/0]).
+-export_type([circle/0]).
+-export_type([line/0]).
+-export_type([lseg/0]).
+-export_type([path/0]).
+-export_type([point/0]).
+-export_type([polygon/0]).
 
 
-start_link() ->
-    supervisor:start_link(?MODULE, []).
+-type point() :: #{x := float(), y := float()}.
 
+-type path() :: #{path := closed | open, points := [point()]}.
 
-init([]) ->
-    {ok, configuration()}.
+-type polygon() :: [point()].
 
+-type circle() :: #{x := float(), y := float(), radius := float()}.
 
-configuration() ->
-    {#{intensity => 5}, children()}.
+-type line() :: #{a := float(), b := float(), c := float()}.
 
+-type lseg() :: {point(), point()}.
 
-children() ->
-    [supervisor(pgmp_connection_sup)].
+-type box() :: {point(), point()}.

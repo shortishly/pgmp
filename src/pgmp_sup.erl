@@ -17,6 +17,7 @@
 
 
 -behaviour(supervisor).
+-export([config/0]).
 -export([get_child/2]).
 -export([init/1]).
 -export([start_link/0]).
@@ -33,15 +34,16 @@ init([]) ->
 
 
 configuration() ->
-    {#{intensity => 5}, children()}.
+    {pgmp_config:sup_flags(?MODULE), children()}.
 
 
 children() ->
     [worker(#{m => pg, args => [pgmp_config:pg(scope)]}),
+     worker(pgmp_telemetry),
      worker(pgmp_message_tags),
      worker(pgmp_error_notice_fields),
-     supervisor(#{m => pgmp_interactive_sup, args => [config()]}),
-     supervisor(#{m => pgmp_replication_sup, args => [config()]})].
+     supervisor(#{m => pgmp_int_sup, args => [config()]}),
+     supervisor(#{m => pgmp_rep_sup, args => [config()]})].
 
 
 config() ->

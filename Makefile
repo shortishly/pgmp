@@ -15,15 +15,23 @@
 #
 PROJECT = pgmp
 PROJECT_DESCRIPTION = PostgreSQL Message Protocol
-PROJECT_VERSION = 0.1.0
+PROJECT_VERSION = ${shell git describe --tags}
 
 DEPS = \
+	backoff \
 	envy \
 	phrase \
-	recon
+	recon \
+	telemetry
 
 SHELL_DEPS = \
+	beaming \
+	jsx \
 	sync
+
+TEST_DEPS = \
+	proper
+
 
 SHELL_OPTS = \
 	-config dev.config \
@@ -35,9 +43,9 @@ SHELL_OPTS = \
 PLT_APPS = \
 	any \
 	asn1 \
+	backoff \
 	compiler \
 	crypto \
-	gproc \
 	inets \
 	mnesia \
 	phrase \
@@ -49,13 +57,18 @@ PLT_APPS = \
 	tools \
 	xmerl
 
-
+dep_beaming = git https://github.com/shortishly/beaming.git
 dep_envy = git https://github.com/shortishly/envy.git
 dep_phrase = git https://github.com/shortishly/phrase.git
+dep_telemetry = git https://github.com/beam-telemetry/telemetry.git
 
-dep_phrase_commit = main
+dep_backoff_commit = 1.1.6
+dep_beaming_commit = 0.1.0
+dep_envy_commit = 0.7.2
+dep_phrase_commit = 0.1.0
+dep_telemetry_commit = v1.1.0
 
-include erlang.mk
+include $(if $(ERLANG_MK_FILENAME),$(ERLANG_MK_FILENAME),erlang.mk)
 
 
-all:: dialyze eunit
+app:: rebar.config

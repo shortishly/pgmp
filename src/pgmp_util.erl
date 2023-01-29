@@ -16,7 +16,9 @@
 -module(pgmp_util).
 
 
+-export([is_exported/3]).
 -export([snake_case/1]).
+-export([split_on_snake_case/1]).
 -export([tl_snake_case/1]).
 
 
@@ -25,7 +27,7 @@ snake_case([_ | _] = Labels) ->
 
 
 split_on_snake_case(Name) ->
-    string:split(atom_to_list(Name), "_").
+    string:split(atom_to_list(Name), "_", all).
 
 tl_snake_case(Name) ->
     case split_on_snake_case(Name) of
@@ -35,3 +37,14 @@ tl_snake_case(Name) ->
         Names ->
             snake_case(tl(Names))
     end.
+
+
+is_exported(M, F, A) ->
+    _ = case erlang:module_loaded(M) of
+            false ->
+                code:ensure_loaded(M);
+
+            true ->
+                ok
+        end,
+    erlang:function_exported(M, F, A).

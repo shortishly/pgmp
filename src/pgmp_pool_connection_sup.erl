@@ -13,7 +13,7 @@
 %% limitations under the License.
 
 
--module(pgmp_replication_logical_stream_sup).
+-module(pgmp_pool_connection_sup).
 
 
 -behaviour(supervisor).
@@ -25,22 +25,31 @@
 start_link(#{config := Config} = Arg) ->
     supervisor:start_link(
       ?MODULE,
-      [Arg#{config := Config#{replication => fun replication/0}}]).
-
-
-init([#{ancestors := Ancestors} = Arg]) ->
-    {ok, configuration(children(Arg#{ancestors := [self() | Ancestors]}))}.
-
-
-configuration(Children) ->
-    {#{intensity => length(Children), strategy => one_for_all}, Children}.
+      [Arg#{config := Config#{replication => fun replication/0,
+                              group => interactive}}]).
 
 
 replication() ->
-    <<"database">>.
+    <<"false">>.
+
+
+init([Arg]) ->
+    {ok, configuration(children(Arg))}.
+
+
+configuration(Children) ->
+    {maps:merge(
+       #{auto_shutdown => any_significant,
+         strategy => one_for_all},
+       pgmp_config:sup_flags(?MODULE)),
+     Children}.
+
 
 children(Arg) ->
-    [worker(#{m => M, args => [Arg#{supervisor => self()}]}) || M <- workers()].
+    [worker(#{m => M,
+              restart => temporary,
+              significant => true,
+              args => [Arg#{supervisor => self()}]}) || M <- workers()].
 
 
 workers() ->

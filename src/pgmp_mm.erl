@@ -25,6 +25,7 @@
 -export([query/1]).
 -export([recv/1]).
 -export([start_link/1]).
+-export([sync/1]).
 -export([terminate/3]).
 -import(pgmp_statem, [nei/1]).
 -import(pgmp_statem, [send_request/1]).
@@ -32,7 +33,7 @@
 
 
 start_link(Arg) ->
-    gen_statem:start_link(?MODULE, [Arg], pgmp_config:options(?MODULE)).
+    gen_statem:start_link(?MODULE, [Arg], envy_gen:options(?MODULE)).
 
 
 recv(#{tag := Tag, message := Message} = Arg) ->
@@ -43,33 +44,41 @@ recv(#{tag := Tag, message := Message} = Arg) ->
 
 
 query(Arg) ->
-    send_request(Arg, ?FUNCTION_NAME, [sql]).
+    send_request(Arg, ?FUNCTION_NAME).
 
 
 parse(Arg) ->
-    send_request(Arg, ?FUNCTION_NAME, [{name, <<>>}, sql]).
+    send_request(Arg, ?FUNCTION_NAME).
+
+
+sync(Arg) ->
+    send_request(Arg, ?FUNCTION_NAME).
 
 
 bind(Arg) ->
-    send_request(
-      Arg,
-      ?FUNCTION_NAME,
-      [{name, <<>>}, {portal, <<>>}, {args, []}]).
+    send_request(Arg, ?FUNCTION_NAME).
 
 
 describe(Arg) ->
-    send_request(
-      Arg,
-      ?FUNCTION_NAME,
-      [type, name]).
+    send_request(Arg, ?FUNCTION_NAME).
 
 
 execute(Arg) ->
-    send_request(
-      Arg,
-      ?FUNCTION_NAME,
-      [{portal, <<>>}, {max_rows, 0}]).
+    send_request(Arg, ?FUNCTION_NAME).
 
+
+-type arg() :: atom() | {atom(), any()}.
+
+-type action() :: query
+                | parse
+                | sync
+                | bind
+                | describe
+                | execute.
+
+
+send_request(Arg, Action) ->
+    ?FUNCTION_NAME(Arg, Action, args(Action)).
 
 send_request(Arg, Action, Config) ->
     send_request(
@@ -79,6 +88,31 @@ send_request(Arg, Action, Config) ->
           Arg#{request => {request,
                            #{action => Action,
                              args => args(Arg, Config)}}}))).
+
+
+-spec args(action()) -> [arg()].
+
+args(query) ->
+    [sql];
+
+args(parse) ->
+    [{name, <<>>}, sql];
+
+args(sync) ->
+    [];
+
+args(bind) ->
+    [{name, <<>>},
+     {portal, <<>>},
+     {args, []},
+     {parameter, binary},
+     {result, binary}];
+
+args(describe) ->
+    [type, {name, <<>>}];
+
+args(execute) ->
+    [{portal, <<>>}, {max_rows, 0}].
 
 
 maybe_label(#{requests := _, label := _} = Arg) ->

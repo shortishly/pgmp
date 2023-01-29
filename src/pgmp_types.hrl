@@ -13,29 +13,4 @@
 %% limitations under the License.
 
 
--module(pgmp_interactive_sup).
-
-
--behaviour(supervisor).
--export([init/1]).
--export([start_link/1]).
--import(pgmp_sup, [supervisor/1]).
--import(pgmp_sup, [worker/1]).
-
-
-start_link(#{} = Arg) ->
-    supervisor:start_link(?MODULE, [Arg]).
-
-
-init([Arg]) ->
-    {ok, configuration(children(Arg))}.
-
-
-configuration(Children) ->
-    {#{intensity => length(Children), strategy => one_for_all}, Children}.
-
-
-children(Arg) ->
-    [worker(pgmp_connection),
-     supervisor(#{m => pgmp_interactive_connection_sup, args => [Arg]}),
-     worker(pgmp_types)].
+-define(TYPE_SQL, "select * from pg_catalog.pg_type").

@@ -17,7 +17,12 @@
 
 
 -export([foldl/3]).
+-export([repeat/4]).
 
+-type mapping() :: fun((binary(), any()) -> {binary(), any()}).
+
+
+-spec foldl(mapping(), any(), binary()) -> any().
 
 foldl(_, A, <<>>) ->
     A;
@@ -25,3 +30,13 @@ foldl(_, A, <<>>) ->
 foldl(F, A0, Binary) ->
     {Remainder, A1} = F(Binary, A0),
     ?FUNCTION_NAME(F, A1, Remainder).
+
+
+-spec repeat(non_neg_integer(), binary(), mapping(), any()) -> {binary(), any()}.
+
+repeat(0, Data, _, A) ->
+    {Data, A};
+
+repeat(N, Data, F, A0) ->
+    {Remainder, A1} = F(Data, A0),
+    ?FUNCTION_NAME(N - 1, Remainder, F, A1).

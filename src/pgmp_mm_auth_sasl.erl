@@ -15,24 +15,9 @@
 
 -module(pgmp_mm_auth_sasl).
 
--export([auth_message/3]).
+
 -export([callback_mode/0]).
--export([client_final/3]).
--export([client_final_without_proof/2]).
--export([client_first_bare/2]).
--export([client_key/2]).
--export([client_proof/2]).
--export([client_signature/3]).
--export([decode/1]).
--export([h/2]).
 -export([handle_event/4]).
--export([hi/4]).
--export([hmac/3]).
--export([output_length/1]).
--export([salted_password/4]).
--export([server_key/2]).
--export([server_signature/3]).
--export([stored_key/2]).
 -import(pgmp_codec, [marshal/2]).
 -import(pgmp_codec, [size_inclusive/1]).
 -import(pgmp_statem, [nei/1]).
@@ -57,36 +42,36 @@ handle_event(internal, {recv, {error_response, Errors}}, _, Data) ->
 %%
 
 handle_event(internal,
-             {sasl, [<<"SCRAM-SHA-256">> = Mechanism | _]},
+             {sasl = EventName, [<<"SCRAM-SHA-256">> = Mechanism | _]},
              _,
              Data) ->
     {keep_state,
      Data#{sasl => #{mechanism => Mechanism}},
-     nei({send,
-          ["p",
-           size_inclusive(
-             [marshal(string, Mechanism), marshal(int32, -1)])]})};
+     [nei({telemetry, EventName, #{count => 1}, #{mechanism => Mechanism}}),
+
+      nei({send,
+           ["p",
+            size_inclusive(
+              [marshal(string, Mechanism), marshal(int32, -1)])]})]};
 
 handle_event(internal,
-             {recv, {authentication, {sasl_continue, Encoded}}},
+             {recv = EventName, {authentication = Tag, {Action, Encoded}}},
              _,
-             #{sasl := #{mechanism := <<"SCRAM-SHA-256">>}}) ->
-    {keep_state_and_data, nei({sasl_continue, Encoded, decode(Encoded)})};
+             #{sasl := #{mechanism := <<"SCRAM-SHA-256">>}})
+  when Action == sasl_continue; Action == sasl_final ->
+    {keep_state_and_data,
+     [nei({telemetry,
+           EventName,
+           #{count => 1},
+           #{tag => Tag, action => Action}}),
 
-%%%
-%% https://datatracker.ietf.org/doc/html/rfc5802
-%%
-%% SaltedPassword  := Hi(Normalize(password), salt, i)
-%% ClientKey       := HMAC(SaltedPassword, "Client Key")
-%% StoredKey       := H(ClientKey)
-%% AuthMessage     := client-first-message-bare + "," +
-%%                    server-first-message + "," +
-%%                    client-final-message-without-proof
-%% ClientSignature := HMAC(StoredKey, AuthMessage)
-%% ClientProof     := ClientKey XOR ClientSignature
-%% ServerKey       := HMAC(SaltedPassword, "Server Key")
-%% ServerSignature := HMAC(ServerKey, AuthMessage)
+      nei({Action, Encoded, pgmp_scram:decode(Encoded)})]};
 
+handle_event(internal,
+             {sasl_final, _, #{v := V}},
+             _,
+             #{sasl := #{client := #{v := V}}}) ->
+    keep_state_and_data;
 
 handle_event(
   internal,
@@ -95,62 +80,62 @@ handle_event(
    #{r := R, s := Salt, i := I} = Server},
   _,
   #{config := #{identity := #{password := Password}},
-    sasl := #{client := #{header := Header,
-                          nonce := Nonce},
+    sasl := #{client := #{header := Header, nonce := Nonce} = Client,
               mechanism := <<"SCRAM-SHA-256">> = Mechanism} = SASL} = Data) ->
 
     %% SaltedPassword  := Hi(Normalize(password), salt, i)
-    SaltedPassword = salted_password(
+    SaltedPassword = pgmp_scram:salted_password(
                        Mechanism,
-                       normalize(Password()),
+                       pgmp_scram:normalize(Password()),
                        Salt,
                        I),
 
     %% ClientKey       := HMAC(SaltedPassword, "Client Key")
-    ClientKey = client_key(Mechanism, SaltedPassword),
+    ClientKey = pgmp_scram:client_key(Mechanism, SaltedPassword),
 
     %% StoredKey       := H(ClientKey)
-    StoredKey = stored_key(Mechanism, ClientKey),
+    StoredKey = pgmp_scram:stored_key(Mechanism, ClientKey),
 
     %% AuthMessage     := client-first-message-bare + "," +
     %%                    server-first-message + "," +
     %%                    client-final-message-without-proof
-    ClientFirstBare = client_first_bare(<<>>, Nonce),
+    ClientFirstBare = pgmp_scram:client_first_bare(<<>>, Nonce),
 
-    ClientFinalWithoutProof = client_final_without_proof(
+    ClientFinalWithoutProof = pgmp_scram:client_final_without_proof(
                                 Header,
                                 R),
 
-    AuthMessage = auth_message(
+    AuthMessage = pgmp_scram:auth_message(
                     ClientFirstBare,
                     ServerFirstMessage,
                     ClientFinalWithoutProof),
 
     %% ClientSignature := HMAC(StoredKey, AuthMessage)
-    ClientSignature = client_signature(
+    ClientSignature = pgmp_scram:client_signature(
                         Mechanism,
                         StoredKey,
                         AuthMessage),
 
     %% ClientProof     := ClientKey XOR ClientSignature
-    ClientProof = client_proof(
+    ClientProof = pgmp_scram:client_proof(
                     ClientKey,
                     ClientSignature),
 
     %% ServerKey       := HMAC(SaltedPassword, "Server Key")
-    %%    ServerKey = hmac(Mechanism, SaltedPassword, "Server Key"),
+    ServerKey = pgmp_scram:server_key(Mechanism, SaltedPassword),
 
     %% ServerSignature := HMAC(ServerKey, AuthMessage)
-    %%    ServerSignature = hmac(Mechanism, ServerKey, AuthMessage),
+    ServerSignature = pgmp_scram:server_signature(Mechanism, ServerKey, AuthMessage),
 
     {keep_state,
-     Data#{sasl := SASL#{server => Server}},
+     Data#{sasl := SASL#{server => Server,
+                         client := Client#{v => ServerSignature}}},
      nei({send,
           ["p",
            size_inclusive(
              [marshal(
                 byte,
-                pgmp_mm_auth_sasl:client_final(
+                pgmp_scram:client_final(
                   Header,
                   R,
                   ClientProof))])]})};
@@ -160,7 +145,7 @@ handle_event(internal,
              _,
              #{sasl := #{mechanism := <<"SCRAM-SHA-256">>} = SASL} = Data) ->
     Header = "n,,",
-    Nonce = base64:encode(crypto:strong_rand_bytes(16)),
+    Nonce = base64:encode(crypto:strong_rand_bytes(21)),
     {keep_state,
      Data#{sasl := SASL#{client => #{header => Header, nonce => Nonce}}},
      nei({send,
@@ -168,124 +153,13 @@ handle_event(internal,
            size_inclusive(
              [marshal(
                 byte,
-                io_lib:fwrite(
-                  "~sn=~s,r=~s",
-                  [Header, <<>>, Nonce]))])]})};
+                [Header,
+                 pgmp_scram:client_first_bare(
+                   <<>>,
+                   Nonce)])])]})};
 
 handle_event(EventType, EventContent, State, Data) ->
     pgmp_mm_common:handle_event(EventType,
                                 EventContent,
                                 State,
                                 Data).
-
-
-%% SaltedPassword := Hi(Normalize(password), salt, i)
-salted_password(Mechanism, Password, Salt, Iterations) ->
-    hi(Mechanism, normalize(Password), Salt, Iterations).
-
-
-%% ClientKey := HMAC(SaltedPassword, "Client Key")
-client_key(Mechanism, SaltedPassword) ->
-    hmac(Mechanism, SaltedPassword, "Client Key").
-
-%% StoredKey := H(ClientKey)
-stored_key(Mechanism, ClientKey) ->
-    h(Mechanism, ClientKey).
-
-
-%% AuthMessage := client-first-message-bare + "," +
-%%                server-first-message + "," +
-%%                client-final-message-without-proof
-auth_message(ClientFirstBare, ServerFirstMessage, ClientFinalWithoutProof) ->
-    lists:join(
-      ",",
-      [ClientFirstBare,
-       ServerFirstMessage,
-       ClientFinalWithoutProof]).
-
-
-client_first_bare(Username, Nonce) ->
-    io_lib:fwrite("n=~s,r=~s", [Username, Nonce]).
-
-
-client_final_without_proof(Header, R) ->
-    io_lib:fwrite(
-      "c=~s,r=~s",
-      [base64:encode(Header), R]).
-
-
-%% ClientSignature := HMAC(StoredKey, AuthMessage)
-client_signature(Mechanism, StoredKey, AuthMessage) ->
-    hmac(Mechanism, StoredKey, AuthMessage).
-
-
-%% ClientProof := ClientKey XOR ClientSignature
-client_proof(ClientKey, ClientSignature) ->
-    crypto:exor(ClientKey, ClientSignature).
-
-
-%% ServerKey := HMAC(SaltedPassword, "Server Key")
-server_key(Mechanism, SaltedPassword) ->
-    hmac(Mechanism, SaltedPassword, "Server Key").
-
-
-%% ServerSignature := HMAC(ServerKey, AuthMessage)
-server_signature(Mechanism, ServerKey, AuthMessage) ->
-    hmac(Mechanism, ServerKey, AuthMessage).
-
-
-client_final(Header, R, ClientProof) ->
-    lists:join(
-      ",",
-      [client_final_without_proof(Header, R),
-       io_lib:fwrite("p=~s", [base64:encode(ClientProof)])]).
-
-
-hi(Mechanism, Password, Salt, Iterations) ->
-    crypto:pbkdf2_hmac(sub_type(Mechanism),
-                       Password,
-                       Salt,
-                       Iterations,
-                       output_length(Mechanism)).
-
-hmac(Mechanism, Key, Data) ->
-    crypto:mac(hmac, sub_type(Mechanism), Key, Data).
-
-h(Mechanism, Data) ->
-    crypto:hash(sub_type(Mechanism), Data).
-
-
-sub_type(<<"SCRAM-SHA-1">>) ->
-    sha;
-sub_type(<<"SCRAM-SHA-256">>) ->
-    sha256.
-
-
-output_length(Mechanism) ->
-    byte_size(h(Mechanism, <<>>)).
-
-
-normalize(X) ->
-    X.
-
-
-decode(Encoded) ->
-    maps:map(
-      fun
-          (K, V) when K == s;
-                      K == v ->
-              base64:decode(V);
-
-          (i, V) ->
-              binary_to_integer(V);
-
-          (_, V) ->
-              V
-      end,
-      lists:foldl(
-        fun
-            (<<K:1/bytes, "=", V/bytes>>, A) ->
-                A#{binary_to_existing_atom(K) => V}
-        end,
-        #{},
-        binary:split(Encoded, <<",">>, [trim_all, global]))).

@@ -13,21 +13,21 @@
 %% See the License for the specific language governing permissions and
 %% limitations under the License.
 
-{$S, severity_localized}.
-{$V, severity}.
-{$C, code}.
-{$M, message}.
-{$D, detail}.
-{$H, hint}.
-{$P, position}.
-{$p, internal_position}.
-{$q, internal_query}.
-{$W, where}.
-{$s, schema_name}.
-{$t, table_name}.
-{$c, column_name}.
-{$d, data_type_name}.
-{$n, constraint_name}.
-{$F, file_name}.
-{$L, line}.
-{$R, routine}.
+{<<"S">>, severity_localized}.
+{<<"V">>, severity, fun (Severity) -> binary_to_atom(string:lowercase(Severity)) end}.
+{<<"C">>, code}.
+{<<"M">>, message}.
+{<<"D">>, detail}.
+{<<"H">>, hint}.
+{<<"P">>, position, fun erlang:binary_to_integer/1}.
+{<<"p">>, internal_position}.
+{<<"q">>, internal_query}.
+{<<"W">>, where}.
+{<<"s">>, schema_name}.
+{<<"t">>, table_name}.
+{<<"c">>, column_name}.
+{<<"d">>, data_type_name}.
+{<<"n">>, constraint_name}.
+{<<"F">>, file_name}.
+{<<"L">>, line, fun erlang:binary_to_integer/1}.
+{<<"R">>, routine}.

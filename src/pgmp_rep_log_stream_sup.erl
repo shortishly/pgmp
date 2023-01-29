@@ -13,7 +13,7 @@
 %% limitations under the License.
 
 
--module(pgmp_replication_logical_snapshot_sup).
+-module(pgmp_rep_log_stream_sup).
 
 
 -behaviour(supervisor).
@@ -33,16 +33,23 @@ init([#{ancestors := Ancestors} = Arg]) ->
 
 
 configuration(Children) ->
-    {#{intensity => length(Children), strategy => one_for_all}, Children}.
+    {maps:merge(
+       #{strategy => one_for_all,
+         auto_shutdown => any_significant},
+       pgmp_config:sup_flags(?MODULE)),
+     Children}.
 
 
 replication() ->
-    <<"false">>.
+    <<"database">>.
 
 
 children(Arg) ->
-    [worker(#{m => M, args => [Arg#{supervisor => self()}]}) || M <- workers()].
+    [worker(#{m => M,
+              significant => true,
+              restart => temporary,
+              args => [Arg#{supervisor => self()}]}) || M <- workers()].
 
 
 workers() ->
-    [pgmp_replication_logical_snapshot_manager].
+    [pgmp_socket, pgmp_mm].

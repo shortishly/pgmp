@@ -13,32 +13,32 @@
 %% limitations under the License.
 
 
--module(pgmp_replication_sup).
+-module(pgmp_int_sup).
 
 
 -behaviour(supervisor).
 -export([init/1]).
 -export([start_link/1]).
 -import(pgmp_sup, [supervisor/1]).
+-import(pgmp_sup, [worker/1]).
 
 
 start_link(#{} = Arg) ->
-    supervisor:start_link(?MODULE, [Arg]).
+    supervisor:start_link({local, ?MODULE}, ?MODULE, [Arg]).
 
 
 init([Arg]) ->
-    case pgmp_config:enabled(pgmp_replication) of
-        true ->
-            {ok, configuration(children(Arg))};
-
-        false ->
-            ignore
-    end.
+    {ok, configuration(children(Arg))}.
 
 
 configuration(Children) ->
-    {#{intensity => length(Children)}, Children}.
+    {maps:merge(
+       #{strategy => one_for_all},
+       pgmp_config:sup_flags(?MODULE)),
+     Children}.
 
 
 children(Arg) ->
-    [supervisor(#{m => pgmp_replication_logical_sup, args => [Arg]})].
+    [supervisor(#{m => pgmp_pool_sup, args => [Arg]}),
+     worker(pgmp_connection),
+     worker(pgmp_types)].
