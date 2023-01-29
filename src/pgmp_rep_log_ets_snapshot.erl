@@ -72,16 +72,12 @@ handle_event(internal,
 handle_event(internal,
              {response, #{label := sync_publication_tables,
                           reply := [{command_complete, {select, 0}}]}},
-             _,
-             #{stream := Stream} = Data) ->
+             execute,
+             Data) ->
     %% There are no publication tables to sync, initiate streaming
     %% replication.
     %%
-    {next_state,
-     ready,
-     maps:without([stream], Data),
-     [pop_callback_module,
-      {reply, Stream, ok}]};
+    {next_state, unready, Data, nei(commit)};
 
 handle_event(internal,
              {response, #{label := sync_publication_tables,
