@@ -113,6 +113,8 @@ handle_event(internal,
                      ", pg_catalog.pg_namespace n"
                      ", pg_catalog.pg_class c"
                      " where "
+                     "i.indisprimary"
+                     " and "
                      "i.indrelid = c.oid"
                      " and "
                      "c.relnamespace = n.oid"
@@ -142,6 +144,18 @@ handle_event(internal,
      unready,
      Data,
      nei({execute, #{label => Label}})};
+
+handle_event(
+  internal,
+  {response,
+   #{label := {fetch, [#{<<"tablename">> := _}  = Publication | T]},
+     reply := [{command_complete, {select, 0}}]}},
+  execute,
+  Data) ->
+    ?LOG_WARNING(
+       #{publication => Publication,
+         reason => "no primary key found"}),
+    {next_state, unready, Data, nei({fetch, T})};
 
 handle_event(
   internal,
