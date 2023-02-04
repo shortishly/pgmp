@@ -424,10 +424,6 @@ handle_event(info,
      drained,
      Data#{connections := maps:without([Connection], Connections)}};
 
-handle_event(info, {'DOWN', _, process, _, _} = Down, State, Data) ->
-    ?LOG_ERROR(#{down => Down, state => State, data => Data}),
-    keep_state_and_data;
-
 handle_event(info, Msg, _, #{requests := Existing} = Data) ->
     case gen_statem:check_response(Msg, Existing, true) of
         {{reply, Reply}, Label, Updated} ->
