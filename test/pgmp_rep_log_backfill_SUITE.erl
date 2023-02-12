@@ -1,4 +1,4 @@
-%% Copyright (c) 2022 Peter Morgan <peter.james.morgan@gmail.com>
+%% Copyright (c) 2023 Peter Morgan <peter.james.morgan@gmail.com>
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 %% limitations under the License.
 
 
--module(pgmp_rep_log_SUITE).
+-module(pgmp_rep_log_backfill_SUITE).
 
 
 -compile(export_all).
@@ -38,80 +38,82 @@ init_per_suite(Config) ->
 
     {ok, _} = pgmp:start(),
 
+    Publication = alpha(5),
+    Schema = alpha(5),
     Table = alpha(5),
 
+    {ok, Replication} = pgmp_rep_sup:start_child(Publication),
+    {_, Manager, worker, _} = pgmp_sup:get_child(Replication, manager),
+
     [{command_complete,
-      create_table}] = pgmp_connection_sync:query(
-                         #{sql => io_lib:format(
-                                    "create table ~s (k serial primary key, v text)",
-                                    [Table])}),
-
-
-    Publication = alpha(5),
+      create_schema}] = pgmp_connection_sync:query(
+                          #{sql => io_lib:format(
+                                     "create schema ~s",
+                                     [Schema])}),
 
     [{command_complete,
       create_publication}] = pgmp_connection_sync:query(
                                #{sql => io_lib:format(
-                                          "create publication ~s for table ~s",
-                                          [Publication, Table])}),
+                                          "create publication ~s for tables in schema ~s",
+                                          [Publication, Schema])}),
 
-    [{command_complete, 'begin'}] = pgmp_connection_sync:query(#{sql => "begin"}),
-
-
-    [{parse_complete, []}] = pgmp_connection_sync:parse(
-                               #{sql => io_lib:format(
-                                          "insert into ~s (v) values ($1) returning *",
-                                          [Table])}),
+    [{command_complete,
+      create_table}] = pgmp_connection_sync:query(
+                         #{sql => io_lib:format(
+                                    "create table ~s.~s (k serial primary key, v text)",
+                                    [Schema, Table])}),
 
     lists:map(
       fun
           (_) ->
+              [{command_complete, 'begin'}] = pgmp_connection_sync:query(#{sql => "begin"}),
+
+              [{parse_complete, []}] = pgmp_connection_sync:parse(
+                                         #{sql => io_lib:format(
+                                                    "insert into ~s.~s (v) values ($1) returning *",
+                                                    [Schema, Table])}),
+
               [{bind_complete, []}] = pgmp_connection_sync:bind(
                                         #{args => [alpha(5)]}),
 
               [{row_description, _},
-               {data_row, Row},
+               {data_row, [K | _] = Row},
                {command_complete,
                 {insert, 1}}] =  pgmp_connection_sync:execute(#{}),
+
+              [{command_complete, commit}] = pgmp_connection_sync:query(#{sql => "commit"}),
+
+              ct:log("row: ~p~n", [Row]),
+
+              wait_for(
+                [list_to_tuple(Row)],
+                fun
+                    () ->
+                        try
+                            ets:lookup(table_name(Publication, Schema, Table), K)
+
+                        catch
+                            error:badarg ->
+                                undefined
+                        end
+                end),
 
               list_to_tuple(Row)
       end,
       lists:seq(1, 50)),
 
-    [{parse_complete,[]}] =  pgmp_connection_sync:parse(
-                               #{sql => "select pubname,schemaname,tablename "
-                                 "from pg_catalog.pg_publication_tables "
-                                 "where pubname = $1"}),
-
-    [{bind_complete, []}] = pgmp_connection_sync:bind(#{args => [Publication]}),
-
-    [{row_description,
-      [<<"pubname">>,
-       <<"schemaname">>,
-       <<"tablename">>]},
-     {data_row,
-      [Publication,
-       Schema,
-       Table]},
-     {command_complete,
-      {select,1}}] = pgmp_connection_sync:execute(#{}),
-
-    [{command_complete, commit}] = pgmp_connection_sync:query(#{sql => "commit"}),
-
-    {ok, Sup} = pgmp_rep_sup:start_child(Publication),
-
-    {_, Manager, worker, _} = pgmp_sup:get_child(Sup, manager),
-
     [{manager, Manager},
      {publication, Publication},
      {schema, Schema},
      {table, Table},
+     {replication, Replication},
      {replica, table_name(Publication, Schema, Table)} | Config].
 
 
 update_test(Config) ->
     Manager = ?config(manager, Config),
     Table = ?config(table, Config),
+    Schema = ?config(schema, Config),
     Replica = ?config(replica, Config),
 
     {reply, ok} = gen_statem:receive_response(
@@ -125,8 +127,8 @@ update_test(Config) ->
 
     [{parse_complete, []}] = pgmp_connection_sync:parse(
                                #{sql => io_lib:format(
-                                          "update ~s set v = $2 where k = $1 returning *",
-                                          [Table])}),
+                                          "update ~s.~s set v = $2 where k = $1 returning *",
+                                          [Schema, Table])}),
 
     V = alpha(5),
 
@@ -152,6 +154,7 @@ update_test(Config) ->
 delete_test(Config) ->
     Manager = ?config(manager, Config),
     Table = ?config(table, Config),
+    Schema = ?config(schema, Config),
     Replica = ?config(replica, Config),
 
     {reply, ok} = gen_statem:receive_response(
@@ -165,8 +168,8 @@ delete_test(Config) ->
 
     [{parse_complete, []}] = pgmp_connection_sync:parse(
                                #{sql => io_lib:format(
-                                          "delete from ~s where k = $1 returning *",
-                                          [Table])}),
+                                          "delete from ~s.~s where k = $1 returning *",
+                                          [Schema, Table])}),
 
     [{bind_complete, []}] = pgmp_connection_sync:bind(
                               #{args => [K]}),
@@ -190,6 +193,7 @@ delete_test(Config) ->
 insert_test(Config) ->
     Manager = ?config(manager, Config),
     Table = ?config(table, Config),
+    Schema = ?config(schema, Config),
     Replica = ?config(replica, Config),
 
     {reply, ok} = gen_statem:receive_response(
@@ -201,8 +205,8 @@ insert_test(Config) ->
 
     [{parse_complete, []}] = pgmp_connection_sync:parse(
                                #{sql => io_lib:format(
-                                          "insert into ~s (v) values ($1) returning *",
-                                          [Table])}),
+                                          "insert into ~s.~s (v) values ($1) returning *",
+                                          [Schema, Table])}),
 
     [{bind_complete, []}] = pgmp_connection_sync:bind(
                               #{args => [alpha(5)]}),
@@ -256,16 +260,17 @@ wait_for(Expected, Check, N) ->
 
 
 end_per_suite(Config) ->
-    Table = ?config(table, Config),
-    _Publication = ?config(publication, Config),
+    Publication = ?config(publication, Config),
+    ok = pgmp_rep_sup:terminate_child(Publication),
 
+    Schema = ?config(schema, Config),
     ct:log("~s: ~p~n",
-           [Table,
+           [Schema,
             pgmp_connection_sync:query(
               #{sql => iolist_to_binary(
                          io_lib:format(
-                           "drop table ~s cascade",
-                           [Table]))})]),
+                           "drop schema ~s cascade",
+                           [Schema]))})]),
 
     ok = application:stop(pgmp).
 

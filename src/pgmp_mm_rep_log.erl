@@ -109,15 +109,18 @@ handle_event(internal,
                 tuple := Values}},
              _,
              #{relations := Relations, parameters := Parameters}) ->
-    #{Relation := #{columns := Columns, name := Table}} = Relations,
+    #{Relation := #{columns := Columns} = Detail}  = Relations,
     {keep_state_and_data,
      [nei({callback,
            Change,
-           #{relation => Table,
+           #{relation => relation(Detail),
              x_log => XLog,
              tuple => row_tuple(Parameters, Columns, Values)}}),
 
-      nei({rep_telemetry, Change, #{count => 1}, #{relation => Table}})]};
+      nei({rep_telemetry,
+           Change,
+           #{count => 1},
+           #{relation => relation(Detail)}})]};
 
 handle_event(internal,
              {update = Change,
@@ -126,30 +129,36 @@ handle_event(internal,
                 new := Values}},
              _,
              #{relations := Relations, parameters := Parameters}) ->
-    #{Relation := #{columns := Columns, name := Table}} = Relations,
+    #{Relation := #{columns := Columns} = Detail} = Relations,
     {keep_state_and_data,
      [nei({callback,
            Change,
-           #{relation => Table,
+           #{relation => relation(Detail),
              x_log => XLog,
              tuple => row_tuple(Parameters, Columns, Values)}}),
 
-      nei({rep_telemetry, Change, #{count => 1}, #{relation => Table}})]};
+      nei({rep_telemetry,
+           Change,
+           #{count => 1},
+           #{relation => relation(Detail)}})]};
 
 handle_event(internal,
              {delete = Change,
               #{relation := Relation, x_log := XLog, key := Values}},
              _,
              #{relations := Relations, parameters := Parameters}) ->
-    #{Relation := #{columns := Columns, name := Table}} = Relations,
+    #{Relation := #{columns := Columns} = Detail} = Relations,
     {keep_state_and_data,
      [nei({callback,
            Change,
-           #{relation => Table,
+           #{relation => relation(Detail),
              x_log => XLog,
              tuple => row_tuple(Parameters, Columns, Values)}}),
 
-      nei({rep_telemetry, Change, #{count => 1}, #{relation => Table}})]};
+      nei({rep_telemetry,
+           Change,
+           #{count => 1},
+           #{relation => relation(Detail)}})]};
 
 handle_event(internal,
              {truncate = Change,
@@ -160,8 +169,8 @@ handle_event(internal,
     Names = lists:map(
               fun
                   (Relation) ->
-                      #{Relation := #{name := Table}} = Relations,
-                      Table
+                      #{Relation := Detail} = Relations,
+                      relation(Detail)
               end,
               Truncates),
     {keep_state_and_data,
@@ -458,3 +467,7 @@ b(false) -> 0;
 b(true) -> 1;
 b(0) -> false;
 b(1) -> true.
+
+
+relation(Detail) ->
+    maps:with([name, namespace], Detail).
