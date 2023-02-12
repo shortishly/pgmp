@@ -13,4 +13,4 @@
 -- limitations under the License.
 
 
-create publication pub for tables in schema current_schema;
+create publication pub for all tables;

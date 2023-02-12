@@ -38,76 +38,88 @@ init_per_suite(Config) ->
 
     {ok, _} = pgmp:start(),
 
-    Publication = alpha(5),
-    Schema = alpha(5),
-    Table = alpha(5),
+    case pgmp_connection_sync:query(
+           #{sql => "select setting from pg_settings where name = 'server_version_num'"}) of
 
-    {ok, Replication} = pgmp_rep_sup:start_child(Publication),
-    {_, Manager, worker, _} = pgmp_sup:get_child(Replication, manager),
+        [{row_description, _},
+         {data_row, [<<"15", _:4/bytes>>]},
+         {command_complete, {select,1}}] ->
+            Publication = alpha(5),
+            Schema = alpha(5),
+            Table = alpha(5),
 
-    [{command_complete,
-      create_schema}] = pgmp_connection_sync:query(
-                          #{sql => io_lib:format(
-                                     "create schema ~s",
-                                     [Schema])}),
+            {ok, Replication} = pgmp_rep_sup:start_child(Publication),
+            {_, Manager, worker, _} = pgmp_sup:get_child(Replication, manager),
 
-    [{command_complete,
-      create_publication}] = pgmp_connection_sync:query(
-                               #{sql => io_lib:format(
-                                          "create publication ~s for tables in schema ~s",
-                                          [Publication, Schema])}),
+            [{command_complete,
+              create_schema}] = pgmp_connection_sync:query(
+                                  #{sql => io_lib:format(
+                                             "create schema ~s",
+                                             [Schema])}),
 
-    [{command_complete,
-      create_table}] = pgmp_connection_sync:query(
-                         #{sql => io_lib:format(
-                                    "create table ~s.~s (k serial primary key, v text)",
-                                    [Schema, Table])}),
+            [{command_complete,
+              create_publication}] = pgmp_connection_sync:query(
+                                       #{sql => io_lib:format(
+                                                  "create publication ~s for tables in schema ~s",
+                                                  [Publication, Schema])}),
 
-    lists:map(
-      fun
-          (_) ->
-              [{command_complete, 'begin'}] = pgmp_connection_sync:query(#{sql => "begin"}),
+            [{command_complete,
+              create_table}] = pgmp_connection_sync:query(
+                                 #{sql => io_lib:format(
+                                            "create table ~s.~s (k serial primary key, v text)",
+                                            [Schema, Table])}),
 
-              [{parse_complete, []}] = pgmp_connection_sync:parse(
-                                         #{sql => io_lib:format(
-                                                    "insert into ~s.~s (v) values ($1) returning *",
-                                                    [Schema, Table])}),
+            lists:map(
+              fun
+                  (_) ->
+                      [{command_complete, 'begin'}] = pgmp_connection_sync:query(#{sql => "begin"}),
 
-              [{bind_complete, []}] = pgmp_connection_sync:bind(
-                                        #{args => [alpha(5)]}),
+                      [{parse_complete, []}] = pgmp_connection_sync:parse(
+                                                 #{sql => io_lib:format(
+                                                            "insert into ~s.~s (v) values ($1) returning *",
+                                                            [Schema, Table])}),
 
-              [{row_description, _},
-               {data_row, [K | _] = Row},
-               {command_complete,
-                {insert, 1}}] =  pgmp_connection_sync:execute(#{}),
+                      [{bind_complete, []}] = pgmp_connection_sync:bind(
+                                                #{args => [alpha(5)]}),
 
-              [{command_complete, commit}] = pgmp_connection_sync:query(#{sql => "commit"}),
+                      [{row_description, _},
+                       {data_row, [K | _] = Row},
+                       {command_complete,
+                        {insert, 1}}] =  pgmp_connection_sync:execute(#{}),
 
-              ct:log("row: ~p~n", [Row]),
+                      [{command_complete, commit}] = pgmp_connection_sync:query(#{sql => "commit"}),
 
-              wait_for(
-                [list_to_tuple(Row)],
-                fun
-                    () ->
-                        try
-                            ets:lookup(table_name(Publication, Schema, Table), K)
+                      ct:log("row: ~p~n", [Row]),
 
-                        catch
-                            error:badarg ->
-                                undefined
-                        end
-                end),
+                      wait_for(
+                        [list_to_tuple(Row)],
+                        fun
+                            () ->
+                                try
+                                    ets:lookup(table_name(Publication, Schema, Table), K)
 
-              list_to_tuple(Row)
-      end,
-      lists:seq(1, 50)),
+                                catch
+                                    error:badarg ->
+                                        undefined
+                                end
+                        end),
 
-    [{manager, Manager},
-     {publication, Publication},
-     {schema, Schema},
-     {table, Table},
-     {replication, Replication},
-     {replica, table_name(Publication, Schema, Table)} | Config].
+                      list_to_tuple(Row)
+              end,
+              lists:seq(1, 50)),
+
+            [{manager, Manager},
+             {publication, Publication},
+             {schema, Schema},
+             {table, Table},
+             {replication, Replication},
+             {replica, table_name(Publication, Schema, Table)} | Config];
+
+        [{row_description, _},
+         {data_row, [Version]},
+         {command_complete, {select,1}}] ->
+            {skip, {pg_version, Version}}
+    end.
 
 
 update_test(Config) ->
