@@ -205,12 +205,12 @@ handle_event({call, _},
     {ok, _} = pgmp_pool_sup:start_child(),
     {keep_state_and_data,
      [postpone,
-      nei({telemetry, [new, connection], #{count => 1}})]};
+      nei({telemetry, new, #{count => 1}})]};
 
 handle_event({call, _}, {request, _}, drained, _) ->
     {keep_state_and_data,
      [postpone,
-      nei({telemetry, [request, postponed], #{count => 1}})]};
+      nei({telemetry, postponed, #{count => 1}})]};
 
 handle_event({call, {Connection, _} = From},
              {join, [_Group]},
@@ -485,7 +485,7 @@ handle_event(internal, census, _, #{max := Max}) ->
             outstanding,
             monitors,
             connections]}),
-     nei({telemetry, [pool, max], #{size => Max}})]};
+     nei({telemetry, pool, #{size => Max}})]};
 
 handle_event(internal, {census, Names}, _, Data) ->
     {keep_state_and_data,

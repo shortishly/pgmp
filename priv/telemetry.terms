@@ -14,6 +14,15 @@
 %% limitations under the License.
 
 
+[pgmp, connection, connections].
+[pgmp, connection, monitors].
+[pgmp, connection, new].
+[pgmp, connection, outstanding].
+[pgmp, connection, owners].
+[pgmp, connection, pool].
+[pgmp, connection, postponed].
+[pgmp, connection, reservations].
+
 [pgmp, socket, connect].
 [pgmp, socket, open].
 [pgmp, socket, recv].
