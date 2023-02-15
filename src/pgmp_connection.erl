@@ -23,6 +23,7 @@
 -export([handle_event/4]).
 -export([init/1]).
 -export([join/1]).
+-export([parameters/1]).
 -export([parse/1]).
 -export([query/1]).
 -export([ready_for_query/1]).
@@ -61,6 +62,10 @@ describe(Arg) ->
 
 
 execute(Arg) ->
+    pgmp_mm:?FUNCTION_NAME(Arg#{server_ref => ?MODULE}).
+
+
+parameters(Arg) ->
     pgmp_mm:?FUNCTION_NAME(Arg#{server_ref => ?MODULE}).
 
 
@@ -437,9 +442,10 @@ handle_event(info, Msg, _, #{requests := Existing} = Data) ->
              normal,
              Data#{requests := UpdatedRequests}};
 
-        {{error, {normal, _}}, #{module := ?MODULE}, UpdatedRequests} ->
+        {{error, {Reason, _}}, #{module := ?MODULE}, UpdatedRequests}
+          when Reason == normal; Reason == shutdown ->
             {stop,
-             normal,
+             Reason,
              Data#{requests := UpdatedRequests}};
 
         {{error, {Reason, ServerRef}}, Label, UpdatedRequests} ->

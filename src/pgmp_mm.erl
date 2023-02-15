@@ -21,6 +21,7 @@
 -export([describe/1]).
 -export([execute/1]).
 -export([init/1]).
+-export([parameters/1]).
 -export([parse/1]).
 -export([query/1]).
 -export([recv/1]).
@@ -67,9 +68,14 @@ execute(Arg) ->
     send_request(Arg, ?FUNCTION_NAME).
 
 
+parameters(Arg) ->
+    send_request(Arg, ?FUNCTION_NAME).
+
+
 -type arg() :: atom() | {atom(), any()}.
 
 -type action() :: query
+                | parameters
                 | parse
                 | sync
                 | bind
@@ -112,7 +118,10 @@ args(describe) ->
     [type, {name, <<>>}];
 
 args(execute) ->
-    [{portal, <<>>}, {max_rows, 0}].
+    [{portal, <<>>}, {max_rows, 0}];
+
+args(parameters) ->
+    [].
 
 
 maybe_label(#{requests := _, label := _} = Arg) ->

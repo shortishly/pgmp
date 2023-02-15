@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env zsh
 # Copyright (c) 2023 Peter Morgan <peter.james.morgan@gmail.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,11 +14,23 @@
 # limitations under the License.
 #
 
-case $(psql --version | cut -d ' ' -f3) in
-    15*)
-        psql --command="create publication pub for tables in schema current_schema"
-        ;;
-    *)
-        psql --command="create publication pub for all tables"
-        ;;
-esac
+set -e
+
+docker compose down --remove-orphans --volumes
+
+make distclean all eunit
+
+for version in {12..15}
+do
+    figlet "PostgreSQL $version"
+    PULL_POLICY=always POSTGRES_VERSION=$version docker compose up --detach --remove-orphans
+
+    until docker compose logs postgres | grep "PostgreSQL init process complete; ready for start up"
+    do
+          echo "sleeping..."
+          sleep 1
+    done
+
+    make ct
+    docker compose down --remove-orphans --volumes
+done

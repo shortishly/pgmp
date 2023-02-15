@@ -114,6 +114,16 @@ handle_event({call, _} = Call,
      data(Call, Arg, Data),
      actions(Call, Arg, Data)};
 
+handle_event({call, From},
+             {request, #{action := parameters}},
+             {ready_for_query, State},
+             #{requests := Requests, parameters := Parameters} = Data) ->
+    {keep_state,
+     Data#{requests => pgmp_connection:ready_for_query(
+                         #{state => State,
+                           requests => Requests})},
+     {reply, From, Parameters}};
+
 handle_event({call, _}, {request, _}, _, _) ->
     {keep_state_and_data, postpone};
 

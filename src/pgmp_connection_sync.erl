@@ -19,6 +19,7 @@
 -export([bind/1]).
 -export([describe/1]).
 -export([execute/1]).
+-export([parameters/1]).
 -export([parse/1]).
 -export([query/1]).
 -export([sync/1]).
@@ -83,6 +84,13 @@ query(Arg) ->
 -spec sync(sync_request()) -> sync_response().
 
 sync(Arg) ->
+    receive_response(?FUNCTION_NAME, Arg).
+
+
+-type parameters_request() :: #{}.
+-type parameters_response() :: #{binary() => binary()}.
+-spec parameters(parameters_request()) -> parameters_response().
+parameters(Arg) ->
     receive_response(?FUNCTION_NAME, Arg).
 
 

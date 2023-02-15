@@ -121,11 +121,6 @@ replication(logical = Type, slot_prefix = Name) ->
            names => [?FUNCTION_NAME, Type, Name],
            default => <<"pgmp">>});
 
-replication(logical = Type, proto_version = Name) ->
-    envy(#{caller => ?MODULE,
-           names => [?FUNCTION_NAME, Type, Name],
-           default => 2});
-
 replication(logical = Type, max_rows = Name) ->
     envy(#{caller => ?MODULE,
            names => [?FUNCTION_NAME, Type, Name],

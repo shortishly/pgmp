@@ -72,7 +72,6 @@ handle_event({call, From}, {recv, {Tag, _} = TM}, _, _) ->
     {Decoded, <<>>} = demarshal(TM),
     {keep_state_and_data, [{reply, From, ok}, nei({recv, {Tag, Decoded}})]};
 
-
 handle_event(info, Msg, _, #{requests := Existing} = Data) ->
     case gen_statem:check_response(Msg, Existing, true) of
         {{reply, Reply}, Label, Updated} ->

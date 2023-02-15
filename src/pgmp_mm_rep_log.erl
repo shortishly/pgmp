@@ -275,10 +275,17 @@ handle_event(internal,
      [nei(manager), nei(identify_system)]};
 
 handle_event(internal,
+             server_version,
+             _,
+             #{parameters := #{<<"server_version">> := ServerVersion}} = Data) ->
+    {keep_state,
+     Data#{server_version => pgmp_util:semantic_version(ServerVersion)}};
+
+handle_event(internal,
              bootstrap_complete,
              _,
              #{types_ready := false} = Data) ->
-    {next_state, waiting_for_types, Data};
+    {next_state, waiting_for_types, Data, nei(server_version)};
 
 handle_event(internal,
              bootstrap_complete,
@@ -287,7 +294,9 @@ handle_event(internal,
     {next_state,
      identify_system,
      Data,
-     [nei(manager), nei(identify_system)]};
+     [nei(server_version),
+      nei(manager),
+      nei(identify_system)]};
 
 handle_event(internal,
              manager,
@@ -317,6 +326,14 @@ handle_event(internal,
              _,
              Data) when Command == identify_system;
                         Command == create_replication_slot ->
+    {keep_state, maps:without([columns], Data)};
+
+handle_event(internal,
+             {recv, {command_complete, select}},
+             State,
+             #{server_version := #{major :=  12}} = Data)
+  when State == identify_system;
+       State == replication_slot ->
     {keep_state, maps:without([columns], Data)};
 
 
@@ -359,11 +376,10 @@ handle_event(internal,
 handle_event(internal,
              start_replication,
              _,
-             #{config := #{publication := Publication}}) ->
+             #{config := #{publication := Publication},
+               server_version := ServerVersion}) ->
     {keep_state_and_data,
-     nei({start_replication,
-          pgmp_config:replication(logical, proto_version),
-          Publication})};
+     nei({start_replication, protocol_version(ServerVersion), Publication})};
 
 handle_event(internal,
              {start_replication, ProtoVersion, PublicationNames},
@@ -471,3 +487,13 @@ b(1) -> true.
 
 relation(Detail) ->
     maps:with([name, namespace], Detail).
+
+
+protocol_version(#{major := Major}) when Major >= 15 ->
+    3;
+
+protocol_version(#{major := Major}) when Major >= 14 ->
+    2;
+
+protocol_version(#{major := _}) ->
+    1.

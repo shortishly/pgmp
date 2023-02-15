@@ -38,12 +38,8 @@ init_per_suite(Config) ->
 
     {ok, _} = pgmp:start(),
 
-    case pgmp_connection_sync:query(
-           #{sql => "select setting from pg_settings where name = 'server_version_num'"}) of
-
-        [{row_description, _},
-         {data_row, [<<"15", _:4/bytes>>]},
-         {command_complete, {select,1}}] ->
+    case version() of
+        #{major := Major} when Major >= 15 ->
             Publication = alpha(5),
             Schema = alpha(5),
             Table = alpha(5),
@@ -115,9 +111,7 @@ init_per_suite(Config) ->
              {replication, Replication},
              {replica, table_name(Publication, Schema, Table)} | Config];
 
-        [{row_description, _},
-         {data_row, [Version]},
-         {command_complete, {select,1}}] ->
+        Version ->
             {skip, {pg_version, Version}}
     end.
 
@@ -307,3 +301,8 @@ pick(N, Pool, A) ->
     ?FUNCTION_NAME(N - 1,
                    Pool,
                    [lists:nth(rand:uniform(length(Pool)), Pool) | A]).
+
+
+version() ->
+    #{<<"server_version">> := Version} = pgmp_connection_sync:parameters(#{}),
+    pgmp_util:semantic_version(Version).
