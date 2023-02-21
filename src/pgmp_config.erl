@@ -15,6 +15,7 @@
 
 -module(pgmp_config).
 
+
 -export([backoff/1]).
 -export([codec/1]).
 -export([database/1]).
@@ -22,6 +23,7 @@
 -export([pg/1]).
 -export([pool/1]).
 -export([protocol/1]).
+-export([rep_log_ets/1]).
 -export([replication/2]).
 -export([sup_flags/1]).
 -export([telemetry/1]).
@@ -61,6 +63,16 @@ timeout(Name) ->
            default => infinity}).
 
 
+enabled(rep_log_ets_schema_in_table_name = Name) ->
+    envy(#{caller => ?MODULE,
+           names => [Name, ?FUNCTION_NAME],
+           default => false});
+
+enabled(rep_log_ets_pub_in_table_name = Name) ->
+    envy(#{caller => ?MODULE,
+           names => [Name, ?FUNCTION_NAME],
+           default => false});
+
 enabled(Name) ->
     envy(#{caller => ?MODULE,
            names => [Name, ?FUNCTION_NAME],
@@ -94,6 +106,10 @@ protocol(minor = Name) ->
            names => [?FUNCTION_NAME, Name],
            default => 0}).
 
+rep_log_ets(prefix_table_name = Name) ->
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name],
+           default => []}).
 
 replication(logical = Type, module = Name) ->
     envy(#{caller => ?MODULE,
@@ -104,11 +120,6 @@ replication(logical = Type, slot_prefix = Name) ->
     envy(#{caller => ?MODULE,
            names => [?FUNCTION_NAME, Type, Name],
            default => <<"pgmp">>});
-
-replication(logical = Type, proto_version = Name) ->
-    envy(#{caller => ?MODULE,
-           names => [?FUNCTION_NAME, Type, Name],
-           default => 2});
 
 replication(logical = Type, max_rows = Name) ->
     envy(#{caller => ?MODULE,

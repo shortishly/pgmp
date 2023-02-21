@@ -16,31 +16,32 @@
 -module(pgmp_rep_log_ets_common).
 
 
--export([insert_new/3]).
+-export([insert_new/5]).
 -export([insert_or_update_tuple/2]).
 -export([metadata/4]).
--export([update/3]).
+-export([table_name/3]).
+-export([update/5]).
 
 
-metadata(Table, Key, Value, Metadata) ->
+metadata({_Namespace, _Name} = Relation, Key,  Value, Metadata) ->
     case Metadata of
-        #{Table := TMD} ->
-            Metadata#{Table := TMD#{Key => Value}};
+        #{Relation := TMD} ->
+            Metadata#{Relation := TMD#{Key => Value}};
 
         #{} ->
-            Metadata#{Table => #{Key => Value}}
+            Metadata#{Relation => #{Key => Value}}
     end.
 
 
-insert_new(Relation, Tuple, Keys) ->
+insert_new(Publication, Schema, Table, Tuple, Keys) ->
     ets:insert_new(
-      binary_to_atom(Relation),
+      table_name(Publication, Schema, Table),
       insert_or_update_tuple(Tuple, Keys)).
 
 
-update(Relation, Tuple, Keys) ->
+update(Publication, Schema, Table, Tuple, Keys) ->
     ets:insert(
-      binary_to_atom(Relation),
+      table_name(Publication, Schema, Table),
       insert_or_update_tuple(Tuple, Keys)).
 
 
@@ -64,3 +65,25 @@ insert_or_update_tuple(Tuple, Composite) ->
          lists:zip(
            lists:seq(1, tuple_size(Tuple)),
            tuple_to_list(Tuple)))]).
+
+
+
+table_name(Publication, Schema, Table) ->
+    pgmp_util:snake_case(
+      lists:filtermap(
+        fun
+            ([]) ->
+                false;
+
+            ([Value]) ->
+                {true, Value};
+
+            (_) ->
+                true
+        end,
+        [pgmp_config:rep_log_ets(prefix_table_name),
+         [binary_to_list(Publication) || pgmp_config:enabled(
+                                           rep_log_ets_pub_in_table_name)],
+         [binary_to_list(Schema) || pgmp_config:enabled(
+                                      rep_log_ets_schema_in_table_name)],
+         binary_to_list(Table)])).

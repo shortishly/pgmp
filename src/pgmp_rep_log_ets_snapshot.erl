@@ -20,6 +20,7 @@
 -export([handle_event/4]).
 -import(pgmp_rep_log_ets_common, [insert_or_update_tuple/2]).
 -import(pgmp_rep_log_ets_common, [metadata/4]).
+-import(pgmp_rep_log_ets_common, [table_name/3]).
 -import(pgmp_statem, [nei/1]).
 -include_lib("kernel/include/logger.hrl").
 
@@ -160,30 +161,33 @@ handle_event(
 handle_event(
   internal,
   {response,
-   #{label := {fetch, [#{<<"tablename">> := Table}  = Publication | T]},
+   #{label := {fetch,
+               [#{<<"schemaname">> := Namespace,
+                  <<"tablename">> := Name} = Info | T]},
      reply := [{row_description, [<<"indkey">>]},
                {data_row, [Key]},
                {command_complete, {select, 1}}]}},
   execute,
-  #{metadata := Metadata} = Data) ->
-    Name = binary_to_atom(Table),
-    Label = {table,
-             ets:new(
-               Name,
-               [{keypos,
-                 case Key of
-                     [Primary] ->
-                         Primary;
+  #{metadata := Metadata,
+    config := #{publication := Publication}} = Data) ->
+    _ = ets:new(
+          table_name(Publication, Namespace, Name),
+          [{keypos,
+            case Key of
+                [Primary] ->
+                    Primary;
 
-                     _Composite ->
-                         1
-                 end},
-                protected,
-                named_table])},
+                _Composite ->
+                    1
+            end},
+           protected,
+           named_table]),
     {next_state,
      unready,
-     Data#{metadata := metadata(Table, keys, Key, Metadata)},
-     [nei({parse, #{label => Label, sql => pub_fetch_sql(Publication)}}),
+     Data#{metadata := metadata({Namespace, Name}, keys, Key, Metadata)},
+     [nei({parse,
+           #{label => {table, #{namespace => Namespace, name => Name}},
+             sql => pub_fetch_sql(Info)}}),
       nei({fetch, T})]};
 
 handle_event(internal,
@@ -204,14 +208,16 @@ handle_event(internal,
 
 
 handle_event(internal,
-             {response, #{label := {table, Table} = Label,
-                          reply := [{row_description, Columns}]}},
+             {response,
+              #{label := {table,
+                          #{namespace := Namespace, name := Name}} = Label,
+                reply := [{row_description, Columns}]}},
              describe,
              #{metadata := Metadata} = Data) ->
     {next_state,
      unready,
      Data#{metadata := metadata(
-                         atom_to_binary(Table),
+                         {Namespace, Name},
                          oids,
                          [OID || #{type_oid := OID} <- Columns],
                          Metadata)},
@@ -230,17 +236,19 @@ handle_event(internal,
     {next_state, unready, Data};
 
 handle_event(internal,
-             {response, #{label := {table, Table} = Label,
+             {response,
+              #{label := {table,
+                          #{namespace := Namespace,
+                            name := Name}} = Label,
                           reply := [{row_description, Columns} | T]}},
              execute,
-             #{metadata := Metadata} = Data) ->
+             #{metadata := Metadata,
+               config := #{publication := Publication}} = Data) ->
 
-    Relation = atom_to_binary(Table),
-
-    #{Relation := #{keys := Keys}} = Metadata,
+    #{{Namespace, Name} := #{keys := Keys}} = Metadata,
 
     true = ets:insert_new(
-             Table,
+             table_name(Publication, Namespace, Name),
              lists:map(
                fun
                    ({data_row, Values}) ->
@@ -254,7 +262,7 @@ handle_event(internal,
         {command_complete, {select, _}} ->
             {next_state,
              unready,
-             Data#{metadata := metadata(Relation, columns, Columns, Metadata)}};
+             Data#{metadata := metadata({Namespace, Name}, columns, Columns, Metadata)}};
 
         {portal_suspended, _} ->
             {next_state,

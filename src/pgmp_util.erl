@@ -17,6 +17,7 @@
 
 
 -export([is_exported/3]).
+-export([semantic_version/1]).
 -export([snake_case/1]).
 -export([split_on_snake_case/1]).
 -export([tl_snake_case/1]).
@@ -48,3 +49,19 @@ is_exported(M, F, A) ->
                 ok
         end,
     erlang:function_exported(M, F, A).
+
+
+semantic_version(Version) ->
+    {ok, MP} = re:compile(
+                 "(?<major>\\d+)(\\.(?<minor>\\d+)(\\.(?<patch>\\d+))?)?"),
+    {namelist, NL} = re:inspect(MP, namelist),
+    {match, Matches} = re:run(Version, MP,  [{capture, all_names, binary}]),
+    lists:foldl(
+      fun
+          ({_, <<>>}, A) ->
+              A;
+          ({K, V}, A) ->
+              A#{binary_to_atom(K) => binary_to_integer(V)}
+      end,
+      #{},
+      lists:zip(NL, Matches)).

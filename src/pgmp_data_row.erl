@@ -287,7 +287,7 @@ decode(_, binary, _, #{<<"typname">> := <<"time">>}, <<Time:64>>) ->
 decode(#{<<"integer_datetimes">> := <<"on">>},
        text,
        _,
-       #{<<"typname">> := <<"timestamp">>},
+       #{<<"typname">> := Name},
        <<Ye:4/bytes,
          "-",
          Mo:2/bytes,
@@ -299,7 +299,9 @@ decode(#{<<"integer_datetimes">> := <<"on">>},
          Mi:2/bytes,
          ":",
          Se:2/bytes,
-         _/bytes>>) ->
+         _/bytes>>)
+  when Name == <<"timestamp">>;
+       Name == <<"timestamptz">> ->
     {triple(Ye, Mo, Da), triple(Ho, Mi, Se)};
 
 decode(_, binary, _, #{<<"typname">> := Name}, <<Encoded:64/signed>>)
@@ -515,7 +517,7 @@ decode(_,
     %% where A and B are not both zero.
     #{a => A, b => B, c => C};
 
-decode(Parameters, Format, _TypeCache,Type, Value) ->
+decode(Parameters, Format, _TypeCache, Type, Value) ->
     ?LOG_WARNING(#{parameters => Parameters,
                    format => Format,
                    type => Type,

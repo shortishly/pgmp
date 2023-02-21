@@ -23,6 +23,7 @@
 -export([handle_event/4]).
 -export([init/1]).
 -export([join/1]).
+-export([parameters/1]).
 -export([parse/1]).
 -export([query/1]).
 -export([ready_for_query/1]).
@@ -61,6 +62,10 @@ describe(Arg) ->
 
 
 execute(Arg) ->
+    pgmp_mm:?FUNCTION_NAME(Arg#{server_ref => ?MODULE}).
+
+
+parameters(Arg) ->
     pgmp_mm:?FUNCTION_NAME(Arg#{server_ref => ?MODULE}).
 
 
@@ -128,7 +133,8 @@ init([]) ->
        reservations => #{},
        outstanding => #{},
        monitors => #{},
-       connections => #{}}}.
+       connections => #{}},
+     nei(census)}.
 
 handle_event({call, {Owner, _} = From},
              {request, _} = Request,
@@ -147,7 +153,8 @@ handle_event({call, {Owner, _} = From},
                          #{module => ?MODULE,
                            connection => Connection,
                            from => From},
-                         Requests)}};
+                         Requests)},
+     nei(census)};
 
 handle_event({call, {Owner, _} = From},
              {request, _} = Request,
@@ -185,7 +192,8 @@ handle_event({call, {Owner, _} = From},
                            from => From},
                          Requests),
            reservations := Reservations#{Connection => Owner},
-           owners := Owners#{Owner => Connection}}};
+           owners := Owners#{Owner => Connection}},
+     nei(census)};
 
 handle_event({call, _},
              {request, _},
@@ -195,10 +203,14 @@ handle_event({call, _},
                connections := Connections})
              when map_size(Connections) + map_size(Owners) < Max ->
     {ok, _} = pgmp_pool_sup:start_child(),
-    {keep_state_and_data, postpone};
+    {keep_state_and_data,
+     [postpone,
+      nei({telemetry, new, #{count => 1}})]};
 
 handle_event({call, _}, {request, _}, drained, _) ->
-    {keep_state_and_data, postpone};
+    {keep_state_and_data,
+     [postpone,
+      nei({telemetry, postponed, #{count => 1}})]};
 
 handle_event({call, {Connection, _} = From},
              {join, [_Group]},
@@ -208,7 +220,7 @@ handle_event({call, {Connection, _} = From},
     {next_state,
      available,
      Data#{connections := Connections#{Connection => idle}},
-     {reply, From, ok}};
+     [{reply, From, ok}, nei(census)]};
 
 handle_event({call, {Connection, _} = From},
              {ready_for_query, [idle]},
@@ -234,7 +246,7 @@ handle_event({call, {Connection, _} = From},
            owners := maps:without([Owner], Owners),
            monitors := maps:without([Owner], Monitors),
            reservations := maps:without([Connection], Reservations)},
-     {reply, From, ok}};
+     [{reply, From, ok}, nei(census)]};
 
 handle_event({call, {Connection, _} = From},
              {join,  [_Group]},
@@ -243,7 +255,7 @@ handle_event({call, {Connection, _} = From},
     _ = erlang:monitor(process, Connection),
     {keep_state,
      Data#{connections := Connections#{Connection => idle}},
-     {reply, From, ok}};
+     [{reply, From, ok}, nei(census)]};
 
 handle_event({call, {Connection, _} = From},
              {ready_for_query,  [idle = State]},
@@ -261,7 +273,7 @@ handle_event({call, {Connection, _} = From},
            owners := maps:without([Owner], Owners),
            monitors := maps:without([Owner], Monitors),
            reservations := maps:without([Connection], Reservations)},
-     {reply, From, ok}};
+     [{reply, From, ok}, nei(census)]};
 
 handle_event({call, {Connection, _} = From},
              {ready_for_query,  [State]},
@@ -269,7 +281,7 @@ handle_event({call, {Connection, _} = From},
              #{connections := Connections} = Data) ->
     {keep_state,
      Data#{connections := Connections#{Connection => State}},
-     {reply, From, ok}};
+     [{reply, From, ok}, nei(census)]};
 
 
 handle_event(internal,
@@ -287,7 +299,8 @@ handle_event(internal,
     {keep_state,
      Data#{monitors := maps:without([Owner], Monitors),
            reservations := maps:without([Connection], Reservations),
-           owners := maps:without([Owner], Owners)}};
+           owners := maps:without([Owner], Owners)},
+     nei(census)};
 
 handle_event(internal,
              {response,
@@ -300,7 +313,8 @@ handle_event(internal,
                reservations := Reservations} = Data) ->
     {keep_state,
      Data#{monitors := maps:without([Owner], Monitors),
-           reservations := maps:without([Connection], Reservations)}};
+           reservations := maps:without([Connection], Reservations)},
+     nei(census)};
 
 handle_event(internal,
              {response,
@@ -321,7 +335,8 @@ handle_event(internal,
     {keep_state,
      Data#{owners := maps:without([Owner], Owners),
            reservations := maps:without([Connection], Reservations),
-           connections := Connections#{Connection => limbo}}};
+           connections := Connections#{Connection => limbo}},
+     nei(census)};
 
 handle_event(internal,
              {response,
@@ -336,12 +351,12 @@ handle_event(internal,
         [] ->
             {keep_state,
              Data#{outstanding := maps:without([Connection], Outstanding)},
-             {reply, From, Reply}};
+             [{reply, From, Reply}, nei(census)]};
 
         Remaining ->
             {keep_state,
              Data#{outstanding := Outstanding#{Connection := Remaining}},
-             {reply, From, Reply}}
+             [{reply, From, Reply}, nei(census)]}
     end;
 
 handle_event(info,
@@ -359,14 +374,17 @@ handle_event(info,
      Data#{monitors := maps:without([Owner], Monitors),
            owners := maps:without([Owner], Owners),
            reservations := maps:without([Connection], Reservations),
-           connections := Connections#{Connection => limbo}}};
+           connections := Connections#{Connection => limbo}},
+     nei(census)};
 
 handle_event(info,
              {'DOWN', _Monitor, process, Owner, _Info},
              _,
              #{monitors := Monitors} = Data)
   when is_map_key(Owner, Monitors) ->
-    {keep_state, Data#{monitors := maps:without([Owner], Monitors)}};
+    {keep_state,
+     Data#{monitors := maps:without([Owner], Monitors)},
+     nei(census)};
 
 handle_event(info,
              {'DOWN', _Monitor, process, Connection, _Info},
@@ -385,7 +403,8 @@ handle_event(info,
      Data#{connections := maps:without([Connection], Connections),
            owners := maps:without([Owner], Owners),
            monitors := maps:without([Owner], Monitors),
-           reservations := maps:without([Connection], Reservations)}};
+           reservations := maps:without([Connection], Reservations)},
+     nei(census)};
 
 handle_event(info,
              {'DOWN', _Monitor, process, Connection, _Info},
@@ -404,7 +423,8 @@ handle_event(info,
      Data#{connections := maps:without([Connection], Connections),
            owners := maps:without([Owner], Owners),
            monitors := maps:without([Owner], Monitors),
-           reservations := maps:without([Connection], Reservations)}};
+           reservations := maps:without([Connection], Reservations)},
+     nei(census)};
 
 handle_event(info,
              {'DOWN', _Monitor, process, Connection, _Info},
@@ -413,7 +433,8 @@ handle_event(info,
   when is_map_key(Connection, Connections),
        map_size(Connections) > 1 ->
     {keep_state,
-     Data#{connections := maps:without([Connection], Connections)}};
+     Data#{connections := maps:without([Connection], Connections)},
+     nei(census)};
 
 handle_event(info,
              {'DOWN', _Monitor, process, Connection, _Info},
@@ -422,7 +443,8 @@ handle_event(info,
   when is_map_key(Connection, Connections) ->
     {next_state,
      drained,
-     Data#{connections := maps:without([Connection], Connections)}};
+     Data#{connections := maps:without([Connection], Connections)},
+     nei(census)};
 
 handle_event(info, Msg, _, #{requests := Existing} = Data) ->
     case gen_statem:check_response(Msg, Existing, true) of
@@ -437,9 +459,10 @@ handle_event(info, Msg, _, #{requests := Existing} = Data) ->
              normal,
              Data#{requests := UpdatedRequests}};
 
-        {{error, {normal, _}}, #{module := ?MODULE}, UpdatedRequests} ->
+        {{error, {Reason, _}}, #{module := ?MODULE}, UpdatedRequests}
+          when Reason == normal; Reason == shutdown ->
             {stop,
-             normal,
+             Reason,
              Data#{requests := UpdatedRequests}};
 
         {{error, {Reason, ServerRef}}, Label, UpdatedRequests} ->
@@ -452,7 +475,50 @@ handle_event(info, Msg, _, #{requests := Existing} = Data) ->
         Otherwise ->
             ?LOG_ERROR(#{reason => Otherwise, msg => Msg, data => Data}),
             keep_state_and_data
-    end.
+    end;
+
+handle_event(internal, census, _, #{max := Max}) ->
+    {keep_state_and_data,
+     [nei({census,
+           [owners,
+            reservations,
+            outstanding,
+            monitors,
+            connections]}),
+     nei({telemetry, pool, #{size => Max}})]};
+
+handle_event(internal, {census, Names}, _, Data) ->
+    {keep_state_and_data,
+     lists:map(
+       fun
+           (Name) ->
+               nei({telemetry, Name, #{size => maps:size(maps:get(Name, Data))}})
+       end,
+       Names)};
+
+handle_event(internal,
+             {telemetry, EventName, Measurements},
+             _,
+             _) ->
+    {keep_state_and_data,
+     nei({telemetry, EventName, Measurements, #{}})};
+
+handle_event(internal,
+             {telemetry, EventName, Measurements, Metadata},
+             _,
+             _) when is_atom(EventName) ->
+    {keep_state_and_data,
+     nei({telemetry, [EventName], Measurements, Metadata})};
+
+handle_event(internal,
+             {telemetry, EventName, Measurements, Metadata},
+             State,
+             _) ->
+    ok = telemetry:execute(
+           [pgmp, connection] ++ EventName,
+           Measurements,
+           Metadata#{state => State}),
+    keep_state_and_data.
 
 
 connection_state_is(Desired) ->

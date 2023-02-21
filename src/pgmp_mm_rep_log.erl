@@ -109,15 +109,18 @@ handle_event(internal,
                 tuple := Values}},
              _,
              #{relations := Relations, parameters := Parameters}) ->
-    #{Relation := #{columns := Columns, name := Table}} = Relations,
+    #{Relation := #{columns := Columns} = Detail}  = Relations,
     {keep_state_and_data,
      [nei({callback,
            Change,
-           #{relation => Table,
+           #{relation => relation(Detail),
              x_log => XLog,
              tuple => row_tuple(Parameters, Columns, Values)}}),
 
-      nei({rep_telemetry, Change, #{count => 1}, #{relation => Table}})]};
+      nei({rep_telemetry,
+           Change,
+           #{count => 1},
+           #{relation => relation(Detail)}})]};
 
 handle_event(internal,
              {update = Change,
@@ -126,30 +129,36 @@ handle_event(internal,
                 new := Values}},
              _,
              #{relations := Relations, parameters := Parameters}) ->
-    #{Relation := #{columns := Columns, name := Table}} = Relations,
+    #{Relation := #{columns := Columns} = Detail} = Relations,
     {keep_state_and_data,
      [nei({callback,
            Change,
-           #{relation => Table,
+           #{relation => relation(Detail),
              x_log => XLog,
              tuple => row_tuple(Parameters, Columns, Values)}}),
 
-      nei({rep_telemetry, Change, #{count => 1}, #{relation => Table}})]};
+      nei({rep_telemetry,
+           Change,
+           #{count => 1},
+           #{relation => relation(Detail)}})]};
 
 handle_event(internal,
              {delete = Change,
               #{relation := Relation, x_log := XLog, key := Values}},
              _,
              #{relations := Relations, parameters := Parameters}) ->
-    #{Relation := #{columns := Columns, name := Table}} = Relations,
+    #{Relation := #{columns := Columns} = Detail} = Relations,
     {keep_state_and_data,
      [nei({callback,
            Change,
-           #{relation => Table,
+           #{relation => relation(Detail),
              x_log => XLog,
              tuple => row_tuple(Parameters, Columns, Values)}}),
 
-      nei({rep_telemetry, Change, #{count => 1}, #{relation => Table}})]};
+      nei({rep_telemetry,
+           Change,
+           #{count => 1},
+           #{relation => relation(Detail)}})]};
 
 handle_event(internal,
              {truncate = Change,
@@ -160,8 +169,8 @@ handle_event(internal,
     Names = lists:map(
               fun
                   (Relation) ->
-                      #{Relation := #{name := Table}} = Relations,
-                      Table
+                      #{Relation := Detail} = Relations,
+                      relation(Detail)
               end,
               Truncates),
     {keep_state_and_data,
@@ -266,10 +275,17 @@ handle_event(internal,
      [nei(manager), nei(identify_system)]};
 
 handle_event(internal,
+             server_version,
+             _,
+             #{parameters := #{<<"server_version">> := ServerVersion}} = Data) ->
+    {keep_state,
+     Data#{server_version => pgmp_util:semantic_version(ServerVersion)}};
+
+handle_event(internal,
              bootstrap_complete,
              _,
              #{types_ready := false} = Data) ->
-    {next_state, waiting_for_types, Data};
+    {next_state, waiting_for_types, Data, nei(server_version)};
 
 handle_event(internal,
              bootstrap_complete,
@@ -278,7 +294,9 @@ handle_event(internal,
     {next_state,
      identify_system,
      Data,
-     [nei(manager), nei(identify_system)]};
+     [nei(server_version),
+      nei(manager),
+      nei(identify_system)]};
 
 handle_event(internal,
              manager,
@@ -308,6 +326,14 @@ handle_event(internal,
              _,
              Data) when Command == identify_system;
                         Command == create_replication_slot ->
+    {keep_state, maps:without([columns], Data)};
+
+handle_event(internal,
+             {recv, {command_complete, select}},
+             State,
+             #{server_version := #{major :=  12}} = Data)
+  when State == identify_system;
+       State == replication_slot ->
     {keep_state, maps:without([columns], Data)};
 
 
@@ -350,11 +376,10 @@ handle_event(internal,
 handle_event(internal,
              start_replication,
              _,
-             #{config := #{publication := Publication}}) ->
+             #{config := #{publication := Publication},
+               server_version := ServerVersion}) ->
     {keep_state_and_data,
-     nei({start_replication,
-          pgmp_config:replication(logical, proto_version),
-          Publication})};
+     nei({start_replication, protocol_version(ServerVersion), Publication})};
 
 handle_event(internal,
              {start_replication, ProtoVersion, PublicationNames},
@@ -458,3 +483,17 @@ b(false) -> 0;
 b(true) -> 1;
 b(0) -> false;
 b(1) -> true.
+
+
+relation(Detail) ->
+    maps:with([name, namespace], Detail).
+
+
+protocol_version(#{major := Major}) when Major >= 15 ->
+    3;
+
+protocol_version(#{major := Major}) when Major >= 14 ->
+    2;
+
+protocol_version(#{major := _}) ->
+    1.

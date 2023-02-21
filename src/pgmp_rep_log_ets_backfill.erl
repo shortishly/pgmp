@@ -19,6 +19,7 @@
 -export([callback_mode/0]).
 -export([handle_event/4]).
 -import(pgmp_rep_log_ets_common, [metadata/4]).
+-import(pgmp_rep_log_ets_common, [table_name/3]).
 -import(pgmp_statem, [nei/1]).
 -include_lib("kernel/include/logger.hrl").
 
@@ -30,23 +31,23 @@ callback_mode() ->
 handle_event({call, _}, _, _, _) ->
     {keep_state_and_data, postpone};
 
-handle_event(internal, {relation, _Name} = Label, _, _) ->
+handle_event(internal, {relation, _} = Label, _, _) ->
     {keep_state_and_data,
      nei({parse,
           #{label => Label,
              sql => <<"select * from pg_catalog.pg_publication_tables "
-                     "where pubname = $1 and tablename = $2">>}})};
+                     "where pubname = $1 and schemaname = $2 and tablename = $3">>}})};
 
 handle_event(internal,
              {response,
-              #{label := {relation, Relation} = Label,
+              #{label := {relation, #{namespace := Namespace, name := Name}} = Label,
                 reply := [{parse_complete, []}]}},
              parse,
              #{config := #{publication := Publication}} = Data) ->
     {next_state,
      unready,
      Data,
-     nei({bind, #{label => Label, args => [Publication, Relation]}})};
+     nei({bind, #{label => Label, args => [Publication, Namespace, Name]}})};
 
 handle_event(internal,
              {response,
@@ -121,7 +122,9 @@ handle_event(internal,
 
 handle_event(internal,
              {response,
-              #{label := {fetch, [#{<<"schemaname">> := Schema, <<"tablename">> := Table} | _]} = Label,
+              #{label := {fetch,
+                          [#{<<"schemaname">> := Schema,
+                             <<"tablename">> := Table} | _]} = Label,
                 reply := [{parse_complete, []}]}},
              parse,
              Data) ->
@@ -144,29 +147,35 @@ handle_event(internal,
 handle_event(
   internal,
   {response,
-   #{label := {fetch, [#{<<"tablename">> := Table} = Publication | T]},
+   #{label := {fetch,
+               [#{<<"pubname">> := Publication,
+                  <<"schemaname">> := Namespace,
+                  <<"tablename">> := Name} = Row | T]},
      reply := [{row_description, [<<"indkey">>]},
                {data_row, [Key]},
                {command_complete, {select, 1}}]}},
   execute,
   #{metadata := Metadata} = Data) ->
-    Label = {table,
-             ets:new(
-               binary_to_atom(Table),
-               [{keypos,
-                 case Key of
-                     [Primary] ->
-                         Primary;
+    _ = ets:new(
+          table_name(Publication, Namespace, Name),
+          [{keypos,
+            case Key of
+                [Primary] ->
+                    Primary;
 
-                     _Composite ->
-                         1
-                 end},
-                protected,
-                named_table])},
+                _Composite ->
+                    1
+            end},
+           protected,
+           named_table]),
     {next_state,
      unready,
-     Data#{metadata := metadata(Table, keys, Key, Metadata)},
-     [nei({parse, #{label => Label, sql => pub_fetch_sql(Publication)}}),
+     Data#{metadata := metadata({Namespace, Name}, keys, Key, Metadata)},
+     [nei({parse,
+           #{label => {table,
+                       #{namespace => Namespace,
+                         name => Name}},
+             sql => pub_fetch_sql(Row)}}),
       nei({fetch, T})]};
 
 handle_event(internal,
@@ -186,25 +195,28 @@ handle_event(internal,
     {next_state, unready, Data, nei({describe, #{type => $P, label => Label}})};
 
 handle_event(internal,
-             {response, #{label := {table, Table},
-                          reply := [{row_description, Columns}]}},
+             {response,
+              #{label := {table,
+                          #{namespace := Namespace,
+                            name := Name}},
+                reply := [{row_description, Columns}]}},
              describe,
              #{config := #{publication := Publication},
                metadata := Metadata} = Data) ->
     {next_state,
      unready,
      Data#{metadata := metadata(
-                         atom_to_binary(Table),
+                         {Namespace, Name},
                          columns,
                          [FieldName || #{field_name := FieldName} <- Columns],
                          metadata(
-                           atom_to_binary(Table),
+                           {Namespace, Name},
                            oids,
                            [OID || #{type_oid := OID} <- Columns],
                            Metadata))},
      nei({notify,
           pgmp_pg:get_members([pgmp_rep_log_ets, Publication, notifications]),
-          #{action => add, relation => atom_to_binary(Table)}})};
+          #{action => add, relation => table_name(Publication, Namespace, Name)}})};
 
 handle_event(internal, {notify, [], _}, _, _) ->
     keep_state_and_data;

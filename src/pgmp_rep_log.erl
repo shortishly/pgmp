@@ -20,7 +20,7 @@
 -optional_callbacks([commit/1]).
 
 
--type relation() :: binary().
+-type relation() :: #{namespace := binary(), name := binary()}.
 -type request_id_collection() :: gen_statem:request_id_collection().
 -type server_ref() :: gen_statem:server_ref().
 -type snapshot_id() :: binary().

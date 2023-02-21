@@ -67,6 +67,12 @@ handle_event({call, _} = Call,
      data(Call, Arg, Data),
      actions(Call, Arg, Data)};
 
+handle_event({call, From},
+             {request, #{action := parameters}},
+             _,
+             #{parameters := Parameters}) ->
+    {keep_state_and_data, {reply, From, Parameters}};
+
 handle_event({call, _}, {request, _}, _, _) ->
     {keep_state_and_data, postpone};
 

@@ -31,9 +31,10 @@
 -export([truncate/1]).
 -export([update/1]).
 -export([when_ready/1]).
--import(pgmp_rep_log_ets_common, [insert_new/3]).
+-import(pgmp_rep_log_ets_common, [insert_new/5]).
 -import(pgmp_rep_log_ets_common, [metadata/4]).
--import(pgmp_rep_log_ets_common, [update/3]).
+-import(pgmp_rep_log_ets_common, [table_name/3]).
+-import(pgmp_rep_log_ets_common, [update/5]).
 -import(pgmp_statem, [nei/1]).
 -include_lib("kernel/include/logger.hrl").
 
@@ -138,16 +139,20 @@ handle_event({call, From},
 
 handle_event({call, From},
              {insert,
-              #{relation := Relation,
+              #{relation := #{namespace := Namespace, name := Name} = Relation,
                 x_log := XLog,
                 tuple := Tuple}},
              _,
-             #{metadata := Metadata} = Data) ->
+             #{metadata := Metadata,
+               config := #{publication := Publication}} = Data) ->
     case Metadata of
-        #{Relation := #{keys := Positions}} ->
-            insert_new(Relation, Tuple, Positions),
+        #{{Namespace, Name} := #{keys := Positions}} ->
+            insert_new(Publication, Namespace, Name, Tuple, Positions),
             {keep_state,
-             Data#{metadata := metadata(Relation, x_log, XLog, Metadata)},
+             Data#{metadata := metadata({Namespace, Name},
+                                        x_log,
+                                        XLog,
+                                        Metadata)},
              {reply, From, ok}};
 
         _Otherwise ->
@@ -161,16 +166,17 @@ handle_event({call, From},
 
 handle_event({call, From},
              {update,
-              #{relation := Relation,
+              #{relation := #{namespace := Namespace, name := Name} = Relation,
                 x_log := XLog,
                 tuple := Tuple}},
-              _,
-              #{metadata := Metadata} = Data) ->
+             _,
+             #{metadata := Metadata,
+               config := #{publication := Publication}} = Data) ->
     case Metadata of
-        #{Relation := #{keys := Positions}} ->
-            update(Relation, Tuple, Positions),
+        #{{Namespace, Name} := #{keys := Positions}} ->
+            update(Publication, Namespace, Name, Tuple, Positions),
             {keep_state,
-             Data#{metadata := metadata(Relation, x_log, XLog, Metadata)},
+             Data#{metadata := metadata({Namespace, Name}, x_log, XLog, Metadata)},
              {reply, From, ok}};
 
         _Otherwise ->
@@ -182,15 +188,16 @@ handle_event({call, From},
 
 handle_event({call, From},
              {delete,
-              #{relation := Relation,
+              #{relation := #{namespace := Namespace, name := Name} = Relation,
                 x_log := XLog,
                 tuple := Tuple}},
               _,
-             #{metadata := Metadata} = Data) ->
+             #{metadata := Metadata,
+               config := #{publication := Publication}} = Data) ->
     case Metadata of
-        #{Relation := #{keys := Keys}} ->
+        #{{Namespace, Name} := #{keys := Keys}} ->
             ets:delete(
-              binary_to_atom(Relation),
+              table_name(Publication, Namespace, Name),
               case Keys of
                   [Primary] ->
                       element(Primary, Tuple);
@@ -200,7 +207,10 @@ handle_event({call, From},
                         [element(Pos, Tuple) || Pos <- Composite])
               end),
             {keep_state,
-             Data#{metadata := metadata(Relation, x_log, XLog, Metadata)},
+             Data#{metadata := metadata({Namespace, Name},
+                                        x_log,
+                                        XLog,
+                                        Metadata)},
              {reply, From, ok}};
 
         _Otherwise ->
@@ -213,11 +223,12 @@ handle_event({call, From},
 handle_event({call, From},
              {truncate, #{relations := Relations}},
              _,
-             #{metadata := Metadata}) ->
+             #{metadata := Metadata,
+               config := #{publication := Publication}}) ->
     case lists:filter(
            fun
-               (Relation) ->
-                   case maps:find(Relation, Metadata) of
+               (#{namespace := Namespace, name := Name}) ->
+                   case maps:find({Namespace, Name}, Metadata) of
                        {ok, _} ->
                            false;
 
@@ -230,8 +241,9 @@ handle_event({call, From},
         [] ->
             lists:foreach(
               fun
-                  (Relation) ->
-                      ets:delete_all_objects(binary_to_atom(Relation))
+                  (#{namespace := Namespace, name := Name}) ->
+                      ets:delete_all_objects(
+                        table_name(Publication, Namespace, Name))
               end,
               Relations),
             {keep_state_and_data, {reply, From, ok}};
