@@ -1,4 +1,4 @@
-%% Copyright (c) 2022 Peter Morgan <peter.james.morgan@gmail.com>
+%% Copyright (c) 2023 Peter Morgan <peter.james.morgan@gmail.com>
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 %% limitations under the License.
 
 
--module(pgmp_rep_log_SUITE).
+-module(pgmp_rep_log_composite_SUITE).
 
 
 -compile(export_all).
@@ -43,7 +43,7 @@ init_per_suite(Config) ->
     [{command_complete,
       create_table}] = pgmp_connection_sync:query(
                          #{sql => io_lib:format(
-                                    "create table ~s (k serial primary key, v text)",
+                                    "create table ~s (x serial, v text, y serial, primary key (x, y))",
                                     [Table])}),
 
 
@@ -118,23 +118,23 @@ update_test(Config) ->
                     pgmp_rep_log_ets:when_ready(
                       #{server_ref => Manager})),
 
-    {K, _} = Existing = pick_one(ets:tab2list(Replica)),
+    {{X, Y}, _} = Existing = pick_one(ets:tab2list(Replica)),
     ct:log("existing: ~p~n", [Existing]),
 
     [{command_complete, 'begin'}] = pgmp_connection_sync:query(#{sql => "begin"}),
 
     [{parse_complete, []}] = pgmp_connection_sync:parse(
                                #{sql => io_lib:format(
-                                          "update ~s set v = $2 where k = $1 returning *",
+                                          "update ~s set v = $3 where x = $1 and y = $2 returning *",
                                           [Table])}),
 
     V = alpha(5),
 
     [{bind_complete, []}] = pgmp_connection_sync:bind(
-                              #{args => [K, V]}),
+                              #{args => [X, Y, V]}),
 
     [{row_description, _},
-     {data_row, [K, V] = Updated},
+     {data_row, [X, V, Y] = Updated},
      {command_complete,
       {update, 1}}] =  pgmp_connection_sync:execute(#{}),
 
@@ -143,9 +143,9 @@ update_test(Config) ->
     [{command_complete, commit}] = pgmp_connection_sync:query(#{sql => "commit"}),
 
     wait_for(
-      [list_to_tuple(Updated)],
+      [{{X, Y}, V}],
       fun () ->
-              ets:lookup(Replica, K)
+              ets:lookup(Replica, {X, Y})
       end).
 
 
@@ -158,21 +158,21 @@ delete_test(Config) ->
                     pgmp_rep_log_ets:when_ready(
                       #{server_ref => Manager})),
 
-    {K, V} = Existing = pick_one(ets:tab2list(Replica)),
+    {{X, Y}, V} = Existing = pick_one(ets:tab2list(Replica)),
     ct:log("existing: ~p~n", [Existing]),
 
     [{command_complete, 'begin'}] = pgmp_connection_sync:query(#{sql => "begin"}),
 
     [{parse_complete, []}] = pgmp_connection_sync:parse(
                                #{sql => io_lib:format(
-                                          "delete from ~s where k = $1 returning *",
+                                          "delete from ~s where x = $1 and y = $2 returning *",
                                           [Table])}),
 
     [{bind_complete, []}] = pgmp_connection_sync:bind(
-                              #{args => [K]}),
+                              #{args => [X, Y]}),
 
     [{row_description, _},
-     {data_row, [K, V] = Deleted},
+     {data_row, [X, V, Y] = Deleted},
      {command_complete,
       {delete, 1}}] =  pgmp_connection_sync:execute(#{}),
 
@@ -183,7 +183,7 @@ delete_test(Config) ->
     wait_for(
       [],
       fun () ->
-              ets:lookup(Replica, K)
+              ets:lookup(Replica, {X, Y})
       end).
 
 
@@ -208,7 +208,7 @@ insert_test(Config) ->
                               #{args => [alpha(5)]}),
 
     [{row_description, _},
-     {data_row, [K, _] = Inserted},
+     {data_row, [X, V, Y] = Inserted},
      {command_complete,
       {insert, 1}}] =  pgmp_connection_sync:execute(#{}),
 
@@ -217,9 +217,9 @@ insert_test(Config) ->
     [{command_complete, commit}] = pgmp_connection_sync:query(#{sql => "commit"}),
 
     wait_for(
-      [list_to_tuple(Inserted)],
+      [{{X, Y}, V}],
       fun () ->
-              ets:lookup(Replica, K)
+              ets:lookup(Replica, {X, Y})
       end).
 
 
