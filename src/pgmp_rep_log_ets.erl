@@ -31,9 +31,10 @@
 -export([truncate/1]).
 -export([update/1]).
 -export([when_ready/1]).
+-import(pgmp_rep_log_ets_common, [delete/5]).
 -import(pgmp_rep_log_ets_common, [insert_new/5]).
 -import(pgmp_rep_log_ets_common, [metadata/4]).
--import(pgmp_rep_log_ets_common, [table_name/3]).
+-import(pgmp_rep_log_ets_common, [truncate/3]).
 -import(pgmp_rep_log_ets_common, [update/5]).
 -import(pgmp_statem, [nei/1]).
 -include_lib("kernel/include/logger.hrl").
@@ -196,16 +197,7 @@ handle_event({call, From},
                config := #{publication := Publication}} = Data) ->
     case Metadata of
         #{{Namespace, Name} := #{keys := Keys}} ->
-            ets:delete(
-              table_name(Publication, Namespace, Name),
-              case Keys of
-                  [Primary] ->
-                      element(Primary, Tuple);
-
-                  Composite ->
-                      list_to_tuple(
-                        [element(Pos, Tuple) || Pos <- Composite])
-              end),
+            delete(Publication, Namespace, Name, Tuple, Keys),
             {keep_state,
              Data#{metadata := metadata({Namespace, Name},
                                         x_log,
@@ -242,8 +234,7 @@ handle_event({call, From},
             lists:foreach(
               fun
                   (#{namespace := Namespace, name := Name}) ->
-                      ets:delete_all_objects(
-                        table_name(Publication, Namespace, Name))
+                      truncate(Publication, Namespace, Name)
               end,
               Relations),
             {keep_state_and_data, {reply, From, ok}};

@@ -19,6 +19,7 @@
 -export([callback_mode/0]).
 -export([handle_event/4]).
 -import(pgmp_rep_log_ets_common, [metadata/4]).
+-import(pgmp_rep_log_ets_common, [new_table/4]).
 -import(pgmp_rep_log_ets_common, [table_name/3]).
 -import(pgmp_statem, [nei/1]).
 -include_lib("kernel/include/logger.hrl").
@@ -156,18 +157,7 @@ handle_event(
                {command_complete, {select, 1}}]}},
   execute,
   #{metadata := Metadata} = Data) ->
-    _ = ets:new(
-          table_name(Publication, Namespace, Name),
-          [{keypos,
-            case Key of
-                [Primary] ->
-                    Primary;
-
-                _Composite ->
-                    1
-            end},
-           protected,
-           named_table]),
+    _ = new_table(Publication, Namespace, Name, Key),
     {next_state,
      unready,
      Data#{metadata := metadata({Namespace, Name}, keys, Key, Metadata)},

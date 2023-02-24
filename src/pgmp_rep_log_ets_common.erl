@@ -16,11 +16,27 @@
 -module(pgmp_rep_log_ets_common).
 
 
+-export([delete/5]).
 -export([insert_new/5]).
 -export([insert_or_update_tuple/2]).
 -export([metadata/4]).
+-export([new_table/4]).
 -export([table_name/3]).
+-export([truncate/3]).
 -export([update/5]).
+
+
+new_table(Publication, Namespace, Name, Keys) ->
+    ets:new(
+      table_name(Publication, Namespace, Name),
+      [{keypos, keypos(Keys)}, protected, named_table]).
+
+
+keypos([Primary]) ->
+    Primary;
+
+keypos(L) when length(L) > 1 ->
+    1.
 
 
 metadata({_Namespace, _Name} = Relation, Key,  Value, Metadata) ->
@@ -33,16 +49,81 @@ metadata({_Namespace, _Name} = Relation, Key,  Value, Metadata) ->
     end.
 
 
-insert_new(Publication, Schema, Table, Tuple, Keys) ->
-    ets:insert_new(
-      table_name(Publication, Schema, Table),
-      insert_or_update_tuple(Tuple, Keys)).
+insert_new(Publication, Schema, Table, Tuples, KeyPositions) when is_list(Tuples) ->
+    true = ets:insert_new(
+             table_name(Publication, Schema, Table),
+             [insert_or_update_tuple(Tuple, KeyPositions) || Tuple <- Tuples]),
+    notify(Publication, Schema, Table, ?FUNCTION_NAME, Tuples, KeyPositions),
+    ok;
+
+insert_new(Publication, Schema, Table, Tuple, Keys) when is_tuple(Tuple) ->
+    ?FUNCTION_NAME(Publication, Schema, Table, [Tuple], Keys).
 
 
-update(Publication, Schema, Table, Tuple, Keys) ->
+update(Publication, Schema, Table, Tuples, KeyPositions) when is_list(Tuples) ->
     ets:insert(
       table_name(Publication, Schema, Table),
-      insert_or_update_tuple(Tuple, Keys)).
+      [insert_or_update_tuple(Tuple, KeyPositions) || Tuple <- Tuples]),
+    notify(Publication, Schema, Table, ?FUNCTION_NAME, Tuples, KeyPositions),
+    ok;
+
+update(Publication, Schema, Table, Tuple, Keys) when is_tuple(Tuple) ->
+    ?FUNCTION_NAME(Publication, Schema, Table, [Tuple], Keys).
+
+
+delete(Publication, Schema, Table, Tuple, KeyPositions) ->
+    ets:delete(
+      table_name(Publication, Schema, Table),
+      key(Tuple, KeyPositions)),
+    notify(Publication, Schema, Table, ?FUNCTION_NAME, [Tuple], KeyPositions),
+    ok.
+
+
+notify(Publication, Namespace, Name, Action, Tuples, KeyPositions) ->
+    ?FUNCTION_NAME(
+       pgmp_pg:get_members(
+         [pgmp_rep_log_ets, Publication, Namespace, Name, notifications]),
+       Publication,
+       Namespace,
+       Name,
+       Action,
+       Tuples,
+       KeyPositions).
+
+notify([], _Publication, _Namespace, _Name, _Action, _Tuples, _KeyPositions) ->
+    ok;
+
+notify(Members, Publication, Namespace, Name, Action, Tuples, KeyPositions) ->
+    ChangedKeys = key(Tuples, KeyPositions),
+    Relation = table_name(Publication, Namespace, Name),
+
+    lists:foreach(
+      fun
+          (Member) ->
+              Member ! {notify,
+                        #{publication => Publication,
+                          namespace => Namespace,
+                          name => Name,
+                          relation => Relation,
+                          keys => ChangedKeys,
+                          action => Action}}
+      end,
+      Members).
+
+
+key(Tuples, KeyPositions) when is_list(Tuples) ->
+    [?FUNCTION_NAME(Tuple, KeyPositions) || Tuple <- Tuples];
+
+key(Tuple, [Primary]) ->
+    element(Primary, Tuple);
+
+key(Tuple, Composite) when length(Composite) > 1 ->
+    list_to_tuple([element(Position, Tuple) || Position <- Composite]).
+
+
+truncate(Publication, Schema, Table) ->
+    ets:delete_all_objects(
+      table_name(Publication, Schema, Table)).
 
 
 insert_or_update_tuple(Tuple, [_]) ->
@@ -50,7 +131,7 @@ insert_or_update_tuple(Tuple, [_]) ->
 
 insert_or_update_tuple(Tuple, Composite) ->
     list_to_tuple(
-      [list_to_tuple([element(Pos, Tuple) || Pos <- Composite]) |
+      [key(Tuple, Composite) |
        lists:filtermap(
          fun
              ({Position, Value}) ->
@@ -65,7 +146,6 @@ insert_or_update_tuple(Tuple, Composite) ->
          lists:zip(
            lists:seq(1, tuple_size(Tuple)),
            tuple_to_list(Tuple)))]).
-
 
 
 table_name(Publication, Schema, Table) ->
