@@ -18,9 +18,9 @@
 
 -export([callback_mode/0]).
 -export([handle_event/4]).
--import(pgmp_rep_log_ets_common, [insert_or_update_tuple/2]).
+-import(pgmp_rep_log_ets_common, [insert_new/5]).
 -import(pgmp_rep_log_ets_common, [metadata/4]).
--import(pgmp_rep_log_ets_common, [table_name/3]).
+-import(pgmp_rep_log_ets_common, [new_table/4]).
 -import(pgmp_statem, [nei/1]).
 -include_lib("kernel/include/logger.hrl").
 
@@ -170,18 +170,7 @@ handle_event(
   execute,
   #{metadata := Metadata,
     config := #{publication := Publication}} = Data) ->
-    _ = ets:new(
-          table_name(Publication, Namespace, Name),
-          [{keypos,
-            case Key of
-                [Primary] ->
-                    Primary;
-
-                _Composite ->
-                    1
-            end},
-           protected,
-           named_table]),
+    _ = new_table(Publication, Namespace, Name, Key),
     {next_state,
      unready,
      Data#{metadata := metadata({Namespace, Name}, keys, Key, Metadata)},
@@ -218,9 +207,13 @@ handle_event(internal,
      unready,
      Data#{metadata := metadata(
                          {Namespace, Name},
-                         oids,
-                         [OID || #{type_oid := OID} <- Columns],
-                         Metadata)},
+                         columns,
+                         [FieldName || #{field_name := FieldName} <- Columns],
+                         metadata(
+                           {Namespace, Name},
+                           oids,
+                           [OID || #{type_oid := OID} <- Columns],
+                           Metadata))},
      nei({execute,
           #{label => Label,
             max_rows => pgmp_config:replication(
@@ -247,16 +240,12 @@ handle_event(internal,
 
     #{{Namespace, Name} := #{keys := Keys}} = Metadata,
 
-    true = ets:insert_new(
-             table_name(Publication, Namespace, Name),
-             lists:map(
-               fun
-                   ({data_row, Values}) ->
-                       insert_or_update_tuple(
-                         list_to_tuple(Values),
-                         Keys)
-               end,
-               lists:droplast(T))),
+    ok = insert_new(
+           Publication,
+           Namespace,
+           Name,
+           [list_to_tuple(Values) || {data_row, Values} <- lists:droplast(T)],
+           Keys),
 
     case lists:last(T) of
         {command_complete, {select, _}} ->
