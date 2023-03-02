@@ -1,4 +1,4 @@
-% Copyright (c) 2022 Peter Morgan <peter.james.morgan@gmail.com>
+%% Copyright (c) 2022 Peter Morgan <peter.james.morgan@gmail.com>
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -565,4 +565,7 @@ marshal(int64, Value) ->
     ?FUNCTION_NAME({int, 64}, Value);
 
 marshal({int, Size}, Value) when is_integer(Value)->
-    <<Value:Size>>.
+    <<Value:Size>>;
+
+marshal(Type, Value) ->
+    error(badarg, [Type, Value]).

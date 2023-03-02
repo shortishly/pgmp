@@ -127,59 +127,69 @@ handle_event(internal,
                Values,
                ParameterFormat,
                ResultFormat]},
-             _,
-             #{cache := Cache, parameters := Parameters}) ->
-    case ets:lookup(Cache, {parameter_description, Statement}) of
+             bind = Action,
+             #{cache := Cache, parameters := Parameters} = Data) ->
+    try
+        case ets:lookup(Cache, {parameter_description, Statement}) of
 
-        [{_, Types}]
-          when length(Types) == length(Values),
-               length(Types) == 0 ->
-            {keep_state_and_data,
-             nei({send,
-                  ["B",
-                   size_inclusive(
-                     [marshal(string, Portal),
-                      marshal(string, Statement),
-                      marshal(int16, 0),
-                      marshal(int16, length(Values)),
-                      marshal(int16, 1),
-                      marshal(int16, 1)])]})};
+            [{_, Types}]
+              when length(Types) == length(Values),
+                   length(Types) == 0 ->
+                {keep_state_and_data,
+                 nei({send,
+                      ["B",
+                       size_inclusive(
+                         [marshal(string, Portal),
+                          marshal(string, Statement),
+                          marshal(int16, 0),
+                          marshal(int16, length(Values)),
+                          marshal(int16, 1),
+                          marshal(int16, 1)])]})};
 
-        [{_, Types}]
-          when length(Types) == length(Values),
-               length(Types) > 0 ->
-            {keep_state_and_data,
-             nei({send,
-                  ["B",
-                   size_inclusive(
-                     [marshal(string, Portal),
-                      marshal(string, Statement),
-                      marshal(int16, 1),
-                      marshal(int16, format(ParameterFormat)),
+            [{_, Types}]
+              when length(Types) == length(Values),
+                   length(Types) > 0 ->
+                {keep_state_and_data,
+                 nei({send,
+                      ["B",
+                       size_inclusive(
+                         [marshal(string, Portal),
+                          marshal(string, Statement),
+                          marshal(int16, 1),
+                          marshal(int16, format(ParameterFormat)),
 
-                      marshal(int16, length(Values)),
+                          marshal(int16, length(Values)),
 
-                      lists:foldl(
-                        fun
-                            ({_, null}, A) ->
-                                [A, marshal(int32, -1)];
+                          lists:foldl(
+                            fun
+                                ({_, null}, A) ->
+                                    [A, marshal(int32, -1)];
 
-                            ({TypeOID, Value}, A) ->
-                                Encoded = pgmp_data_row:encode(
-                                            Parameters,
-                                            [{#{format => ParameterFormat,
-                                                type_oid => TypeOID},
-                                              Value}]),
-                                [A,
-                                 marshal(int32, iolist_size(Encoded)),
-                                 Encoded]
-                        end,
-                        [],
-                        lists:zip(Types, Values)),
-                      marshal(int16, 1),
-                      marshal(
-                        int16,
-                        format(ResultFormat))])]})}
+                                ({TypeOID, Value}, A) ->
+                                    Encoded = pgmp_data_row:encode(
+                                                Parameters,
+                                                [{#{format => ParameterFormat,
+                                                    type_oid => TypeOID},
+                                                  Value}]),
+                                    [A,
+                                     marshal(int32, iolist_size(Encoded)),
+                                     Encoded]
+                            end,
+                            [],
+                            lists:zip(Types, Values)),
+                          marshal(int16, 1),
+                          marshal(
+                            int16,
+                            format(ResultFormat))])]})}
+        end
+    catch
+        error:badarg ->
+            {next_state,
+             error,
+             Data,
+             [nei({process, {error, badarg}}),
+              nei({complete, Action}),
+              nei(sync)]}
     end;
 
 handle_event(internal, {execute = EventName, [Portal, MaxRows]}, _, _) ->
