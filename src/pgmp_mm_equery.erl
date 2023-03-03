@@ -144,7 +144,7 @@ handle_event(internal,
                           marshal(int16, 0),
                           marshal(int16, length(Values)),
                           marshal(int16, 1),
-                          marshal(int16, 1)])]})};
+                          marshal(int16, format(ResultFormat))])]})};
 
             [{_, Types}]
               when length(Types) == length(Values),
