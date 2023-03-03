@@ -517,6 +517,20 @@ decode(_,
     %% where A and B are not both zero.
     #{a => A, b => B, c => C};
 
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"geometry">>},
+       WKB) ->
+    binary:encode_hex(WKB);
+
+decode(_,
+       text,
+       _,
+       #{<<"typname">> := <<"raster">>},
+       Raster) ->
+    Raster;
+
 decode(Parameters, Format, _TypeCache, Type, Value) ->
     ?LOG_WARNING(#{parameters => Parameters,
                    format => Format,
