@@ -13,18 +13,14 @@
 -- limitations under the License.
 
 
+CREATE TABLE col_array (id serial primary key,
+                        a integer[],
+                        b text[][]);
 
---
--- note: logical replication of this table should fail due not having
--- a primary key
---
 
-begin;
+-- insert into col_array (a) values ('{10000, 10000, 10000, 10000}');
+-- insert into col_array (a) values ('{20000, 25000, 25000, 25000}');
 
-create table no_pk (
-  id integer
-);
+-- insert into col_array (b) values ('{{"meeting", "lunch"}, {"training", "presentation"}}');
+-- insert into col_array (b) values ('{{"breakfast", "consulting"}, {"meeting", "lunch"}}');
 
-insert into no_pk (id) select generate_series(1, 10);
-
-commit;

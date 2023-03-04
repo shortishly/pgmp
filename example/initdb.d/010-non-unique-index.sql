@@ -12,6 +12,12 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 
+
+--
+-- note: logical replication of this table should fail due not having
+-- a unique index
+--
+
 begin;
 
 create table non_unique_index (

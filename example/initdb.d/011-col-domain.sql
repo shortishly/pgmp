@@ -13,18 +13,9 @@
 -- limitations under the License.
 
 
+create domain posint as integer check (value > 0);
 
---
--- note: logical replication of this table should fail due not having
--- a primary key
---
+create table col_domain (id serial primary key,
+                         a posint);
 
-begin;
-
-create table no_pk (
-  id integer
-);
-
-insert into no_pk (id) select generate_series(1, 10);
-
-commit;
+INSERT INTO col_domain (a) values(1);

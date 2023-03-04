@@ -12,19 +12,9 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 
+create table col_date_time (id serial primary key,
+                            a timestamp,
+                            b date,
+                            c time);
 
-
---
--- note: logical replication of this table should fail due not having
--- a primary key
---
-
-begin;
-
-create table no_pk (
-  id integer
-);
-
-insert into no_pk (id) select generate_series(1, 10);
-
-commit;
+insert into col_date_time (a, b, c) values ('1999-01-08 04:05:06', '1999-01-08', '04:05:06');

@@ -13,18 +13,7 @@
 -- limitations under the License.
 
 
+create table col_jsonb (id serial primary key, a jsonb);
 
---
--- note: logical replication of this table should fail due not having
--- a primary key
---
 
-begin;
-
-create table no_pk (
-  id integer
-);
-
-insert into no_pk (id) select generate_series(1, 10);
-
-commit;
+insert into col_jsonb (a) values ('{"foo": "bar", "baz": 1}');

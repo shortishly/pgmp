@@ -12,19 +12,12 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 
+create type mood as enum ('sad', 'ok', 'happy');
 
+create table person (id serial primary key,
+                     name text,
+                     mood mood);
 
---
--- note: logical replication of this table should fail due not having
--- a primary key
---
-
-begin;
-
-create table no_pk (
-  id integer
-);
-
-insert into no_pk (id) select generate_series(1, 10);
-
-commit;
+insert into person (name, mood) values ('Moe', 'happy');
+insert into person (name, mood) values ('Larry', 'sad');
+insert into person (name, mood) values ('Curly', 'ok');

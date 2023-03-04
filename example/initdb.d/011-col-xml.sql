@@ -13,18 +13,6 @@
 -- limitations under the License.
 
 
+create table col_xml (id serial primary key, a xml);
 
---
--- note: logical replication of this table should fail due not having
--- a primary key
---
-
-begin;
-
-create table no_pk (
-  id integer
-);
-
-insert into no_pk (id) select generate_series(1, 10);
-
-commit;
+insert into col_xml (a) values (xmlelement(name foo, xmlattributes(current_date as bar), 'cont', 'ent'));

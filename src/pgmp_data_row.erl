@@ -219,14 +219,23 @@ decode(_,
          _:12/bytes>> = UUID) ->
     UUID;
 
-decode(_,
+decode(Parameters,
+       binary = Format,
+      _,
+       #{<<"typname">> := <<"jsonb">> = Type},
+       <<1:8, Encoded/bytes>>) ->
+    ?LOG_DEBUG(#{parameters => Parameters, format => Format, type => Type, encoded => Encoded}),
+    (pgmp_config:codec(binary_to_atom(Type))):?FUNCTION_NAME(Encoded);
+
+decode(Parameters,
+       Format,
        _,
-       _,
-       #{<<"typname">> := Type}, Value)
+       #{<<"typname">> := Type}, Encoded)
   when Type == <<"xml">>;
        Type == <<"jsonb">>;
        Type == <<"json">> ->
-    (pgmp_config:codec(binary_to_atom(Type))):?FUNCTION_NAME(Value);
+    ?LOG_DEBUG(#{parameters => Parameters, format => Format, type => Type, encoded => Encoded}),
+    (pgmp_config:codec(binary_to_atom(Type))):?FUNCTION_NAME(Encoded);
 
 %% src/backend/utils/adt/arrayfuncs.c#array_recv
 decode(Parameters,
@@ -531,6 +540,13 @@ decode(_,
        Raster) ->
     Raster;
 
+decode(_,
+       binary,
+       _,
+       #{<<"typreceive">> := <<"enum_recv">>},
+       Enumeration) ->
+    Enumeration;
+
 decode(Parameters, Format, _TypeCache, Type, Value) ->
     ?LOG_WARNING(#{parameters => Parameters,
                    format => Format,
@@ -708,8 +724,16 @@ encode(#{<<"integer_datetimes">> := <<"on">>},
       calendar:date_to_gregorian_days(Date) -
           calendar:date_to_gregorian_days(pgmp_calendar:epoch_date(pg)));
 
+encode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"jsonb">> = Type}, Value) ->
+    [1, (pgmp_config:codec(binary_to_atom(Type))):?FUNCTION_NAME(Value)];
 
-encode(_, _, _, #{<<"typname">> := Type}, Value)
+encode(_,
+       _,
+       _,
+       #{<<"typname">> := Type}, Value)
   when Type == <<"json">>;
        Type == <<"jsonb">>;
        Type == <<"xml">> ->
