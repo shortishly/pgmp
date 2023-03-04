@@ -13,18 +13,15 @@
 -- limitations under the License.
 
 
+create type complex as (r double precision,
+                        i double precision);
 
---
--- note: logical replication of this table should fail due not having
--- a primary key
---
+create type inventory_item as (name text,
+                               supplier_id integer,
+                               price numeric);
 
-begin;
+create table on_hand (id serial primary key,
+                      item inventory_item,
+                      count integer);
 
-create table no_pk (
-  id integer
-);
-
-insert into no_pk (id) select generate_series(1, 10);
-
-commit;
+-- insert into on_hand (item, count) values (ROW('fuzzy dice', 42, 1.99), 1000);

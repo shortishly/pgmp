@@ -82,13 +82,16 @@ delete(Publication, Schema, Table, Tuple, KeyPositions) ->
 notify(Publication, Namespace, Name, Action, Tuples, KeyPositions) ->
     ?FUNCTION_NAME(
        pgmp_pg:get_members(
-         [pgmp_rep_log_ets, Publication, Namespace, Name, notifications]),
+         #{m => pgmp_rep_log_ets,
+           publication => Publication,
+           name => Name}),
        Publication,
        Namespace,
        Name,
        Action,
        Tuples,
        KeyPositions).
+
 
 notify([], _Publication, _Namespace, _Name, _Action, _Tuples, _KeyPositions) ->
     ok;

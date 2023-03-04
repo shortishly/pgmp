@@ -80,14 +80,15 @@
 -type row_description() :: {row_description, [column_name()]}.
 -type column_value() :: pgmp_data_row:decoded().
 -type data_row() :: {data_row, [column_value()]}.
--type command_complete() :: {command_complete, pgmp_codec:command_complete_response()}.
+-type command_complete() :: {command_complete, atom() | {atom(), integer()}}.
 
 -type parse_complete() :: {parse_complete, []}.
 -type bind_complete() :: {bind_complete, []}.
 -type portal_suspended() :: {portal_suspended, []}.
 
 -type error_severity() :: error | fatal | panic.
--type error_response() :: {error_response,
+-type error_response() :: {error, term()}
+                        | {error_response,
                            #{code := binary(),
                              file_name := binary(),
                              line := integer(),

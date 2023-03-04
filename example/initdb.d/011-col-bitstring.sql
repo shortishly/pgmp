@@ -13,18 +13,10 @@
 -- limitations under the License.
 
 
+create table col_bitstring (id serial primary key,
+                            a bit(3),
+                            b bit varying (5));
 
---
--- note: logical replication of this table should fail due not having
--- a primary key
---
-
-begin;
-
-create table no_pk (
-  id integer
-);
-
-insert into no_pk (id) select generate_series(1, 10);
-
-commit;
+insert into col_bitstring (a, b) values (b'101', b'00');
+insert into col_bitstring (a, b) values (b'000', b'101');
+insert into col_bitstring (a, b) values (b'100', b'101');

@@ -157,10 +157,17 @@ handle_event(
                {command_complete, {select, 1}}]}},
   execute,
   #{metadata := Metadata} = Data) ->
-    _ = new_table(Publication, Namespace, Name, Key),
     {next_state,
      unready,
-     Data#{metadata := metadata({Namespace, Name}, keys, Key, Metadata)},
+     Data#{metadata := metadata(
+                         {Namespace, Name},
+                         keys,
+                         Key,
+                         metadata(
+                           {Namespace, Name},
+                           table,
+                           new_table(Publication, Namespace, Name, Key),
+                           Metadata))},
      [nei({parse,
            #{label => {table,
                        #{namespace => Namespace,

@@ -12,19 +12,6 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 
+create table col_binary (id serial primary key, a bytea);
 
-
---
--- note: logical replication of this table should fail due not having
--- a primary key
---
-
-begin;
-
-create table no_pk (
-  id integer
-);
-
-insert into no_pk (id) select generate_series(1, 10);
-
-commit;
+insert into col_binary (a) values ('\xDEADBEEF');

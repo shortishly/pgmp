@@ -133,7 +133,9 @@ handle_event(internal,
     {next_state,
      unready,
      Data,
-     nei({bind, #{label => Label, args => [Schema, Table]}})};
+     nei({bind,
+          #{label => Label,
+            args => [Schema, Table]}})};
 
 handle_event(internal,
              {response,
@@ -170,10 +172,17 @@ handle_event(
   execute,
   #{metadata := Metadata,
     config := #{publication := Publication}} = Data) ->
-    _ = new_table(Publication, Namespace, Name, Key),
     {next_state,
      unready,
-     Data#{metadata := metadata({Namespace, Name}, keys, Key, Metadata)},
+     Data#{metadata := metadata(
+                         {Namespace, Name},
+                         keys,
+                         Key,
+                         metadata(
+                           {Namespace, Name},
+                           table,
+                           new_table(Publication, Namespace, Name, Key),
+                           Metadata))},
      [nei({parse,
            #{label => {table, #{namespace => Namespace, name => Name}},
              sql => pub_fetch_sql(Info)}}),
@@ -185,7 +194,10 @@ handle_event(internal,
                 reply := [{parse_complete, []}]}},
              parse,
              Data) ->
-    {next_state, unready, Data, nei({bind, #{label => Label}})};
+    {next_state,
+     unready,
+     Data,
+     nei({describe, #{type => $S, label => Label}})};
 
 handle_event(internal,
              {response,
@@ -193,14 +205,21 @@ handle_event(internal,
                 reply := [{bind_complete, []}]}},
              bind,
              Data) ->
-    {next_state, unready, Data, nei({describe, #{type => $P, label => Label}})};
-
+    {next_state,
+     unready,
+     Data,
+     nei({execute,
+          #{label => Label,
+            max_rows => pgmp_config:replication(
+                          logical,
+                          max_rows)}})};
 
 handle_event(internal,
              {response,
               #{label := {table,
                           #{namespace := Namespace, name := Name}} = Label,
-                reply := [{row_description, Columns}]}},
+                reply := [{parameter_description,[]},
+                          {row_description, Columns}]}},
              describe,
              #{metadata := Metadata} = Data) ->
     {next_state,
@@ -214,12 +233,7 @@ handle_event(internal,
                            oids,
                            [OID || #{type_oid := OID} <- Columns],
                            Metadata))},
-     nei({execute,
-          #{label => Label,
-            max_rows => pgmp_config:replication(
-                          logical,
-                          max_rows)}})};
-
+     nei({bind, #{label => Label, result => column_format(Columns)}})};
 
 handle_event(internal,
              {response, #{label := {table, _},
@@ -361,3 +375,21 @@ pub_fetch_columns(#{<<"attnames">> := Attributes}) ->
 
 pub_fetch_columns(#{}) ->
     "*".
+
+column_format(Columns) ->
+    Types = pgmp_types:cache(),
+    case lists:any(
+           fun
+               (OID) ->
+                   #{<<"typreceive">> := R,
+                     <<"typsend">> := S} = maps:get(OID, Types),
+                   R == <<"-">> orelse S == <<"-">>
+           end,
+           [OID || #{type_oid := OID} <- Columns]) of
+
+        true ->
+            text;
+
+        false ->
+            binary
+    end.

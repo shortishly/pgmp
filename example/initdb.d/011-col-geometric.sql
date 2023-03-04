@@ -12,19 +12,14 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 
+create table col_geometric (id serial primary key,
+                            a point,
+                            b line,
+                            c lseg,
+                            d box,
+                            e path,
+                            f path,
+                            g polygon,
+                            h circle);
 
-
---
--- note: logical replication of this table should fail due not having
--- a primary key
---
-
-begin;
-
-create table no_pk (
-  id integer
-);
-
-insert into no_pk (id) select generate_series(1, 10);
-
-commit;
+insert into col_geometric (a, b, c, d, e, f, g, h) values ('(1, 2)', '{1, 2, 3}', '((1, 1), (6, 6))', '((1, 2), (3, 5))', '((1, 1), (6, 9), (11, 15), (8, 11))', '[(1, 1), (6, 9), (11, 15), (8, 11)]', '((1, 1), (6, 9), (11, 15), (8, 11))', '((3, 2), 8)');

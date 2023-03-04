@@ -13,18 +13,7 @@
 -- limitations under the License.
 
 
+create table col_range (id serial primary key,
+                        a tsrange);
 
---
--- note: logical replication of this table should fail due not having
--- a primary key
---
-
-begin;
-
-create table no_pk (
-  id integer
-);
-
-insert into no_pk (id) select generate_series(1, 10);
-
-commit;
+-- insert into col_range (a) values ('[2010-01-01 14:30, 2010-01-01 15:30)');

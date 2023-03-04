@@ -12,19 +12,18 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 
+create table col_boolean (id serial primary key, a boolean);
 
+insert into col_boolean (a) values (true);
+insert into col_boolean (a) values (TRUE);
+insert into col_boolean (a) values ('true');
+insert into col_boolean (a) values ('yes');
+insert into col_boolean (a) values ('on');
+insert into col_boolean (a) values ('1');
 
---
--- note: logical replication of this table should fail due not having
--- a primary key
---
-
-begin;
-
-create table no_pk (
-  id integer
-);
-
-insert into no_pk (id) select generate_series(1, 10);
-
-commit;
+insert into col_boolean (a) values (FALSE);
+insert into col_boolean (a) values (false);
+insert into col_boolean (a) values ('false');
+insert into col_boolean (a) values ('no');
+insert into col_boolean (a) values ('off');
+insert into col_boolean (a) values ('0');

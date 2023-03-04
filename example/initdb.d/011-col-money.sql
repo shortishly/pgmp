@@ -12,19 +12,7 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 
+create table col_money (id serial primary key, mon money);
 
-
---
--- note: logical replication of this table should fail due not having
--- a primary key
---
-
-begin;
-
-create table no_pk (
-  id integer
-);
-
-insert into no_pk (id) select generate_series(1, 10);
-
-commit;
+insert into col_money (mon) values(12.34);
+insert into col_money (mon) values(52093.89);

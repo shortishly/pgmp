@@ -52,6 +52,17 @@ parse_bind_test(_Config) ->
     [{bind_complete, []}] = pgmp_connection_sync:bind(
                               #{args => []}).
 
+bind_badarg_type_test(_Config) ->
+    [{parse_complete, []}] = pgmp_connection_sync:parse(
+                               #{sql => "select 2 + $1"}),
+    [{error, badarg}] = pgmp_connection_sync:bind(
+                              #{args => [<<"abc">>]}).
+
+bind_error_response_test(_Config) ->
+    [{parse_complete, []}] = pgmp_connection_sync:parse(
+                               #{sql => "select 2 / $1"}),
+    [{error_response, _}] = pgmp_connection_sync:bind(
+                              #{args => [0]}).
 
 parse_bind_execute_test(_Config) ->
     ?assertMatch(
@@ -82,4 +93,3 @@ parse_syntax_test(_Config) ->
            severity_localized := <<"ERROR">>}}],
        pgmp_connection_sync:parse(
          #{sql => "select 2 + a"})).
-
