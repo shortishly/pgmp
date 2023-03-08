@@ -1191,6 +1191,9 @@ precision(Value, <<"float8">>) ->
 precision(Value, <<"float4">>) ->
     ?FUNCTION_NAME(Value, 6);
 
+precision(Value, Digits) when is_integer(Value) ->
+    ?FUNCTION_NAME(float(Value), Digits);
+
 precision(Value, Digits) when is_float(Value),
                               is_integer(Digits) ->
     Decimals = Digits - trunc(math:ceil(math:log10(trunc(abs(Value)) + 1))),
