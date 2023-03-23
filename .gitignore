@@ -10,11 +10,13 @@
 .eunit
 .fuse_hidden*
 /*.d
+/makefile.bak
 _rel
 cover
 db
 deps
-ebin
+ebin/*.beam
+ebin/test
 elvis
 elvis.config
 erl_crash.dump
@@ -24,4 +26,3 @@ package-lock.json
 package.json
 relx
 xrefr
-/makefile.bak
