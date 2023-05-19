@@ -447,6 +447,14 @@ decode(_,
     Address;
 
 decode(_,
+       text,
+       _,
+       #{<<"typname">> := <<"inet">>},
+       Encoded) ->
+    {ok, Decoded} = inet:parse_address(binary_to_list(Encoded)),
+    Decoded;
+
+decode(_,
        binary,
        _,
        #{<<"typname">> := <<"inet">>},

@@ -131,6 +131,22 @@ handle_event(internal,
              #{cache := Cache, parameters := Parameters} = Data) ->
     try
         case ets:lookup(Cache, {parameter_description, Statement}) of
+            [] ->
+                %% force an error response from PostgreSQL, as the
+                %% parameter description is not cached, this is either
+                %% because no statement has been parsed, or a previous
+                %% error has been ignored.
+                %%
+                {keep_state_and_data,
+                 nei({send,
+                      ["B",
+                       size_inclusive(
+                         [marshal(string, Portal),
+                          marshal(string, Statement),
+                          marshal(int16, 0),
+                          marshal(int16, length(Values)),
+                          marshal(int16, 1),
+                          marshal(int16, format(ResultFormat))])]})};
 
             [{_, Types}]
               when length(Types) == length(Values),
