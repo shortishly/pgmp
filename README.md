@@ -1,7 +1,7 @@
 # PostgreSQL Message Protocol (PGMP)
 
 An implementation of the [PostgreSQL Message
-Protocol][postgresql-org-protocol] for [Erlang/OTP 25][erlang-org].
+Protocol][postgresql-org-protocol] for [Erlang/OTP 25+][erlang-org].
 
 Features:
 
