@@ -1,0 +1,78 @@
+%% -*- mode: erlang -*-
+%% Copyright (c) 2023 Peter Morgan <peter.james.morgan@gmail.com>
+%%
+%% Licensed under the Apache License, Version 2.0 (the "License");
+%% you may not use this file except in compliance with the License.
+%% You may obtain a copy of the License at
+%%
+%% http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS,
+%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%% See the License for the specific language governing permissions and
+%% limitations under the License.
+
+{begin_prepare,
+ #{timestamp => 739719910616066,
+   x_log => #{clock => 1686404710617740,
+              start_wal => 26693544,
+              end_wal => 26693544},
+   xid => 860,
+   end_lsn => 26694152,
+   gid => <<"abc">>,
+   lsn => 26693872}}.
+
+{insert,
+ #{tuple => [#{value => <<0,0,0,8>>,format => binary},
+             #{value => <<"5">>,format => binary}],
+   relation => 16686,
+   x_log => #{clock => 1686404710618195,
+              start_wal => 26693648,
+              end_wal => 26693648}}}.
+
+{prepare,
+ #{flags => 0,
+   timestamp => 739719910616066,
+   x_log => #{clock => 1686404710618212,
+              start_wal => 26694152,
+              end_wal => 26694152},
+   xid => 860,
+   end_lsn => 26694152,
+   gid => <<"abc">>,
+   lsn => 26693872}}.
+
+{begin_transaction,
+ #{x_log => #{clock => 1686404729854195,
+              start_wal => 26694152,
+              end_wal => 26694152},
+   commit_timestamp => 739719929852992,
+   final_lsn => 26694280,
+   xid => 861}}.
+
+{insert,
+ #{tuple => [#{value => <<0,0,0,9>>,format => binary},
+             #{value => <<"7">>,format => binary}],
+   relation => 16686,
+   x_log => #{clock => 1686404729854250,
+              start_wal => 26694152,
+              end_wal => 26694152}}}.
+{commit,
+ #{flags => 0,
+   x_log => #{clock => 1686404729854301,
+              start_wal => 26694328,
+              end_wal => 26694328},
+   commit_timestamp => 739719929852992,
+   commit_lsn => 26694280,
+   end_lsn => 26694328}}.
+
+{commit_prepared,
+ #{flags => 0,
+   timestamp => 739720086429963,
+   x_log => #{clock => 1686404886438449,
+              start_wal => 26694440,
+              end_wal => 26694440},
+   xid => 860,
+   end_lsn => 26694440,
+   gid => <<"abc">>,
+   lsn => 26694384}}.

@@ -1,0 +1,58 @@
+%% -*- mode: erlang -*-
+%% Copyright (c) 2023 Peter Morgan <peter.james.morgan@gmail.com>
+%%
+%% Licensed under the Apache License, Version 2.0 (the "License");
+%% you may not use this file except in compliance with the License.
+%% You may obtain a copy of the License at
+%%
+%% http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS,
+%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%% See the License for the specific language governing permissions and
+%% limitations under the License.
+
+{begin_prepare,
+ #{timestamp => 739719026217983,
+   x_log =>
+       #{clock => 1686403826219162,
+         start_wal => 26667936,
+         end_wal => 26667936},
+   xid => 855,
+   end_lsn => 26668576,
+   gid => <<"abc">>,
+   lsn => 26668296}}.
+
+{insert,
+ #{tuple =>
+       [#{value => <<0,0,0,5>>,format => binary},
+        #{value => <<"5">>,format => binary}],
+   relation => 16686,
+   x_log =>
+       #{clock => 1686403826219233,start_wal => 26667936,
+         end_wal => 26667936}}}.
+
+{prepare,
+ #{flags => 0,
+   timestamp => 739719026217983,
+   x_log =>
+       #{clock => 1686403826219247,
+         start_wal => 26668576,
+         end_wal => 26668576},
+   xid => 855,
+   end_lsn => 26668576,
+   gid => <<"abc">>,
+   lsn => 26668296}}.
+
+{commit_prepared,
+ #{flags => 0,
+   timestamp => 739719036161588,
+   x_log =>
+       #{clock => 1686403836248196,
+         start_wal => 26668688,
+         end_wal => 26668688},
+   xid => 855,
+   end_lsn => 26668688,
+   gid => <<"abc">>,
+   lsn => 26668632}}.

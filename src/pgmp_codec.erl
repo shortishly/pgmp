@@ -259,6 +259,40 @@ demarshal(x_log_data, <<"T", N:32, Options:8, Data/bytes>>) ->
                                 Data),
     {{truncate, #{options => Options, relations => Relations}}, Remainder};
 
+demarshal(x_log_data, <<"b", BeginPrepare/bytes>>) ->
+    {Decoded, Remainder} = ?FUNCTION_NAME(
+                              [lsn, end_lsn, timestamp, xid, gid],
+                              [int64, int64, int64, int32, string],
+                              BeginPrepare),
+    {{begin_prepare, Decoded}, Remainder};
+
+demarshal(x_log_data, <<"P", Prepare/bytes>>) ->
+    {Decoded, Remainder} = ?FUNCTION_NAME(
+                              [flags, lsn, end_lsn, timestamp, xid, gid],
+                              [int8, int64, int64, int64, int32, string],
+                              Prepare),
+    {{prepare, Decoded}, Remainder};
+
+demarshal(x_log_data, <<"K", CommitPrepared/bytes>>) ->
+    {Decoded, Remainder} = ?FUNCTION_NAME(
+                              [flags, lsn, end_lsn, timestamp, xid, gid],
+                              [int8, int64, int64, int64, int32, string],
+                              CommitPrepared),
+    {{commit_prepared, Decoded}, Remainder};
+
+demarshal(x_log_data, <<"r", RollbackPrepared/bytes>>) ->
+    {Decoded, Remainder} = ?FUNCTION_NAME(
+                              [flags,
+                               prepared_end_lsn,
+                               rollback_end_lsn,
+                               prepare_timestamp,
+                               rollback_timestamp,
+                               xid,
+                               gid],
+                              [int8, int64, int64, int64, int64, int32, string],
+                              RollbackPrepared),
+    {{rollback_prepared, Decoded}, Remainder};
+
 demarshal(tuple_data, <<Columns:16, TupleData/bytes>>) ->
     ?FUNCTION_NAME(tuple_data, Columns, TupleData, []);
 
@@ -513,6 +547,15 @@ demarshal(tuple_data, Columns, <<"n", Remainder/bytes>>, A) ->
                    Columns - 1,
                    Remainder,
                    [null | A]);
+
+demarshal(tuple_data,
+          Columns,
+          <<"b", Length:32, Value:Length/bytes, Remainder/bytes>>,
+          A) ->
+    ?FUNCTION_NAME(tuple_data,
+                   Columns - 1,
+                   Remainder,
+                   [#{format => binary, value => Value} | A]);
 
 demarshal(tuple_data,
           Columns,

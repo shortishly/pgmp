@@ -87,11 +87,31 @@ handle_event(internal,
                               label => F,
                               requests => Requests})}};
 
+handle_event(internal, {begin_prepare = Change, Arg}, _, _) ->
+    ?LOG_DEBUG(#{Change => Arg}),
+    {keep_state_and_data,
+     nei({rep_telemetry, Change, #{count => 1}})};
+
+handle_event(internal, {prepare = Change, Arg}, _, _) ->
+    ?LOG_DEBUG(#{Change => Arg}),
+    {keep_state_and_data,
+     nei({rep_telemetry, Change, #{count => 1}})};
+
+handle_event(internal, {commit_prepared = Change, Arg}, _, _) ->
+    ?LOG_DEBUG(#{Change => Arg}),
+    {keep_state_and_data,
+     nei({rep_telemetry, Change, #{count => 1}})};
+
+handle_event(internal, {rollback_prepared = Change, Arg}, _, _) ->
+    ?LOG_DEBUG(#{Change => Arg}),
+    {keep_state_and_data,
+     nei({rep_telemetry, Change, #{count => 1}})};
 
 handle_event(internal,
              {begin_transaction =  Change, Arg},
              _,
              _) ->
+    ?LOG_DEBUG(#{Change => Arg}),
     {keep_state_and_data,
      [nei({optional_callback,
            Change,
@@ -106,9 +126,10 @@ handle_event(internal,
              {insert = Change,
               #{relation := Relation,
                 x_log := XLog,
-                tuple := Values}},
+                tuple := Values} = Arg},
              _,
              #{relations := Relations, parameters := Parameters}) ->
+    ?LOG_DEBUG(#{Change => Arg}),
     #{Relation := #{columns := Columns} = Detail}  = Relations,
     {keep_state_and_data,
      [nei({callback,
@@ -126,9 +147,10 @@ handle_event(internal,
              {update = Change,
               #{relation := Relation,
                 x_log := XLog,
-                new := Values}},
+                new := Values} = Arg},
              _,
              #{relations := Relations, parameters := Parameters}) ->
+    ?LOG_DEBUG(#{Change => Arg}),
     #{Relation := #{columns := Columns} = Detail} = Relations,
     {keep_state_and_data,
      [nei({callback,
@@ -144,9 +166,10 @@ handle_event(internal,
 
 handle_event(internal,
              {delete = Change,
-              #{relation := Relation, x_log := XLog, key := Values}},
+              #{relation := Relation, x_log := XLog, key := Values} = Arg},
              _,
              #{relations := Relations, parameters := Parameters}) ->
+    ?LOG_DEBUG(#{Change => Arg}),
     #{Relation := #{columns := Columns} = Detail} = Relations,
     {keep_state_and_data,
      [nei({callback,
@@ -163,9 +186,10 @@ handle_event(internal,
 handle_event(internal,
              {truncate = Change,
               #{x_log := XLog,
-                relations := Truncates}},
+                relations := Truncates} = Arg},
              _,
              #{relations := Relations}) ->
+    ?LOG_DEBUG(#{Change => Arg}),
     Names = lists:map(
               fun
                   (Relation) ->
@@ -179,6 +203,7 @@ handle_event(internal,
       nei({rep_telemetry, Change, #{count => 1}, #{relations => Names}})]};
 
 handle_event(internal, {commit = Change, Arg}, _, _) ->
+    ?LOG_DEBUG(#{Change => Arg}),
     {keep_state_and_data,
      [nei({optional_callback,
            Change,
@@ -369,30 +394,53 @@ handle_event(internal,
              _) ->
     {keep_state_and_data,
      nei({query,
-          io_lib:format(
-            <<"CREATE_REPLICATION_SLOT ~s TEMPORARY LOGICAL pgoutput">>,
-            [SlotName])})};
+          lists:join(
+            " ",
+            ["CREATE_REPLICATION_SLOT",
+             ["\"", SlotName, "\""],
+             "TEMPORARY LOGICAL pgoutput",
+             create_slot_options()])})};
 
 handle_event(internal,
              start_replication,
              _,
-             #{config := #{publication := Publication},
+             #{config := #{publication := PublicationNames},
                server_version := ServerVersion}) ->
     {keep_state_and_data,
-     nei({start_replication, protocol_version(ServerVersion), Publication})};
+     nei({start_replication,
+          pgoutput_options(
+            protocol_version(ServerVersion),
+            PublicationNames)})};
 
 handle_event(internal,
-             {start_replication, ProtoVersion, PublicationNames},
+             {start_replication, Options},
              _,
              #{identify_system := #{<<"xlogpos">> := _Location},
                replication_slot := #{<<"slot_name">> := SlotName}} = Data) ->
     {keep_state,
      Data#{relations => #{}},
      nei({query,
-          io_lib:format(
-             <<"START_REPLICATION SLOT ~s LOGICAL ~s ",
-               "(proto_version '~b', publication_names '~s')">>,
-             [SlotName, "0/0", ProtoVersion, PublicationNames])})};
+          lists:join(
+            " ",
+            ["START_REPLICATION SLOT",
+             SlotName,
+             "LOGICAL",
+             "0/0",
+             ["(",
+              maps:fold(
+                fun
+                    (K, V, A) ->
+                        [A,
+                         [", " || A /= []],
+                         atom_to_list(K),
+                         " ",
+                         "'",
+                         any:to_list(V),
+                         "'"]
+                end,
+                [],
+                Options),
+              ")"]])})};
 
 handle_event(internal, {recv, {row_description, Columns}}, _, Data) ->
     {keep_state, Data#{columns => Columns}};
@@ -488,6 +536,64 @@ b(1) -> true.
 relation(Detail) ->
     maps:with([name, namespace], Detail).
 
+create_slot_options() ->
+    ["(",
+     lists:foldl(
+       fun
+           (Option, A) ->
+               case pgmp_config:replication(logical, Option) of
+                   false ->
+                       A;
+
+                   true ->
+                       [A,
+                        [", " || A /= []],
+                        slot_option_name(Option)];
+                   Value ->
+                       [A,
+                        [", " || A /= []],
+                        slot_option(Option, Value)]
+               end
+       end,
+       [],
+       [two_phase, reserve_wal, snapshot]),
+     ")"].
+
+
+slot_option(Name, Value) when is_boolean(Value) ->
+    lists:join(
+      " ",
+      [slot_option_name(Name), slot_option_value(Value)]);
+
+slot_option(Name, Value) ->
+    lists:join(
+      " ",
+      [slot_option_name(Name), slot_option_value(Value)]).
+
+slot_option_name(Name) ->
+    string:uppercase(atom_to_list(Name)).
+
+slot_option_value(Value) when is_boolean(Value) ->
+    ["'", atom_to_list(Value), "'"];
+
+slot_option_value(Value) ->
+    ["'", atom_to_list(Value), "'"].
+
+
+pgoutput_options(ProtoVersion, PublicationNames) ->
+    lists:foldl(
+      fun
+          (K, A) ->
+              A#{K => pgmp_config:pgoutput(K, ProtoVersion)}
+      end,
+      #{proto_version => ProtoVersion,
+        publication_names => PublicationNames},
+      pgoutput_options(ProtoVersion)).
+
+
+
+protocol_version(#{major := Major}) when Major >= 16 ->
+    4;
 
 protocol_version(#{major := Major}) when Major >= 15 ->
     3;
@@ -497,3 +603,16 @@ protocol_version(#{major := Major}) when Major >= 14 ->
 
 protocol_version(#{major := _}) ->
     1.
+
+
+pgoutput_options(ProtocolVersion) when ProtocolVersion >= 4 ->
+    [binary, messages, streaming, two_phase, origin];
+
+pgoutput_options(ProtocolVersion) when ProtocolVersion >= 3 ->
+    [binary, messages, streaming, two_phase];
+
+pgoutput_options(ProtocolVersion) when ProtocolVersion >= 2 ->
+    [binary, messages, streaming];
+
+pgoutput_options(_) ->
+    [].

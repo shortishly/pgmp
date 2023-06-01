@@ -15,7 +15,7 @@
 #
 
 case $(psql --version | cut -d ' ' -f3) in
-    15*)
+    1[56]*)
         psql --command="create publication pub for tables in schema current_schema"
         ;;
     *)

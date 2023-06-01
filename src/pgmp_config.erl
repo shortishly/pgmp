@@ -21,6 +21,7 @@
 -export([database/1]).
 -export([enabled/1]).
 -export([pg/1]).
+-export([pgoutput/2]).
 -export([pool/1]).
 -export([protocol/1]).
 -export([rep_log_ets/1]).
@@ -126,6 +127,21 @@ replication(logical = Type, max_rows = Name) ->
            names => [?FUNCTION_NAME, Type, Name],
            default => 5_000});
 
+replication(logical = Type, two_phase = Name) ->
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Type, Name],
+           default => false});
+
+replication(logical = Type, reserve_wal = Name) ->
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Type, Name],
+           default => false});
+
+replication(logical = Type, snapshot = Name) ->
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Type, Name],
+           default => export});
+
 replication(logical = Type, publication_names = Name) ->
       binary:split(
         envy(#{caller => ?MODULE,
@@ -133,6 +149,35 @@ replication(logical = Type, publication_names = Name) ->
                default => <<"pub">>}),
         <<",">>,
         [global, trim_all]).
+
+
+pgoutput(two_phase = Name, _Version) ->
+    replication(logical, Name);
+
+pgoutput(origin = Name, _Version) ->
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name],
+           default => "any"});
+
+pgoutput(binary = Name, _Version) ->
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name],
+           default => true});
+
+pgoutput(messages = Name, _Version) ->
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name],
+           default => true});
+
+pgoutput(streaming = Name, Version) when Version >= 4 ->
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name],
+           default => "parallel"});
+
+pgoutput(streaming = Name, _Version) ->
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name],
+           default => true}).
 
 
 database(options = Name) ->
