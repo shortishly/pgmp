@@ -391,7 +391,7 @@ handle_event(internal,
 handle_event(internal,
              {create_replication_slot, SlotName},
              _,
-             _) ->
+             #{server_version := ServerVersion}) ->
     {keep_state_and_data,
      nei({query,
           lists:join(
@@ -399,7 +399,8 @@ handle_event(internal,
             ["CREATE_REPLICATION_SLOT",
              ["\"", SlotName, "\""],
              "TEMPORARY LOGICAL pgoutput",
-             create_slot_options()])})};
+             create_slot_options(
+               protocol_version(ServerVersion))])})};
 
 handle_event(internal,
              start_replication,
@@ -536,7 +537,7 @@ b(1) -> true.
 relation(Detail) ->
     maps:with([name, namespace], Detail).
 
-create_slot_options() ->
+create_slot_options(ProtoVersion) when ProtoVersion >= 3 ->
     ["(",
      lists:foldl(
        fun
@@ -557,7 +558,18 @@ create_slot_options() ->
        end,
        [],
        [two_phase, reserve_wal, snapshot]),
-     ")"].
+     ")"];
+
+create_slot_options(2) ->
+    case pgmp_config:replication(logical, snapshot) of
+        export ->
+            "EXPORT_SNAPSHOT";
+        no ->
+            "NOEXPORT_SNAPSHOT";
+        use ->
+            "USE_SNAPSHOT"
+    end.
+
 
 
 slot_option(Name, Value) when is_boolean(Value) ->
