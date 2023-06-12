@@ -10,22 +10,16 @@ jobs:
     strategy:
       matrix:
         otp: [25, 26]
+        postgres: ['14', '15', '16beta1']
     steps:
       - uses: actions/checkout@v3
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{matrix.otp}}
       - run: make all dialyze eunit
-      - name: PostgreSQL wal_level = logical
-        run: |
-          sudo pg_conftool set wal_level logical
-      - name: Start PostgreSQL service
-        run: |
-          sudo systemctl start postgresql.service
-          pg_isready
-      - name: Create PostgreSQL ci user
-        run: |
-          sudo -u postgres psql --command="create user ci password 'ci' superuser replication"
+      - run: docker-compose --project-directory etc/github-ci up --detach
+        env:
+          POSTGRES_VERSION: ${{matrix.postgres}}
       - name: Common Test
         run: make ct
         env:
