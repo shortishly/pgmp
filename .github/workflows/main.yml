@@ -17,16 +17,16 @@ jobs:
         with:
           otp-version: ${{matrix.otp}}
       - run: make all dialyze eunit
-      - run: docker-compose --project-directory etc/github-ci up --detach
+      - run: docker-compose --file etc/github-ci/compose.yaml --project-directory etc/github-ci up --detach
         env:
           POSTGRES_VERSION: ${{matrix.postgres}}
       - name: Common Test
         run: make ct
         env:
           PGMP_PGMP_REPLICATION_ENABLED: false
-          PGMP_DATABASE_USER: ci
+          PGMP_DATABASE_USER: postgres
           PGMP_DATABASE_NAME: postgres
-          PGMP_DATABASE_PASSWORD: ci
+          PGMP_DATABASE_PASSWORD: postgres
       - uses: actions/upload-artifact@v3
         with:
           name: ct-logs
