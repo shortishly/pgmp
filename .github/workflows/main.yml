@@ -17,21 +17,15 @@ jobs:
         with:
           otp-version: ${{matrix.otp}}
       - run: make all eunit
-      - uses: actions/cache@v3
-        with:
-          path: /var/lib/docker/
-          key: var-lib-docker
       - run: docker-compose --file etc/github-ci/compose.yaml --project-directory etc/github-ci up --detach
         env:
           POSTGRES_VERSION: ${{matrix.postgres}}
-      - run: docker compose logs
       - run: make ct-pgmp_equery
         env:
           PGMP_PGMP_REPLICATION_ENABLED: false
           PGMP_DATABASE_USER: postgres
           PGMP_DATABASE_NAME: postgres
           PGMP_DATABASE_PASSWORD: postgres
-      - run: docker compose logs
       - uses: actions/upload-artifact@v3
         with:
           name: ct-logs-otp-${{matrix.otp}}-pg-${{matrix.postgres}}
