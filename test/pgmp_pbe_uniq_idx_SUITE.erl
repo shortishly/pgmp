@@ -33,7 +33,7 @@ init_per_suite(Config) ->
     application:set_env(pgmp, pgmp_mm_log, true),
     application:set_env(pgmp, pgmp_mm_log_n, 50),
 
-    application:set_env(pgmp, pgmp_rep_log_trace, true),
+    application:set_env(pgmp, pgmp_rep_log_trace, false),
 
     {ok, _} = pgmp:start(),
 

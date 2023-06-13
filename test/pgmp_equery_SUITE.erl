@@ -48,9 +48,7 @@ init_per_suite(Config) ->
                         legacy_header => true,
                         single_line => false}}}),
 
-    logger:set_module_level(
-      [pgmp_mm_equery],
-      debug),
+    logger:set_module_level([], debug),
 
     Config.
 

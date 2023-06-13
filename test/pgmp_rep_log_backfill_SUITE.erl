@@ -34,7 +34,7 @@ init_per_suite(Config) ->
     application:set_env(pgmp, pgmp_mm_log, true),
     application:set_env(pgmp, pgmp_mm_log_n, 50),
 
-    application:set_env(pgmp, pgmp_rep_log_trace, true),
+    application:set_env(pgmp, pgmp_rep_log_trace, false),
 
     {ok, _} = pgmp:start(),
 
@@ -44,8 +44,16 @@ init_per_suite(Config) ->
             Schema = alpha(5),
             Table = alpha(5),
 
-            {ok, Replication} = pgmp_rep_sup:start_child(Publication),
-            {_, Manager, worker, _} = pgmp_sup:get_child(Replication, manager),
+            [{_, DbSup, supervisor, [pgmp_db_sup]}] = supervisor:which_children(
+                                                        pgmp_sup:get_child_pid(
+                                                          pgmp_sup,
+                                                          dbs_sup)),
+
+            {ok, LogRepSup} = pgmp_db:start_replication_on_publication(
+                                pgmp_sup:get_child_pid(DbSup, db),
+                                Publication),
+
+            {_, Manager, worker, _} = pgmp_sup:get_child(LogRepSup, manager),
 
             [{command_complete,
               create_schema}] = pgmp_connection_sync:query(
@@ -106,9 +114,10 @@ init_per_suite(Config) ->
 
             [{manager, Manager},
              {publication, Publication},
+             {db_sup, DbSup},
+             {rep_sup, pgmp_sup:get_child_pid(DbSup, rep_sup)},
              {schema, Schema},
              {table, Table},
-             {replication, Replication},
              {replica, table_name(Publication, Schema, Table)} | Config];
 
         Version ->
@@ -267,7 +276,11 @@ wait_for(Expected, Check, N) ->
 
 end_per_suite(Config) ->
     Publication = ?config(publication, Config),
-    ok = pgmp_rep_sup:terminate_child(Publication),
+    RepSup = ?config(rep_sup, Config),
+
+    ok = pgmp_rep_sup:terminate_child(
+           RepSup,
+           Publication),
 
     Schema = ?config(schema, Config),
     ct:log("~s: ~p~n",
