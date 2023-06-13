@@ -9,8 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        otp: [25, 26]
-        postgres: ['14', '15', '16beta1']
+        otp: [25]
+        postgres: ['14']
     steps:
       - uses: actions/checkout@v3
       - uses: erlef/setup-beam@v1
