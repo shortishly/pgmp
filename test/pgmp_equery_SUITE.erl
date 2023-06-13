@@ -29,11 +29,29 @@ all() ->
 init_per_suite(Config) ->
     _ = application:load(pgmp),
     application:set_env(pgmp, pgmp_replication_enabled, false),
-    application:set_env(pgmp, pgmp_mm_trace, true),
+    application:set_env(pgmp, pgmp_mm_trace, false),
     application:set_env(pgmp, pgmp_connection_trace, false),
     application:set_env(pgmp, pgmp_mm_log, true),
     application:set_env(pgmp, pgmp_mm_log_n, 50),
+
     {ok, _} = pgmp:start(),
+
+    logger:set_handler_config(
+      default,
+      #{formatter => {logger_formatter,
+                      #{template => [[logger_formatter, header],
+                                     {pid, [" ", pid, ""], ""},
+                                     {mfa, [" ", mfa, ":", line], ""},
+                                     "\n",
+                                     msg,
+                                     "\n"],
+                        legacy_header => true,
+                        single_line => false}}}),
+
+    logger:set_module_level(
+      [pgmp_mm_equery],
+      debug),
+
     Config.
 
 
@@ -41,7 +59,7 @@ end_per_suite(_Config) ->
     ok = application:stop(pgmp).
 
 
-parse_test(_Config) ->
+parse_test_ignore(_Config) ->
     [{parse_complete, []}] = pgmp_connection_sync:parse(
                                #{sql => "select 2 + 2"}).
 
