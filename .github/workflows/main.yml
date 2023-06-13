@@ -6,7 +6,7 @@ on:
       - develop
 jobs:
   build:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         otp: ['25']
