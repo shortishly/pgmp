@@ -10,18 +10,29 @@ jobs:
     strategy:
       matrix:
         otp: ['25']
-        postgres: ['14']
+        postgres: ['14', '15', '16beta1']
     steps:
       - uses: actions/checkout@v3
-      - run: free -m
-      - run: docker-compose --file etc/github-ci/compose.yaml --project-directory etc/github-ci up --detach
+      - run: >-
+          docker-compose
+          --file etc/github-ci/compose.yaml
+          --project-directory etc/github-ci
+          up
+          --detach
         env:
           POSTGRES_VERSION: ${{matrix.postgres}}
-      - run: free -m
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{matrix.otp}}
-      - run: make all eunit
+      - uses: actions/cache@v3
+        with:
+          path: .pgmp.plt
+          key: pgmp-plt-${{matrix.otp}}
+      - uses: actions/cache@v3
+        with:
+          path: ebin
+          key: pgmp-ebin-${{matrix.otp}}
+      - run: make all dialyze eunit
       - run: make ct
         env:
           PGMP_PGMP_REPLICATION_ENABLED: false
