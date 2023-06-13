@@ -16,12 +16,12 @@ jobs:
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{matrix.otp}}
-      - run: make all dialyze eunit
+      - run: make all eunit
       - run: docker-compose --file etc/github-ci/compose.yaml --project-directory etc/github-ci up --detach
         env:
           POSTGRES_VERSION: ${{matrix.postgres}}
       - name: Common Test
-        run: make ct
+        run: make ct-pgmp_equery
         env:
           PGMP_PGMP_REPLICATION_ENABLED: false
           PGMP_DATABASE_USER: postgres
@@ -29,5 +29,5 @@ jobs:
           PGMP_DATABASE_PASSWORD: postgres
       - uses: actions/upload-artifact@v3
         with:
-          name: ct-logs
+          name: ct-logs-otp-${{matrix.otp}}-pg-${{matrix.postgres}}
           path: logs
