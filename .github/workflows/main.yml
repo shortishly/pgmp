@@ -24,14 +24,6 @@ jobs:
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{matrix.otp}}
-      - uses: actions/cache@v3
-        with:
-          path: .pgmp.plt
-          key: pgmp-plt-${{matrix.otp}}
-      - uses: actions/cache@v3
-        with:
-          path: ebin
-          key: pgmp-ebin-${{matrix.otp}}
       - run: make all dialyze eunit
       - run: make ct
         env:
