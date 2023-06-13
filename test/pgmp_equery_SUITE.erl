@@ -59,7 +59,7 @@ end_per_suite(_Config) ->
     ok = application:stop(pgmp).
 
 
-parse_test_ignore(_Config) ->
+parse_test(_Config) ->
     [{parse_complete, []}] = pgmp_connection_sync:parse(
                                #{sql => "select 2 + 2"}).
 
