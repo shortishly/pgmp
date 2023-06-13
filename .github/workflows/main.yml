@@ -22,7 +22,7 @@ jobs:
         with:
           otp-version: ${{matrix.otp}}
       - run: make all eunit
-      - run: make ct-pgmp_equery
+      - run: make ct
         env:
           PGMP_PGMP_REPLICATION_ENABLED: false
           PGMP_DATABASE_USER: postgres
