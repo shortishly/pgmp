@@ -13,15 +13,15 @@ jobs:
         postgres: ['14']
     steps:
       - uses: actions/checkout@v3
-      - uses: erlef/setup-beam@v1
-        with:
-          otp-version: ${{matrix.otp}}
-      - run: make all eunit
       - run: free -m
       - run: docker-compose --file etc/github-ci/compose.yaml --project-directory etc/github-ci up --detach
         env:
           POSTGRES_VERSION: ${{matrix.postgres}}
       - run: free -m
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{matrix.otp}}
+      - run: make all eunit
       - run: make ct-pgmp_equery
         env:
           PGMP_PGMP_REPLICATION_ENABLED: false
