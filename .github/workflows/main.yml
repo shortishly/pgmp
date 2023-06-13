@@ -20,8 +20,7 @@ jobs:
       - run: docker-compose --file etc/github-ci/compose.yaml --project-directory etc/github-ci up --detach
         env:
           POSTGRES_VERSION: ${{matrix.postgres}}
-      - name: Common Test
-        run: make ct-pgmp_equery
+      - run: make ct-pgmp_equery
         env:
           PGMP_PGMP_REPLICATION_ENABLED: false
           PGMP_DATABASE_USER: postgres

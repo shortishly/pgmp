@@ -62,6 +62,7 @@ handle_event({call, _} = Call,
        Action == describe;
        Action == bind;
        Action == execute ->
+    ?LOG_DEBUG(#{call => Call, arg => Arg, data => Data}),
     {next_state,
      Action,
      data(Call, Arg, Data),
@@ -108,6 +109,7 @@ handle_event(internal, {describe_portal, Portal}, unsynchronized, Data) ->
      [nei({describe, Args}), nei(flush)]};
 
 handle_event(internal, {parse = EventName, [Name, SQL]}, _, _) ->
+    ?LOG_DEBUG(#{name => Name, sql => SQL}),
     {keep_state_and_data,
      [nei({telemetry,
            EventName,
@@ -248,6 +250,7 @@ handle_event(internal,
              {recv = EventName, {parse_complete = Tag, _}},
              {named_statements, _},
              #{args := [Statement, _]} = Data) ->
+    ?LOG_DEBUG(#{statement => Statement}),
     Args = [$S, Statement],
     {keep_state,
      Data#{args := Args},
@@ -312,6 +315,7 @@ handle_event(internal,
              {recv = EventName, {parse_complete = Tag, _} = TM},
              parse = Action,
              #{args := [Statement, _]} = Data) ->
+    ?LOG_DEBUG(#{statement => Statement}),
     {next_state,
      unsynchronized,
      Data,
@@ -331,6 +335,7 @@ handle_event(internal,
              {recv = EventName, {error_response = Tag, _} = TM},
              parse = Action,
              Data) ->
+    ?LOG_DEBUG(#{tm => TM}),
     {next_state,
      error,
      Data,
