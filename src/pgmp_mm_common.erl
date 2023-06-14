@@ -259,6 +259,11 @@ handle_event(internal, {recv, {error_response, _} = TM}, _, Data) ->
            pgmp_config:backoff(rand_increment))),
        {backoff, #{action => Tag, reason => Message}}}]};
 
+handle_event(internal, gc_unnamed_portal, _, #{cache := Cache}) ->
+    ets:delete(Cache, {parameter_description, <<>>}),
+    ets:delete(Cache, {row_description, <<>>}),
+    keep_state_and_data;
+
 handle_event(state_timeout, {backoff, _}, limbo, _) ->
     stop.
 

@@ -46,7 +46,7 @@ handle_event({call, _} = Call,
     {next_state,
      Action,
      data(Call, Arg, Data),
-     [pop_callback_module | actions(Call, Arg, Data)]};
+     [nei(gc_unnamed_portal), pop_callback_module | actions(Call, Arg, Data)]};
 
 handle_event({call, From},
              {request, #{action := sync}},
@@ -232,7 +232,8 @@ handle_event(internal,
     {next_state,
      TM,
      Data,
-     [pop_callback_module,
+     [nei(gc_unnamed_portal),
+      pop_callback_module,
       nei({telemetry,
            EventName,
            #{count => 1},
@@ -293,7 +294,8 @@ handle_event(internal,
     {next_state,
      Previous,
      Data,
-     [pop_callback_module,
+     [nei(gc_unnamed_portal),
+      pop_callback_module,
       nei({telemetry, EventName, #{count => 1}, #{tag => Tag}})]};
 
 handle_event(internal,
