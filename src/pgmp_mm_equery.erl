@@ -85,11 +85,6 @@ handle_event(internal, sync, _, _) ->
     {keep_state_and_data,
      [nei({send, ["S", size_inclusive([])]}), nei(gc_unnamed_portal)]};
 
-handle_event(internal, gc_unnamed_portal, _, #{cache := Cache}) ->
-    ets:delete(Cache, {parameter_description, <<>>}),
-    ets:delete(Cache, {row_description, <<>>}),
-    keep_state_and_data;
-
 handle_event(internal, {describe, [What, Name]}, _, _) ->
     {keep_state_and_data,
      nei({send, ["D", size_inclusive([What, marshal(string, Name)])]})};
