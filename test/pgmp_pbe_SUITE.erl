@@ -110,11 +110,15 @@ pbe_sync_test(Config) ->
 bind_without_parse_test(_Config) ->
     K = alpha(5),
 
+    Response = pgmp_connection_sync:bind(#{args => [K]}),
+
+    ct:pal("~p~n", [Response]),
+
     [{error_response,
       #{code := <<"26000">>,
         severity := error,
         message := <<"unnamed prepared statement does not exist">>}}]
-        = pgmp_connection_sync:bind(#{args => [K]}).
+        = Response.
 
 
 execute_without_parse_bind_test(_Config) ->
