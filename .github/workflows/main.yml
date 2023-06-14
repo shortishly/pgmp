@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        otp: ['25']
+        otp: ['25', '26']
         postgres: ['14', '15', '16beta1']
     steps:
       - uses: actions/checkout@v3
