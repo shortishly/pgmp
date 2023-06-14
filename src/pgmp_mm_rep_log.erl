@@ -506,6 +506,12 @@ handle_event(internal,
             Metadata#{publication => Publication},
             maps:with([identify_system, replication_slot], Data))})};
 
+handle_event(info,
+             {'DOWN' ,_ , process, Manager, noproc},
+             _,
+             #{manager := Manager}) ->
+    stop;
+
 handle_event(EventType, EventContent, State, Data) ->
     pgmp_mm_common:handle_event(EventType,
                                 EventContent,
@@ -569,7 +575,6 @@ create_slot_options(2) ->
         use ->
             "USE_SNAPSHOT"
     end.
-
 
 
 slot_option(Name, Value) when is_boolean(Value) ->
