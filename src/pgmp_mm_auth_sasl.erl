@@ -79,7 +79,7 @@ handle_event(
    ServerFirstMessage,
    #{r := R, s := Salt, i := I} = Server},
   _,
-  #{config := #{identity := #{password := Password}},
+  #{config := #{password := Password},
     sasl := #{client := #{header := Header, nonce := Nonce} = Client,
               mechanism := <<"SCRAM-SHA-256">> = Mechanism} = SASL} = Data) ->
 

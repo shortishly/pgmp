@@ -45,15 +45,12 @@ handle_event({call, From},
 handle_event({call, _}, {request, _}, _, _) ->
     {keep_state_and_data, postpone};
 
-handle_event(internal,
-             peer,
-             _,
-             #{supervisor := Supervisor} = Data) ->
-    case pgmp_sup:get_child(Supervisor, socket) of
+handle_event(internal, peer, _, Data) ->
+    case pgmp_sup:get_child(hd(get('$ancestors')), socket) of
         {_, PID, worker, _} when is_pid(PID) ->
             {keep_state,
              Data#{socket => PID},
-             nei(eager_startup_on_replication)};
+             nei(eager_startup_for_replication)};
 
         {_, _, _, _} = Reason ->
             {stop, Reason};
@@ -66,11 +63,13 @@ handle_event(internal,
              join = EventName,
              _,
              #{requests := Requests,
-               config := #{group := Group}} = Data) ->
-    pgmp_pg:join(Group),
+               config := #{scope := Scope,
+                           group := Group} = Config} = Data) ->
+    pg:join(Scope, Group, self()),
     {keep_state,
      Data#{requests := pgmp_connection:join(
                          #{group => Group,
+                           server_ref => pgmp_connection:server_ref(Config),
                            requests => Requests})},
      nei({telemetry,
           EventName,
@@ -80,26 +79,23 @@ handle_event(internal,
 handle_event(internal, join, _, #{config := #{}}) ->
     keep_state_and_data;
 
-handle_event(internal, types_when_ready, _, Data) ->
+handle_event(internal,
+             types_when_ready,
+             _,
+             #{requests := Requests, config := Config} = Data) ->
     {keep_state,
      Data#{requests := pgmp_types:when_ready(
-                         maps:with([requests], Data))}};
+                         #{requests => Requests,
+                           server_ref => pgmp_types:server_ref(Config)})}};
 
 handle_event(internal,
-             eager_startup_on_replication,
+             eager_startup_for_replication,
              _,
-             #{config := #{replication := Replication}}) ->
-    {keep_state_and_data,
-     nei({eager_startup_for_replication, Replication()})};
-
-handle_event(internal,
-             {eager_startup_for_replication, <<"false">>},
-             _,
-             _) ->
+             #{config := #{replication := <<"false">>}}) ->
     keep_state_and_data;
 
 handle_event(internal,
-             {eager_startup_for_replication, _},
+             eager_startup_for_replication,
              _,
              _) ->
     {keep_state_and_data, nei(startup)};
@@ -110,7 +106,7 @@ handle_event(internal, startup, _, _) ->
 handle_event(internal,
              {startup = EventName, KV},
              _,
-             #{config := #{identity := #{user := User},
+             #{config := #{user := User,
                            database := Database,
                            replication := Replication}}) ->
     {keep_state_and_data,
@@ -124,16 +120,16 @@ handle_event(internal,
                 end,
                 [],
                 maps:merge(
-                  #{<<"user">> => User(),
-                    <<"database">> => Database(),
-                    <<"replication">> => Replication()},
+                  #{<<"user">> => User,
+                    <<"database">> => Database,
+                    <<"replication">> => Replication},
                   KV)),
               marshal(byte, <<0>>)])}),
       nei({telemetry,
            EventName,
            #{count => 1},
-           #{user => User(),
-             database => Database()}})]};
+           #{user => User,
+             database => Database}})]};
 
 handle_event(internal,
              {recv = EventName,
@@ -148,7 +144,7 @@ handle_event(internal,
              {recv, {ready_for_query, _} = TM},
              authenticated,
              #{config := #{replication := Replication}} = Data) ->
-    {next_state, TM, Data, nei({replication, Replication()})};
+    {next_state, TM, Data, nei({replication, Replication})};
 
 handle_event(internal, {replication = EventName, Type}, _, _) ->
     {keep_state_and_data,

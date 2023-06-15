@@ -76,9 +76,16 @@ init_per_suite(Config) ->
 
     [{command_complete, commit}] = pgmp_connection_sync:query(#{sql => "commit"}),
 
-    {ok, Sup} = pgmp_rep_sup:start_child(Publication),
+    [{_, DbSup, supervisor, [pgmp_db_sup]}] = supervisor:which_children(
+                                                pgmp_sup:get_child_pid(
+                                                  pgmp_sup,
+                                                  dbs_sup)),
 
-    {_, Manager, worker, _} = pgmp_sup:get_child(Sup, manager),
+    {ok, LogRepSup} = pgmp_db:start_replication_on_publication(
+                        pgmp_sup:get_child_pid(DbSup, db),
+                        Publication),
+
+    {_, Manager, worker, _} = pgmp_sup:get_child(LogRepSup, manager),
 
     [{manager, Manager},
      {publication, Publication},

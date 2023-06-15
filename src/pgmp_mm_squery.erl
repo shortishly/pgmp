@@ -21,7 +21,6 @@
 -export([terminate/3]).
 -import(pgmp_codec, [marshal/2]).
 -import(pgmp_codec, [size_inclusive/1]).
--import(pgmp_data_row, [decode/2]).
 -import(pgmp_data_row, [decode/3]).
 -import(pgmp_mm_common, [actions/3]).
 -import(pgmp_mm_common, [data/3]).
@@ -117,10 +116,13 @@ handle_event({call, _} = Call,
 handle_event({call, From},
              {request, #{action := parameters}},
              {ready_for_query, State},
-             #{requests := Requests, parameters := Parameters} = Data) ->
+             #{requests := Requests,
+               config := Config,
+               parameters := Parameters} = Data) ->
     {keep_state,
      Data#{requests => pgmp_connection:ready_for_query(
                          #{state => State,
+                           server_ref => pgmp_connection:server_ref(Config),
                            requests => Requests})},
      {reply, From, Parameters}};
 
@@ -201,6 +203,7 @@ handle_event(internal,
              {recv = EventName, {data_row = Tag, Columns}},
              query,
              #{parameters := Parameters,
+               config := Config,
                types_ready := true,
                types := Types}) ->
     {keep_state_and_data,
@@ -209,7 +212,11 @@ handle_event(internal,
            #{count => 1},
            #{tag => Tag, types_ready => true}}),
 
-      nei({process, {Tag, decode(Parameters, lists:zip(Types, Columns))}})]};
+      nei({process,
+           {Tag,
+            decode(Parameters,
+                   lists:zip(Types, Columns),
+                   pgmp_types:cache(Config))}})]};
 
 handle_event(internal,
              {recv = EventName, {data_row = Tag, Columns}},

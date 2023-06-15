@@ -23,8 +23,8 @@
 -import(pgmp_sup, [worker/1]).
 
 
-start_link(#{} = Arg) ->
-    supervisor:start_link({local, ?MODULE}, ?MODULE, [Arg]).
+start_link(Arg) ->
+    supervisor:start_link(?MODULE, [Arg]).
 
 
 init([Arg]) ->
@@ -40,5 +40,5 @@ configuration(Children) ->
 
 children(Arg) ->
     [supervisor(#{m => pgmp_pool_sup, args => [Arg]}),
-     worker(pgmp_connection),
-     worker(pgmp_types)].
+     worker(#{m => pgmp_connection, args => [Arg]}),
+     worker(#{m => pgmp_types, args => [Arg]})].

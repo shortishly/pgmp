@@ -16,14 +16,14 @@
 -module(pgmp_rep_log_ets_common).
 
 
--export([delete/5]).
--export([insert_new/5]).
+-export([delete/6]).
+-export([insert_new/6]).
 -export([insert_or_update_tuple/2]).
 -export([metadata/4]).
 -export([new_table/4]).
 -export([table_name/3]).
 -export([truncate/3]).
--export([update/5]).
+-export([update/6]).
 
 
 new_table(Publication, Namespace, Name, Keys) ->
@@ -49,39 +49,57 @@ metadata({_Namespace, _Name} = Relation, Key,  Value, Metadata) ->
     end.
 
 
-insert_new(Publication, Schema, Table, Tuples, KeyPositions) when is_list(Tuples) ->
+insert_new(Scope,
+           Publication,
+           Schema,
+           Table,
+           Tuples,
+           KeyPositions) when is_list(Tuples) ->
     true = ets:insert_new(
              table_name(Publication, Schema, Table),
              [insert_or_update_tuple(Tuple, KeyPositions) || Tuple <- Tuples]),
-    notify(Publication, Schema, Table, ?FUNCTION_NAME, Tuples, KeyPositions),
+    notify(Scope,
+           Publication,
+           Schema,
+           Table,
+           ?FUNCTION_NAME,
+           Tuples,
+           KeyPositions),
     ok;
 
-insert_new(Publication, Schema, Table, Tuple, Keys) when is_tuple(Tuple) ->
-    ?FUNCTION_NAME(Publication, Schema, Table, [Tuple], Keys).
+insert_new(Scope, Publication, Schema, Table, Tuple, Keys) when is_tuple(Tuple) ->
+    ?FUNCTION_NAME(Scope, Publication, Schema, Table, [Tuple], Keys).
 
 
-update(Publication, Schema, Table, Tuples, KeyPositions) when is_list(Tuples) ->
+update(Scope, Publication, Schema, Table, Tuples, KeyPositions) when is_list(Tuples) ->
     ets:insert(
       table_name(Publication, Schema, Table),
       [insert_or_update_tuple(Tuple, KeyPositions) || Tuple <- Tuples]),
-    notify(Publication, Schema, Table, ?FUNCTION_NAME, Tuples, KeyPositions),
+    notify(Scope, Publication, Schema, Table, ?FUNCTION_NAME, Tuples, KeyPositions),
     ok;
 
-update(Publication, Schema, Table, Tuple, Keys) when is_tuple(Tuple) ->
-    ?FUNCTION_NAME(Publication, Schema, Table, [Tuple], Keys).
+update(Scope, Publication, Schema, Table, Tuple, Keys) when is_tuple(Tuple) ->
+    ?FUNCTION_NAME(Scope, Publication, Schema, Table, [Tuple], Keys).
 
 
-delete(Publication, Schema, Table, Tuple, KeyPositions) ->
+delete(Scope, Publication, Schema, Table, Tuple, KeyPositions) ->
     ets:delete(
       table_name(Publication, Schema, Table),
       key(Tuple, KeyPositions)),
-    notify(Publication, Schema, Table, ?FUNCTION_NAME, [Tuple], KeyPositions),
+    notify(Scope,
+           Publication,
+           Schema,
+           Table,
+           ?FUNCTION_NAME,
+           [Tuple],
+           KeyPositions),
     ok.
 
 
-notify(Publication, Namespace, Name, Action, Tuples, KeyPositions) ->
-    ?FUNCTION_NAME(
-       pgmp_pg:get_members(
+notify(Scope, Publication, Namespace, Name, Action, Tuples, KeyPositions) ->
+    notify_members(
+       pg:get_members(
+         Scope,
          #{m => pgmp_rep_log_ets,
            publication => Publication,
            name => Name}),
@@ -93,10 +111,22 @@ notify(Publication, Namespace, Name, Action, Tuples, KeyPositions) ->
        KeyPositions).
 
 
-notify([], _Publication, _Namespace, _Name, _Action, _Tuples, _KeyPositions) ->
+notify_members([],
+               _Publication,
+               _Namespace,
+               _Name,
+               _Action,
+               _Tuples,
+               _KeyPositions) ->
     ok;
 
-notify(Members, Publication, Namespace, Name, Action, Tuples, KeyPositions) ->
+notify_members(Members,
+               Publication,
+               Namespace,
+               Name,
+               Action,
+               Tuples,
+               KeyPositions) ->
     ChangedKeys = key(Tuples, KeyPositions),
     Relation = table_name(Publication, Namespace, Name),
 

@@ -1,4 +1,4 @@
-%% Copyright (c) 2022 Peter Morgan <peter.james.morgan@gmail.com>
+%% Copyright (c) 2023 Peter Morgan <peter.james.morgan@gmail.com>
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -13,39 +13,37 @@
 %% limitations under the License.
 
 
--module(pgmp_rep_log_stream_sup).
+-module(pgmp_db_sup).
 
 
 -behaviour(supervisor).
 -export([init/1]).
 -export([start_link/1]).
+-import(pgmp_sup, [supervisor/1]).
 -import(pgmp_sup, [worker/1]).
 
 
 start_link(Arg) ->
-    supervisor:start_link(
-      ?MODULE,
-      [Arg#{replication => <<"database">>}]).
+    supervisor:start_link(?MODULE, [Arg]).
 
 
 init([Arg]) ->
-    {ok, configuration(children(Arg))}.
+    {ok, configuration(children(scope(Arg)))}.
 
 
 configuration(Children) ->
     {maps:merge(
-       #{strategy => one_for_all,
-         auto_shutdown => any_significant},
+       #{strategy => one_for_all},
        pgmp_config:sup_flags(?MODULE)),
      Children}.
 
+scope(#{application_name := ApplicationName} = Arg) ->
+    Arg#{scope => pgmp_util:snake_case(
+              [binary_to_list(ApplicationName),
+               pgmp_config:pg(scope)])}.
 
-children(Arg) ->
-    [worker(#{m => M,
-              significant => true,
-              restart => temporary,
-              args => [Arg]}) || M <- workers()].
-
-
-workers() ->
-    [pgmp_socket, pgmp_mm].
+children(#{scope := Scope} = Arg) ->
+    [worker(#{m => pg, args => [Scope]}),
+     supervisor(#{m => pgmp_int_sup, args => [Arg]}),
+     supervisor(#{m => pgmp_rep_sup, args => [Arg]}),
+     worker(#{m => pgmp_db, args => [Arg]})].

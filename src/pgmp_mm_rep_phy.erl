@@ -21,7 +21,7 @@
 -export([terminate/3]).
 -import(pgmp_codec, [marshal/2]).
 -import(pgmp_codec, [size_inclusive/1]).
--import(pgmp_data_row, [decode/2]).
+-import(pgmp_data_row, [decode/3]).
 -import(pgmp_statem, [nei/1]).
 -include_lib("kernel/include/logger.hrl").
 
@@ -129,6 +129,7 @@ handle_event(internal,
              {recv, {data_row, Values}},
              State,
              #{parameters := Parameters,
+               config := Config,
                columns := Columns} = Data) ->
     {keep_state,
      maps:put(State,
@@ -141,7 +142,8 @@ handle_event(internal,
                 lists:zip(Columns,
                           decode(
                             Parameters,
-                            lists:zip(Columns, Values)))),
+                            lists:zip(Columns, Values),
+                            pgmp_types:cache(Config)))),
               Data)};
 
 handle_event(internal, {query, [SQL]}, _, _) ->

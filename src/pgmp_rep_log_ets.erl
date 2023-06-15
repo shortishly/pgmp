@@ -31,11 +31,11 @@
 -export([truncate/1]).
 -export([update/1]).
 -export([when_ready/1]).
--import(pgmp_rep_log_ets_common, [delete/5]).
--import(pgmp_rep_log_ets_common, [insert_new/5]).
+-import(pgmp_rep_log_ets_common, [delete/6]).
+-import(pgmp_rep_log_ets_common, [insert_new/6]).
 -import(pgmp_rep_log_ets_common, [metadata/4]).
 -import(pgmp_rep_log_ets_common, [truncate/3]).
--import(pgmp_rep_log_ets_common, [update/5]).
+-import(pgmp_rep_log_ets_common, [update/6]).
 -import(pgmp_statem, [nei/1]).
 -include_lib("kernel/include/logger.hrl").
 
@@ -105,7 +105,9 @@ init([Arg]) ->
     process_flag(trap_exit, true),
     {ok,
      unready,
-     Arg#{requests => gen_statem:reqids_new(), metadata => #{}},
+     #{requests => gen_statem:reqids_new(),
+       config => Arg,
+       metadata => #{}},
      nei(join)}.
 
 
@@ -113,8 +115,11 @@ callback_mode() ->
     handle_event_function.
 
 
-handle_event(internal, join, _, #{config := #{publication := Publication}}) ->
-    pgmp_pg:join([?MODULE, Publication]),
+handle_event(internal,
+             join,
+             _,
+             #{config := #{scope := Scope, publication := Publication}}) ->
+    pg:join(Scope, [?MODULE, Publication], self()),
     keep_state_and_data;
 
 handle_event({call, From}, {metadata, #{}}, ready, #{metadata := Metadata}) ->
@@ -145,10 +150,11 @@ handle_event({call, From},
                 tuple := Tuple}},
              _,
              #{metadata := Metadata,
-               config := #{publication := Publication}} = Data) ->
+               config := #{scope := Scope,
+                           publication := Publication}} = Data) ->
     case Metadata of
         #{{Namespace, Name} := #{keys := Positions}} ->
-            insert_new(Publication, Namespace, Name, Tuple, Positions),
+            insert_new(Scope, Publication, Namespace, Name, Tuple, Positions),
             {keep_state,
              Data#{metadata := metadata({Namespace, Name},
                                         x_log,
@@ -172,10 +178,11 @@ handle_event({call, From},
                 tuple := Tuple}},
              _,
              #{metadata := Metadata,
-               config := #{publication := Publication}} = Data) ->
+               config := #{scope := Scope,
+                           publication := Publication}} = Data) ->
     case Metadata of
         #{{Namespace, Name} := #{keys := Positions}} ->
-            update(Publication, Namespace, Name, Tuple, Positions),
+            update(Scope, Publication, Namespace, Name, Tuple, Positions),
             {keep_state,
              Data#{metadata := metadata({Namespace, Name}, x_log, XLog, Metadata)},
              {reply, From, ok}};
@@ -194,10 +201,11 @@ handle_event({call, From},
                 tuple := Tuple}},
               _,
              #{metadata := Metadata,
-               config := #{publication := Publication}} = Data) ->
+               config := #{scope := Scope,
+                           publication := Publication}} = Data) ->
     case Metadata of
         #{{Namespace, Name} := #{keys := Keys}} ->
-            delete(Publication, Namespace, Name, Tuple, Keys),
+            delete(Scope, Publication, Namespace, Name, Tuple, Keys),
             {keep_state,
              Data#{metadata := metadata({Namespace, Name},
                                         x_log,
@@ -271,5 +279,7 @@ handle_event(info, Msg, _, #{requests := Existing} = Data) ->
     end.
 
 
-terminate(_Reason, _State, #{config := #{publication := Publication}}) ->
-    pgmp_pg:leave([?MODULE, Publication]).
+terminate(_Reason,
+          _State,
+          #{config := #{scope := Scope, publication := Publication}}) ->
+    pg:leave(Scope, [?MODULE, Publication], self()).

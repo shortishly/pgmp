@@ -18,26 +18,26 @@
 
 -behaviour(supervisor).
 -export([init/1]).
--export([start_child/1]).
+-export([start_child/3]).
 -export([start_link/1]).
--export([terminate_child/1]).
+-export([terminate_child/2]).
 -import(pgmp_sup, [supervisor/1]).
 
 
-start_link(#{} = Arg) ->
-    supervisor:start_link({local, ?MODULE}, ?MODULE, [Arg]).
+start_link(Arg) ->
+    supervisor:start_link(?MODULE, [Arg]).
 
-start_child(Pub) ->
-    Arg = #{config := Config} = pgmp_sup:config(),
+
+start_child(Supervisor, DB, Publication) ->
     supervisor:start_child(
-      ?MODULE,
-      supervisor(#{id => Pub,
+      Supervisor,
+      supervisor(#{id => Publication,
                    m => pgmp_rep_log_sup,
-                   args => [Arg#{config := Config#{publication => Pub}}]})).
+                   args => [DB#{publication => Publication}]})).
 
 
-terminate_child(Pub) ->
-    supervisor:terminate_child(?MODULE, Pub).
+terminate_child(Sup, Pub) ->
+    supervisor:terminate_child(Sup, Pub).
 
 
 init([Arg]) ->
@@ -56,13 +56,13 @@ configuration(Children) ->
     {pgmp_config:sup_flags(?MODULE), Children}.
 
 
-children(#{config := Config} = Arg) ->
+children(Arg) ->
     lists:map(
       fun
           (Pub) ->
               supervisor(
                 #{id => Pub,
                   m => pgmp_rep_log_sup,
-                  args => [Arg#{config := Config#{publication => Pub}}]})
+                  args => [Arg#{publication => Pub}]})
       end,
       pgmp_config:replication(logical, publication_names)).

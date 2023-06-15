@@ -17,10 +17,8 @@
 
 
 -define(NBASE,10_000).
--export([decode/2]).
 -export([decode/3]).
 -export([decode/5]).
--export([encode/2]).
 -export([encode/3]).
 -export([encode/5]).
 -export([numeric_encode/1]).
@@ -68,10 +66,10 @@
                  | pgmp_geo:box().
 
 
--spec decode(pgmp:parameters(), [encoded()]) -> [decoded()].
+%% -spec decode(pgmp:parameters(), [encoded()]) -> [decoded()].
 
-decode(Parameters, TypeValue) ->
-    ?FUNCTION_NAME(Parameters, TypeValue, pgmp_types:cache()).
+%% decode(Parameters, TypeValue) ->
+%%     ?FUNCTION_NAME(Parameters, TypeValue, pgmp_types:cache()).
 
 
 -spec decode(pgmp:parameters(), [encoded()], pgmp_types:cache()) -> [decoded()].
@@ -588,8 +586,8 @@ triple(X, Y, Z) ->
     list_to_tuple([binary_to_integer(I) || I <- [X, Y, Z]]).
 
 
-encode(Parameters, TypeValue) ->
-    ?FUNCTION_NAME(Parameters, TypeValue, pgmp_types:cache()).
+%% encode(Parameters, TypeValue) ->
+%%     ?FUNCTION_NAME(Parameters, TypeValue, pgmp_types:cache()).
 
 encode(Parameters, TypeValue, Types) ->
     ?FUNCTION_NAME(Parameters, TypeValue, Types, []).

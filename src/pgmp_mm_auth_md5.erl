@@ -56,8 +56,7 @@ handle_event(internal,
 handle_event(internal,
              {md5_password, <<Salt:4/bytes>>},
              _,
-             #{config := #{identity := #{user := User,
-                                         password := Password}}}) ->
+             #{config := #{user := User, password := Password}}) ->
     %% src/common/md5_common.c
     %% src/interfaces/libpq/fe-auth.c
     {keep_state_and_data,
@@ -66,7 +65,7 @@ handle_event(internal,
            size_inclusive(
              marshal(
                string,
-               ["md5", md5([md5([Password(), User()]), Salt])]))]})};
+               ["md5", md5([md5([Password(), User]), Salt])]))]})};
 
 handle_event(EventType, EventContent, State, Data) ->
     pgmp_mm_common:handle_event(EventType,

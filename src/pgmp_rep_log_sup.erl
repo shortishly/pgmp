@@ -23,12 +23,12 @@
 -import(pgmp_sup, [worker/1]).
 
 
-start_link(#{} = Arg) ->
+start_link(Arg) ->
     supervisor:start_link(?MODULE, [Arg]).
 
 
 init([Arg]) ->
-    {ok, configuration(children(Arg#{ancestors => [self()]}))}.
+    {ok, configuration(children(Arg))}.
 
 
 configuration(Children) ->

@@ -22,15 +22,8 @@
 -import(pgmp_sup, [worker/1]).
 
 
-start_link(#{config := Config} = Arg) ->
-    supervisor:start_link(
-      ?MODULE,
-      [Arg#{config := Config#{replication => fun replication/0,
-                              group => interactive}}]).
-
-
-replication() ->
-    <<"false">>.
+start_link(Arg) ->
+    supervisor:start_link(?MODULE, [Arg]).
 
 
 init([Arg]) ->
@@ -46,10 +39,12 @@ configuration(Children) ->
 
 
 children(Arg) ->
-    [worker(#{m => M,
-              restart => temporary,
-              significant => true,
-              args => [Arg#{supervisor => self()}]}) || M <- workers()].
+    [worker(
+       #{m => M,
+         restart => temporary,
+         significant => true,
+         args => [Arg#{replication => <<"false">>,
+                       group => interactive}]}) || M <- workers()].
 
 
 workers() ->

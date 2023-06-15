@@ -27,46 +27,54 @@
 -export([parse/1]).
 -export([query/1]).
 -export([ready_for_query/1]).
--export([start_link/0]).
+-export([server_ref/1]).
+-export([start_link/1]).
 -export([sync/1]).
 -import(pgmp_statem, [nei/1]).
 -import(pgmp_statem, [send_request/1]).
 -include_lib("kernel/include/logger.hrl").
 
 
-start_link() ->
-    gen_statem:start_link({local, ?MODULE},
-                          ?MODULE,
-                          [],
-                          envy_gen:options(?MODULE)).
+start_link(Arg) ->
+    gen_statem:start_link(
+      {local, server_ref(Arg)},
+      ?MODULE,
+      [Arg],
+      envy_gen:options(?MODULE)).
+
+
+-spec server_ref(pgmp_dbs_sup:db()) -> gen_statem:server_ref().
+
+server_ref(#{application_name := ApplicationName}) ->
+    pgmp_util:snake_case([binary_to_list(ApplicationName), ?MODULE]).
 
 
 query(Arg) ->
-    pgmp_mm:?FUNCTION_NAME(Arg#{server_ref => ?MODULE}).
+    pgmp_mm:?FUNCTION_NAME(default_server_ref(Arg)).
 
 
 parse(Arg) ->
-    pgmp_mm:?FUNCTION_NAME(Arg#{server_ref => ?MODULE}).
+    pgmp_mm:?FUNCTION_NAME(default_server_ref(Arg)).
 
 
 sync(Arg) ->
-    pgmp_mm:?FUNCTION_NAME(Arg#{server_ref => ?MODULE}).
+    pgmp_mm:?FUNCTION_NAME(default_server_ref(Arg)).
 
 
 bind(Arg) ->
-    pgmp_mm:?FUNCTION_NAME(Arg#{server_ref => ?MODULE}).
+    pgmp_mm:?FUNCTION_NAME(default_server_ref(Arg)).
 
 
 describe(Arg) ->
-    pgmp_mm:?FUNCTION_NAME(Arg#{server_ref => ?MODULE}).
+    pgmp_mm:?FUNCTION_NAME(default_server_ref(Arg)).
 
 
 execute(Arg) ->
-    pgmp_mm:?FUNCTION_NAME(Arg#{server_ref => ?MODULE}).
+    pgmp_mm:?FUNCTION_NAME(default_server_ref(Arg)).
 
 
 parameters(Arg) ->
-    pgmp_mm:?FUNCTION_NAME(Arg#{server_ref => ?MODULE}).
+    pgmp_mm:?FUNCTION_NAME(default_server_ref(Arg)).
 
 
 join(Arg) ->
@@ -82,8 +90,18 @@ send_request(Arg, Action, Config) ->
       maps:without(
         keys(Config),
         maybe_label(
-          Arg#{request => {Action, args(Arg, Config)},
-               server_ref => ?MODULE}))).
+          default_server_ref(
+            Arg#{request => {Action, args(Arg, Config)}})))).
+
+
+default_server_ref(Arg) ->
+    maps:merge(
+      #{server_ref => pgmp_util:snake_case(
+                        [binary_to_list(
+                           pgmp_dbs_sup:default(
+                             application_name)),
+                         ?MODULE])},
+      Arg).
 
 
 maybe_label(#{requests := _, label := _} = Arg) ->
@@ -124,17 +142,17 @@ callback_mode() ->
     handle_event_function.
 
 
-init([]) ->
+init([Arg]) ->
     {ok,
      drained,
-     #{requests => gen_statem:reqids_new(),
-       max => pgmp_config:pool(max),
-       owners => #{},
-       reservations => #{},
-       outstanding => #{},
-       monitors => #{},
-       connections => #{}},
-     nei(census)}.
+     Arg#{requests => gen_statem:reqids_new(),
+          max => pgmp_config:pool(max),
+          owners => #{},
+          reservations => #{},
+          outstanding => #{},
+          monitors => #{},
+          connections => #{}},
+     [nei(pool_sup), nei(census)]}.
 
 handle_event({call, {Owner, _} = From},
              {request, _} = Request,
@@ -200,9 +218,10 @@ handle_event({call, _},
              drained,
              #{max := Max,
                owners := Owners,
+               pool_sup := PoolSup,
                connections := Connections})
              when map_size(Connections) + map_size(Owners) < Max ->
-    {ok, _} = pgmp_pool_sup:start_child(),
+    {ok, _} = pgmp_pool_sup:start_child(PoolSup),
     {keep_state_and_data,
      [postpone,
       nei({telemetry, new, #{count => 1}})]};
@@ -283,6 +302,12 @@ handle_event({call, {Connection, _} = From},
      Data#{connections := Connections#{Connection => State}},
      [{reply, From, ok}, nei(census)]};
 
+
+handle_event(internal, pool_sup, _, Data) ->
+    {keep_state,
+     Data#{pool_sup => pgmp_sup:get_child_pid(
+                         hd(get('$ancestors')),
+                         pool_sup)}};
 
 handle_event(internal,
              {response,

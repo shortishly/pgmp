@@ -185,10 +185,32 @@ database(options = Name) ->
            caller => ?MODULE,
            names => [?FUNCTION_NAME, Name]});
 
+%% URI used to connect to the database; multiple URIs are separarated
+%% with database(uri_separator) [default ";"]
+%%
+database(uri = Name) ->
+    envy(#{type => binary,
+           caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name]});
+
+%% with multiple databases the separator used between each PostgreSQL
+%% connection URI
+%%
+database(uri_separator = Name) ->
+    envy(#{type => list,
+           caller => ?MODULE,
+           default => ";",
+           names => [?FUNCTION_NAME, Name]});
+
+database(application_name = Name) ->
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Name],
+           default => <<"default_application_name">>});
+
 database(hostname = Name) ->
     envy(#{caller => ?MODULE,
            names => [?FUNCTION_NAME, Name],
-           default => "localhost"});
+           default => <<"localhost">>});
 
 database(port = Name) ->
     envy(#{caller => ?MODULE,

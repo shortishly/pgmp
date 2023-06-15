@@ -44,8 +44,16 @@ init_per_suite(Config) ->
             Schema = alpha(5),
             Table = alpha(5),
 
-            {ok, Sup} = pgmp_rep_sup:start_child(Publication),
-            {_, Manager, worker, _} = pgmp_sup:get_child(Sup, manager),
+            [{_, DbSup, supervisor, [pgmp_db_sup]}] = supervisor:which_children(
+                                                        pgmp_sup:get_child_pid(
+                                                          pgmp_sup,
+                                                          dbs_sup)),
+
+            {ok, LogRepSup} = pgmp_db:start_replication_on_publication(
+                                pgmp_sup:get_child_pid(DbSup, db),
+                                Publication),
+
+            {_, Manager, worker, _} = pgmp_sup:get_child(LogRepSup, manager),
 
             [{command_complete,
               create_schema}] = pgmp_connection_sync:query(
@@ -106,6 +114,8 @@ init_per_suite(Config) ->
 
             [{manager, Manager},
              {publication, Publication},
+             {db_sup, DbSup},
+             {rep_sup, pgmp_sup:get_child_pid(DbSup, rep_sup)},
              {schema, Schema},
              {table, Table},
              {replica, table_name(Publication, Schema, Table)} | Config];

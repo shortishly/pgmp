@@ -55,8 +55,8 @@ post_actions(_, #{action := Action}, _) ->
                        orelse Action == execute].
 
 
-terminate(_Reason, _State, #{config := #{group := Group}}) ->
-    pgmp_pg:leave(Group);
+terminate(_Reason, _State, #{config := #{scope := Scope, group := Group}}) ->
+    pg:leave(Scope, Group, self());
 
 terminate(_Reason, _State, _Data) ->
     ok.
@@ -134,19 +134,23 @@ handle_event(internal,
 handle_event(internal, {process, Reply}, _, #{from := _, replies := Rs} = Data) ->
     {keep_state, Data#{replies := [Reply | Rs]}};
 
-handle_event(internal, types_when_ready, _, Data) ->
-    {keep_state, Data#{requests := pgmp_types:when_ready(
-                                     maps:with([requests], Data))}};
+handle_event(internal,
+             types_when_ready,
+             _,
+             #{requests := Requests, config := Config} = Data) ->
+    {keep_state,
+     Data#{requests := pgmp_types:when_ready(
+                         #{requests => Requests,
+                           server_ref => pgmp_types:server_ref(Config)})}};
 
 handle_event(enter,
              _,
              {ready_for_query, State},
              #{requests := Requests,
-               config := #{group := _}} = Data) ->
+               config := #{group := _} = Config} = Data) ->
     {keep_state,
      maps:with(
-       [ancestors,
-        backend,
+       [backend,
         cache,
         config,
         parameters,
@@ -156,6 +160,7 @@ handle_event(enter,
         types_ready],
        Data#{requests => pgmp_connection:ready_for_query(
                            #{state => State,
+                             server_ref => pgmp_connection:server_ref(Config),
                              requests => Requests})})};
 
 handle_event(enter,
@@ -164,8 +169,7 @@ handle_event(enter,
              Data) ->
     {keep_state,
      maps:with(
-       [ancestors,
-        backend,
+       [backend,
         cache,
         config,
         parameters,

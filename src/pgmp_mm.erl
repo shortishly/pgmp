@@ -162,10 +162,11 @@ init([Arg]) ->
     process_flag(trap_exit, true),
     {ok,
      unready,
-     Arg#{cache => ets:new(?MODULE, []),
-          requests => gen_statem:reqids_new(),
-          types_ready => false,
-          parameters => #{}},
+     #{cache => ets:new(?MODULE, []),
+       requests => gen_statem:reqids_new(),
+       types_ready => false,
+       config => Arg,
+       parameters => #{}},
      [{change_callback_module, pgmp_mm_bootstrap},
       nei(join),
       nei(types_when_ready),
@@ -176,8 +177,8 @@ callback_mode() ->
     [handle_event_function, state_enter].
 
 
-terminate(_Reason, _State, #{config := #{group := Group}}) ->
-    pgmp_pg:leave(Group);
+terminate(_Reason, _State, #{config := #{scope := Scope, group := Group}}) ->
+    pg:leave(Scope, Group, self());
 
 terminate(_Reason, _State, _Data) ->
     ok.

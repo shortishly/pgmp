@@ -21,7 +21,7 @@
 -export([terminate/3]).
 -import(pgmp_codec, [marshal/2]).
 -import(pgmp_codec, [size_inclusive/1]).
--import(pgmp_data_row, [decode/2]).
+-import(pgmp_data_row, [decode/3]).
 -import(pgmp_statem, [cancel_generic_timeout/1]).
 -import(pgmp_statem, [generic_timeout/1]).
 -import(pgmp_statem, [nei/1]).
@@ -128,7 +128,9 @@ handle_event(internal,
                 x_log := XLog,
                 tuple := Values} = Arg},
              _,
-             #{relations := Relations, parameters := Parameters}) ->
+             #{relations := Relations,
+               config := Config,
+               parameters := Parameters}) ->
     ?LOG_DEBUG(#{Change => Arg}),
     #{Relation := #{columns := Columns} = Detail}  = Relations,
     {keep_state_and_data,
@@ -136,7 +138,7 @@ handle_event(internal,
            Change,
            #{relation => relation(Detail),
              x_log => XLog,
-             tuple => row_tuple(Parameters, Columns, Values)}}),
+             tuple => row_tuple(Config, Parameters, Columns, Values)}}),
 
       nei({rep_telemetry,
            Change,
@@ -149,7 +151,9 @@ handle_event(internal,
                 x_log := XLog,
                 new := Values} = Arg},
              _,
-             #{relations := Relations, parameters := Parameters}) ->
+             #{relations := Relations,
+               config := Config,
+               parameters := Parameters}) ->
     ?LOG_DEBUG(#{Change => Arg}),
     #{Relation := #{columns := Columns} = Detail} = Relations,
     {keep_state_and_data,
@@ -157,7 +161,7 @@ handle_event(internal,
            Change,
            #{relation => relation(Detail),
              x_log => XLog,
-             tuple => row_tuple(Parameters, Columns, Values)}}),
+             tuple => row_tuple(Config, Parameters, Columns, Values)}}),
 
       nei({rep_telemetry,
            Change,
@@ -168,7 +172,9 @@ handle_event(internal,
              {delete = Change,
               #{relation := Relation, x_log := XLog, key := Values} = Arg},
              _,
-             #{relations := Relations, parameters := Parameters}) ->
+             #{relations := Relations,
+               config := Config,
+               parameters := Parameters}) ->
     ?LOG_DEBUG(#{Change => Arg}),
     #{Relation := #{columns := Columns} = Detail} = Relations,
     {keep_state_and_data,
@@ -176,7 +182,7 @@ handle_event(internal,
            Change,
            #{relation => relation(Detail),
              x_log => XLog,
-             tuple => row_tuple(Parameters, Columns, Values)}}),
+             tuple => row_tuple(Config, Parameters, Columns, Values)}}),
 
       nei({rep_telemetry,
            Change,
@@ -326,7 +332,8 @@ handle_event(internal,
 handle_event(internal,
              manager,
              _,
-             #{config := Config, ancestors :=  [_, LogicalSup]} = Data) ->
+             #{config := Config} = Data) ->
+    [_, LogicalSup | _] = get('$ancestors'),
     case pgmp_sup:get_child(LogicalSup, manager) of
         {_, Manager, worker, _} when is_pid(Manager) ->
             {keep_state,
@@ -450,6 +457,7 @@ handle_event(internal,
              {recv, {data_row, Values}},
              State,
              #{parameters := Parameters,
+               config := Config,
                columns := Columns} = Data) ->
     {keep_state,
      maps:put(State,
@@ -462,7 +470,8 @@ handle_event(internal,
                 lists:zip(Columns,
                           decode(
                             Parameters,
-                            lists:zip(Columns, Values)))),
+                            lists:zip(Columns, Values),
+                            pgmp_types:cache(Config)))),
               Data)};
 
 handle_event(internal, {query, SQL}, _, _) ->
@@ -519,7 +528,7 @@ handle_event(EventType, EventContent, State, Data) ->
                                 Data).
 
 
-row_tuple(Parameters, Columns, Values) ->
+row_tuple(Config, Parameters, Columns, Values) ->
     list_to_tuple(
       pgmp_data_row:decode(
         Parameters,
@@ -531,7 +540,8 @@ row_tuple(Parameters, Columns, Values) ->
               ({#{type := Type}, #{format := Format, value := Value}}) ->
                   {#{format => Format, type_oid => Type}, Value}
           end,
-          lists:zip(Columns, Values)))).
+          lists:zip(Columns, Values)),
+        pgmp_types:cache(Config))).
 
 
 b(false) -> 0;
@@ -556,6 +566,7 @@ create_slot_options(ProtoVersion) when ProtoVersion >= 3 ->
                        [A,
                         [", " || A /= []],
                         slot_option_name(Option)];
+
                    Value ->
                        [A,
                         [", " || A /= []],

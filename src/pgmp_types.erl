@@ -16,14 +16,15 @@
 -module(pgmp_types).
 
 
--export([cache/0]).
+%% -export([write_file/1]).
+-behaviour(gen_statem).
+-export([cache/1]).
 -export([callback_mode/0]).
 -export([handle_event/4]).
 -export([init/1]).
--export([start_link/0]).
+-export([server_ref/1]).
 -export([start_link/1]).
 -export([when_ready/1]).
--export([write_file/1]).
 -export_type([cache/0]).
 -import(pgmp_statem, [nei/1]).
 -include("pgmp_types.hrl").
@@ -32,23 +33,25 @@
 -type cache() :: #{pgmp:oid() => #{binary() => any()}}.
 
 
-start_link() ->
-    ?FUNCTION_NAME(#{}).
-
-
 start_link(Arg) ->
-    gen_statem:start_link({local, ?MODULE},
-                          ?MODULE,
-                          [Arg],
-                          envy_gen:options(?MODULE)).
+    gen_statem:start_link(
+      {local, server_ref(Arg)},
+      ?MODULE,
+      [Arg],
+      envy_gen:options(?MODULE)).
+
+
+-spec server_ref(pgmp_dbs_sup:db()) -> gen_statem:server_ref().
+
+server_ref(#{application_name := ApplicationName}) ->
+    pgmp_util:snake_case([binary_to_list(ApplicationName), ?MODULE]).
 
 
 when_ready(Arg) ->
     send_request(
       maps:merge(
         Arg,
-        #{server_ref => ?MODULE,
-          request => ?FUNCTION_NAME})).
+        #{request => ?FUNCTION_NAME})).
 
 
 send_request(#{label := _} = Arg) ->
@@ -58,26 +61,30 @@ send_request(Arg) ->
     pgmp_statem:send_request(Arg#{label => ?MODULE}).
 
 
-write_file(Filename) ->
-    {ok, Header} = file:read_file("HEADER.txt"),
+%% write_file(Filename) ->
+%%     {ok, Header} = file:read_file("HEADER.txt"),
 
-    file:write_file(
-      Filename,
-      [io_lib:fwrite("%% -*- mode: erlang -*-~n", []),
-       Header,
-       maps:fold(
-         fun
-             (K, V, A) ->
-                 [io_lib:fwrite("~n~p.~n", [{K, V}]) | A]
-         end,
-         [],
-         cache())]).
+%%     file:write_file(
+%%       Filename,
+%%       [io_lib:fwrite("%% -*- mode: erlang -*-~n", []),
+%%        Header,
+%%        maps:fold(
+%%          fun
+%%              (K, V, A) ->
+%%                  [io_lib:fwrite("~n~p.~n", [{K, V}]) | A]
+%%          end,
+%%          [],
+%%          cache())]).
 
 
--spec cache() -> cache().
+-spec cache(pgmp_dbs_sup:db()) -> cache().
 
-cache() ->
-    persistent_term:get(?MODULE).
+cache(Arg) ->
+    persistent_term:get(persistent_term_name(Arg)).
+
+
+persistent_term_name(#{application_name := ApplicationName}) ->
+    pgmp_util:snake_case([binary_to_list(ApplicationName), ?MODULE]).
 
 
 init([Arg]) ->
@@ -85,8 +92,9 @@ init([Arg]) ->
         true ->
             {ok,
              unready,
-             Arg#{cache => ets:new(?MODULE, []),
-                  requests => gen_statem:reqids_new()},
+             #{cache => ets:new(?MODULE, []),
+               config => Arg,
+               requests => gen_statem:reqids_new()},
              nei(refresh)};
 
         false ->
@@ -104,11 +112,15 @@ handle_event({call, _}, when_ready, unready, _) ->
 handle_event({call, From}, when_ready, ready, _) ->
     {keep_state_and_data, {reply, From, ready}};
 
-handle_event(internal, refresh, _, #{requests := Requests} = Data) ->
+handle_event(internal,
+             refresh,
+             _,
+             #{config := Config, requests := Requests} = Data) ->
     {keep_state,
      Data#{requests := pgmp_connection:query(
                          #{sql=> <<?TYPE_SQL>>,
                            label => types,
+                           server_ref => pgmp_connection:server_ref(Config),
                            requests => Requests})}};
 
 handle_event(info, Msg, _, #{requests := Existing} = Data) ->
@@ -135,9 +147,9 @@ handle_event(internal,
 handle_event(internal,
              {command_complete, {select, _}},
              _,
-             #{cache := Cache} = Data) ->
+             #{config := Config, cache := Cache} = Data) ->
     persistent_term:put(
-      ?MODULE,
+      persistent_term_name(Config),
       ets:foldl(
         fun
             ({{type, OID}, Description}, A) ->

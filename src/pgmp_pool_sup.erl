@@ -18,13 +18,13 @@
 
 -behaviour(supervisor).
 -export([init/1]).
--export([start_child/0]).
+-export([start_child/1]).
 -export([start_link/1]).
 -import(pgmp_sup, [supervisor/1]).
 
 
 start_link(Arg) ->
-    supervisor:start_link({local, ?MODULE}, ?MODULE, [Arg]).
+    supervisor:start_link(?MODULE, [Arg]).
 
 
 init([Arg]) ->
@@ -41,8 +41,8 @@ configuration(Children) ->
 children(Arg) ->
     [supervisor(#{m => pgmp_pool_connection_sup,
                   restart => temporary,
-                  args => [Arg#{supervisor => self()}]})].
+                  args => [Arg]})].
 
 
-start_child() ->
-    supervisor:start_child(?MODULE, []).
+start_child(Sup) ->
+    supervisor:start_child(Sup, []).

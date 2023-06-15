@@ -21,7 +21,7 @@
 -export([terminate/3]).
 -import(pgmp_codec, [marshal/2]).
 -import(pgmp_codec, [size_inclusive/1]).
--import(pgmp_data_row, [decode/2]).
+-import(pgmp_data_row, [decode/3]).
 -import(pgmp_mm_common, [actions/3]).
 -import(pgmp_mm_common, [data/3]).
 -import(pgmp_mm_common, [field_names/1]).
@@ -125,7 +125,9 @@ handle_event(internal,
                ParameterFormat,
                ResultFormat]},
              bind = Action,
-             #{cache := Cache, parameters := Parameters} = Data) ->
+             #{config := Config,
+               cache := Cache,
+               parameters := Parameters} = Data) ->
     try
         case ets:lookup(Cache, {parameter_description, Statement}) of
             [] ->
@@ -183,7 +185,8 @@ handle_event(internal,
                                                 Parameters,
                                                 [{#{format => ParameterFormat,
                                                     type_oid => TypeOID},
-                                                  Value}]),
+                                                  Value}],
+                                               pgmp_types:cache(Config)),
                                     [A,
                                      marshal(int32, iolist_size(Encoded)),
                                      Encoded]
@@ -237,10 +240,16 @@ handle_event(internal,
 handle_event(internal,
              {recv = EventName, {data_row = Tag, Columns}},
              execute,
-             #{parameters := Parameters, types := Types}) ->
+             #{config := Config,
+               parameters := Parameters,
+               types := Types}) ->
     {keep_state_and_data,
      [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
-      nei({process, {Tag, decode(Parameters, lists:zip(Types, Columns))}})]};
+      nei({process,
+           {Tag,
+            decode(Parameters,
+                   lists:zip(Types, Columns),
+                   pgmp_types:cache(Config))}})]};
 
 handle_event(internal,
              {recv = EventName, {parse_complete = Tag, _}},
@@ -386,6 +395,7 @@ handle_event(internal,
              {recv = EventName, {data_row = Tag, Columns}},
              execute,
              #{args := [Portal, _],
+               config := Config,
                parameters := Parameters,
                cache := Cache} = Data) ->
     [{_, Types}] = ets:lookup(Cache, {row_description, Portal}),
@@ -393,7 +403,7 @@ handle_event(internal,
      Data#{types => Types},
      [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
       nei({process, {row_description, field_names(Types)}}),
-      nei({process, {Tag, decode(Parameters, lists:zip(Types, Columns))}})]};
+      nei({process, {Tag, decode(Parameters, lists:zip(Types, Columns), pgmp_types:cache(Config))}})]};
 
 handle_event(internal,
              {recv = EventName,

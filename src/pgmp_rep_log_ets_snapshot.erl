@@ -18,7 +18,7 @@
 
 -export([callback_mode/0]).
 -export([handle_event/4]).
--import(pgmp_rep_log_ets_common, [insert_new/5]).
+-import(pgmp_rep_log_ets_common, [insert_new/6]).
 -import(pgmp_rep_log_ets_common, [metadata/4]).
 -import(pgmp_rep_log_ets_common, [new_table/4]).
 -import(pgmp_statem, [nei/1]).
@@ -221,7 +221,7 @@ handle_event(internal,
                 reply := [{parameter_description,[]},
                           {row_description, Columns}]}},
              describe,
-             #{metadata := Metadata} = Data) ->
+             #{metadata := Metadata, config := Config} = Data) ->
     {next_state,
      unready,
      Data#{metadata := metadata(
@@ -233,7 +233,7 @@ handle_event(internal,
                            oids,
                            [OID || #{type_oid := OID} <- Columns],
                            Metadata))},
-     nei({bind, #{label => Label, result => column_format(Columns)}})};
+     nei({bind, #{label => Label, result => column_format(Config, Columns)}})};
 
 handle_event(internal,
              {response, #{label := {table, _},
@@ -250,11 +250,13 @@ handle_event(internal,
                           reply := [{row_description, Columns} | T]}},
              execute,
              #{metadata := Metadata,
-               config := #{publication := Publication}} = Data) ->
+               config := #{scope := Scope,
+                           publication := Publication}} = Data) ->
 
     #{{Namespace, Name} := #{keys := Keys}} = Metadata,
 
     ok = insert_new(
+           Scope,
            Publication,
            Namespace,
            Name,
@@ -315,7 +317,7 @@ handle_event(internal, {set_transaction_snapshot = Label, Id}, _, _) ->
 handle_event(internal,
              {Action, Arg},
              unready,
-             #{requests := Requests} = Data)
+             #{requests := Requests, config := Config} = Data)
   when Action == query;
        Action == parse;
        Action == bind;
@@ -324,7 +326,9 @@ handle_event(internal,
     {next_state,
      Action,
      Data#{requests := pgmp_connection:Action(
-                         Arg#{requests => Requests})}};
+                         Arg#{requests => Requests,
+                              server_ref => pgmp_connection:server_ref(
+                                              Config)})}};
 
 handle_event(internal, {Action, _}, _, _)
   when Action == query;
@@ -376,8 +380,8 @@ pub_fetch_columns(#{<<"attnames">> := Attributes}) ->
 pub_fetch_columns(#{}) ->
     "*".
 
-column_format(Columns) ->
-    Types = pgmp_types:cache(),
+column_format(Config, Columns) ->
+    Types = pgmp_types:cache(Config),
     case lists:any(
            fun
                (OID) ->

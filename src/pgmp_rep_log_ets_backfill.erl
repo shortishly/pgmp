@@ -81,7 +81,7 @@ handle_event(internal,
 handle_event(internal,
              {Action, Arg},
              unready,
-             #{requests := Requests} = Data)
+             #{config := Config, requests := Requests} = Data)
   when Action == query;
        Action == parse;
        Action == bind;
@@ -90,7 +90,8 @@ handle_event(internal,
     {next_state,
      Action,
      Data#{requests := pgmp_connection:Action(
-                         Arg#{requests => Requests})}};
+                         Arg#{server_ref => pgmp_connection:server_ref(Config),
+                              requests => Requests})}};
 
 
 handle_event(internal,
@@ -198,7 +199,8 @@ handle_event(internal,
                             name := Name}},
                 reply := [{row_description, Columns}]}},
              describe,
-             #{config := #{publication := Publication},
+             #{config := #{scope := Scope,
+                           publication := Publication},
                metadata := Metadata} = Data) ->
     {next_state,
      unready,
@@ -212,7 +214,7 @@ handle_event(internal,
                            [OID || #{type_oid := OID} <- Columns],
                            Metadata))},
      nei({notify,
-          pgmp_pg:get_members([pgmp_rep_log_ets, Publication, notifications]),
+          pg:get_members(Scope, [pgmp_rep_log_ets, Publication, notifications]),
           #{action => add, relation => table_name(Publication, Namespace, Name)}})};
 
 handle_event(internal, {notify, [], _}, _, _) ->

@@ -48,8 +48,9 @@ init([Arg]) ->
     process_flag(trap_exit, true),
     {ok,
      disconnected,
-     Arg#{requests => gen_statem:reqids_new(),
-          telemetry => #{db => #{system => postgresql}}}}.
+     #{requests => gen_statem:reqids_new(),
+       config => Arg,
+       telemetry => #{db => #{system => postgresql}}}}.
 
 
 callback_mode() ->
@@ -222,12 +223,15 @@ handle_event(internal,
           #{count => 1, bytes => iolist_size(Message)},
           #{tag => pgmp_message_tags:name(backend, Tag)}})};
 
-handle_event(internal, connect, _, _) ->
+handle_event(internal,
+             connect,
+             _,
+             #{config := #{host := Host, port := Port}}) ->
     {keep_state_and_data,
      nei({connect,
           #{family => inet,
-            port => pgmp_config:database(port),
-            addr => addr()}})};
+            port => Port,
+            addr => addr(Host)}})};
 
 handle_event(internal,
              {connect = EventName,
@@ -263,12 +267,8 @@ terminate(_Reason, _State, _Data) ->
     ok.
 
 
-addr() ->
-    ?FUNCTION_NAME(pgmp_config:database(hostname)).
-
-
 addr(Hostname) ->
-    case inet:gethostbyname(Hostname) of
+    case inet:gethostbyname(binary_to_list(Hostname)) of
         {ok, #hostent{h_addr_list = Addresses}} ->
             pick_one(Addresses);
 
