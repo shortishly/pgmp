@@ -10,7 +10,10 @@ jobs:
     strategy:
       matrix:
         otp: ['25', '26']
-        postgres: ['14', '15', '16beta2']
+        pg:
+          - 'postgres:14'
+          - 'postgres:15'
+          - 'postgres:16beta2'
     steps:
       - uses: actions/checkout@v3
       - run: >-
@@ -20,7 +23,7 @@ jobs:
           up
           --detach
         env:
-          POSTGRES_VERSION: ${{matrix.postgres}}
+          POSTGRES_IMAGE: ${{matrix.pg}}
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{matrix.otp}}
@@ -33,5 +36,5 @@ jobs:
           PGMP_DATABASE_PASSWORD: postgres
       - uses: actions/upload-artifact@v3
         with:
-          name: ct-logs-otp-${{matrix.otp}}-pg-${{matrix.postgres}}
+          name: ct-logs-otp-${{matrix.otp}}-pg-${{matrix.pg}}
           path: logs

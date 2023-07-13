@@ -2,7 +2,7 @@
 services:
   postgres:
     image:
-      postgres:${POSTGRES_VERSION}
+      ${POSTGRES_IMAGE}
     environment:
       PGUSER: postgres
       POSTGRES_PASSWORD: postgres
