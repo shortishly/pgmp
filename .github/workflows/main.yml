@@ -10,7 +10,7 @@ jobs:
     strategy:
       matrix:
         otp: ['25', '26']
-        postgres: ['14', '15', '16beta1']
+        postgres: ['14', '15', '16beta2']
     steps:
       - uses: actions/checkout@v3
       - run: >-
