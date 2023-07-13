@@ -14,6 +14,7 @@ jobs:
           - 'postgres:14'
           - 'postgres:15'
           - 'postgres:16beta2'
+          - 'postgis/postgis:15-3.3'
     steps:
       - uses: actions/checkout@v3
       - run: >-
@@ -34,7 +35,13 @@ jobs:
           PGMP_DATABASE_USER: postgres
           PGMP_DATABASE_NAME: postgres
           PGMP_DATABASE_PASSWORD: postgres
+      - run: |
+          echo MATRIX_OTP="${{matrix.otp}}" >> $GITHUB_ENV
+      - run: |
+          echo MATRIX_PG="${{matrix.pg}}" >> $GITHUB_ENV
+      - run: |
+          echo ARTIFACT_NAME="ct-logs-otp-${MATRIX_OTP}-pg-${MATRIX_PG//[:\/]/-}" >> $GITHUB_ENV
       - uses: actions/upload-artifact@v3
         with:
-          name: ct-logs-otp-${{matrix.otp}}-pg-${{matrix.pg}}
+          name: ${{env.ARTIFACT_NAME}}
           path: logs
