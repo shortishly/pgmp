@@ -156,6 +156,7 @@ handle_event(internal,
                          measurements := Measurements} = Span} = Data)
   when is_atom(Command),
        is_integer(Rows) ->
+    ?LOG_DEBUG(#{tm => TM}),
     {keep_state,
      Data#{span := Span#{metadata := Metadata#{command => Command},
                          measurements := Measurements#{rows => Rows}}},
@@ -184,10 +185,37 @@ handle_event(internal,
   when Tag == empty_query_response;
        Tag == error_response;
        Tag == command_complete ->
+    ?LOG_DEBUG(#{tm => TM}),
     {keep_state_and_data,
      [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
       nei({process, TM}),
       nei(complete)]};
+
+handle_event(internal,
+             {recv = EventName, {copy_out_response = Tag, Response} = TM},
+             query,
+             _) ->
+    ?LOG_DEBUG(#{tm => TM}),
+    {keep_state_and_data,
+     [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
+      nei({process, {Tag, Response}})]};
+
+handle_event(internal,
+             {recv = EventName, {copy_data = Tag, Row} = TM},
+             query,
+             _) ->
+    ?LOG_DEBUG(#{tm => TM}),
+    {keep_state_and_data,
+     [nei({telemetry, EventName, #{count => 1}, #{tag => Tag}}),
+      nei({process, {Tag, Row}})]};
+
+handle_event(internal,
+             {recv = EventName, {copy_done = Tag, _} = TM},
+             query,
+             _) ->
+    ?LOG_DEBUG(#{tm => TM}),
+    {keep_state_and_data,
+     nei({telemetry, EventName, #{count => 1}, #{tag => Tag}})};
 
 handle_event(internal,
              {recv = EventName,

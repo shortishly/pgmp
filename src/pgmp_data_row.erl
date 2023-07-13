@@ -75,6 +75,7 @@
 -spec decode(pgmp:parameters(), [encoded()], pgmp_types:cache()) -> [decoded()].
 
 decode(Parameters, TypeValue, Types) ->
+    ?LOG_DEBUG(#{parameters => Parameters, type_value => TypeValue}),
     ?FUNCTION_NAME(Parameters, TypeValue, Types, []).
 
 
@@ -591,6 +592,9 @@ triple(X, Y, Z) ->
 %% encode(Parameters, TypeValue) ->
 %%     ?FUNCTION_NAME(Parameters, TypeValue, pgmp_types:cache()).
 
+
+-spec encode(map(), [{type_format(), any()}], pgmp_types:cache()) -> iodata().
+
 encode(Parameters, TypeValue, Types) ->
     ?FUNCTION_NAME(Parameters, TypeValue, Types, []).
 
@@ -1034,7 +1038,19 @@ array_send(
            (V) ->
                size_exclusive(encode(Parameters, Format, Types, Type, V))
        end,
-       L)].
+       L)];
+
+array_send(Parameters, text = Format, Types, Type, L) ->
+    ["{",
+     lists:join(
+       ",",
+       lists:map(
+         fun
+             (Value) ->
+                 encode(Parameters, Format, Types, Type, Value)
+         end,
+         L)),
+     "}"].
 
 
 null_bitmap(L) ->

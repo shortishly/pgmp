@@ -22,13 +22,17 @@
 -export([size_exclusive/1]).
 -export([size_inclusive/1]).
 -export_type([command_complete_response/0]).
+-export_type([row_description/0]).
+-include_lib("kernel/include/logger.hrl").
 
+
+-type pg_integer() :: int8
+                    | int16
+                    | int32
+                    | int64.
 
 -type type() :: {byte, pos_integer()}
-              | int8
-              | int16
-              | int32
-              | int64
+              | pg_integer()
               | {int, pgmp:int_bit_sizes()}
               | clock
               | string
@@ -53,6 +57,7 @@
               | data_row.
 
 demarshal({Type, Encoded}) ->
+    ?LOG_DEBUG(#{type => Type, encoded => Encoded}),
     ?FUNCTION_NAME(Type, Encoded).
 
 -type x_log_begin_transaction() :: #{final_lsn := pgmp:int64(),
@@ -108,6 +113,16 @@ demarshal({Type, Encoded}) ->
                     | {delete, x_log_delete()}
                     | {truncate, x_log_truncate()}.
 
+-type startup() :: #{major := integer(),
+                     minor := integer(),
+                     parameters := #{binary() => binary()}}.
+
+-type copy_both_response() :: #{format := text | binary,
+                                n_of_cols := non_neg_integer()}.
+
+-type copy_out_response() :: #{format := text | binary,
+                               col_formats := [text | binary]}.
+
 -spec demarshal(nonempty_list(type()), binary()) -> {[any()], binary()};
                ({byte, pos_integer()}, binary()) -> {binary(), binary()};
                ({int, 8}, binary()) -> {pgmp:int8(), binary()};
@@ -129,11 +144,17 @@ demarshal({Type, Encoded}) ->
                (error_response, binary()) -> {any(), binary()};
                (authentication, binary()) -> {any(), binary()};
                (parameter_description, binary()) -> {[pgmp:int32()], binary()};
+               (password, binary()) -> {binary(), binary()};
+               (startup, binary()) -> {startup(), binary()};
                (x_log_data, binary()) -> {x_log_data(), binary()};
                (tuple_data, binary()) -> {[tuple_data()], binary()};
+               (pairs, binary()) -> {#{}, binary()};
+               (copy_out_response, binary()) -> {copy_out_response(), binary()};
+               (copy_both_response, binary()) -> {copy_both_response(), binary()};
                (copy_data, binary()) -> {{x_log_data, x_log_data()}, binary()}.
 
 demarshal(Types, Encoded) when is_list(Types) ->
+    ?LOG_DEBUG(#{types => Types, encoded => Encoded}),
     lists:mapfoldl(fun demarshal/2, Encoded, Types);
 
 demarshal({byte, N}, Encoded) ->
@@ -184,6 +205,7 @@ demarshal(parameter_description, Encoded) ->
     ?FUNCTION_NAME(lists:duplicate(N, int32), R0);
 
 demarshal(x_log_data, <<"B", BeginMessage/bytes>>) ->
+    ?LOG_DEBUG(#{start_transaction => BeginMessage}),
     {Decoded, Remainder} =  ?FUNCTION_NAME(
                                [final_lsn, commit_timestamp, xid],
                                [int64, int64, int32],
@@ -191,6 +213,7 @@ demarshal(x_log_data, <<"B", BeginMessage/bytes>>) ->
     {{begin_transaction, Decoded}, Remainder};
 
 demarshal(x_log_data, <<"M", LogicalDecoding/bytes>>) ->
+    ?LOG_DEBUG(#{logical => LogicalDecoding}),
     {Decoded, Remainder} =  ?FUNCTION_NAME(
                                [xid, flags, lsn, prefix, content],
                                [int32, int8, int64, string, int32],
@@ -198,6 +221,7 @@ demarshal(x_log_data, <<"M", LogicalDecoding/bytes>>) ->
     {{logical_decoding, Decoded}, Remainder};
 
 demarshal(x_log_data, <<"C", CommitMessage/bytes>>) ->
+    ?LOG_DEBUG(#{commit => CommitMessage}),
     {Decoded, Remainder} =  ?FUNCTION_NAME(
                                [flags, commit_lsn, end_lsn, commit_timestamp],
                                [int8, int64, int64, int64],
@@ -205,6 +229,7 @@ demarshal(x_log_data, <<"C", CommitMessage/bytes>>) ->
     {{commit, Decoded}, Remainder};
 
 demarshal(x_log_data, <<"O", OriginMessage/bytes>>) ->
+    ?LOG_DEBUG(#{origin => OriginMessage}),
     {Decoded, Remainder} = ?FUNCTION_NAME(
                               [commit_lsn, name],
                               [int64, string],
@@ -212,6 +237,7 @@ demarshal(x_log_data, <<"O", OriginMessage/bytes>>) ->
     {{origin, Decoded}, Remainder};
 
 demarshal(x_log_data, <<"R", RelationMessage/bytes>>) ->
+    ?LOG_DEBUG(#{relation => RelationMessage}),
     {Relation, R0} = ?FUNCTION_NAME(
                         [id, namespace, name, replica_identity, ncols],
                         [int32, string, string, int8, int16],
@@ -231,35 +257,42 @@ demarshal(x_log_data, <<"R", RelationMessage/bytes>>) ->
     {{relation, Relation#{columns => Columns}}, <<>>};
 
 demarshal(x_log_data, <<"Y", TypeMessage/bytes>>) ->
+    ?LOG_DEBUG(#{type => TypeMessage}),
     {Decoded, Remainder} = ?FUNCTION_NAME([xid, type, namespace, name],
                                           [in32, int32, string, string],
                                           TypeMessage),
     {{type, Decoded}, Remainder};
 
 demarshal(x_log_data, <<"I", Id:32, "N", TupleData/bytes>>) ->
+    ?LOG_DEBUG(#{id => Id, tuple => TupleData}),
     {Tuple, Remainder} = ?FUNCTION_NAME(tuple_data, TupleData),
     {{insert, #{relation => Id, tuple => Tuple}}, Remainder};
 
 demarshal(x_log_data, <<"U", Relation:32, "K", KeyData/bytes>>) ->
+    ?LOG_DEBUG(#{update => Relation, key => KeyData}),
     {Key, <<"N", NewData/bytes>>} = ?FUNCTION_NAME(tuple_data, KeyData),
     {New, Remainder} = ?FUNCTION_NAME(tuple_data, NewData),
     {{update, #{key => Key, relation => Relation, new => New}}, Remainder};
 
 demarshal(x_log_data, <<"U", Relation:32, "N", NewData/bytes>>) ->
+    ?LOG_DEBUG(#{update => Relation, new => NewData}),
     {New, Remainder} = ?FUNCTION_NAME(tuple_data, NewData),
     {{update, #{relation => Relation, new => New}}, Remainder};
 
 demarshal(x_log_data, <<"D", Relation:32, "K", KeyData/bytes>>) ->
+    ?LOG_DEBUG(#{update => Relation, delete => KeyData}),
     {Key, Remainder} = ?FUNCTION_NAME(tuple_data, KeyData),
     {{delete, #{key => Key, relation => Relation}}, Remainder};
 
 demarshal(x_log_data, <<"T", N:32, Options:8, Data/bytes>>) ->
+    ?LOG_DEBUG(#{truncate => Data}),
     {Relations, Remainder} = ?FUNCTION_NAME(
                                 lists:duplicate(N, int32),
                                 Data),
     {{truncate, #{options => Options, relations => Relations}}, Remainder};
 
 demarshal(x_log_data, <<"b", BeginPrepare/bytes>>) ->
+    ?LOG_DEBUG(#{begin_prepare => BeginPrepare}),
     {Decoded, Remainder} = ?FUNCTION_NAME(
                               [lsn, end_lsn, timestamp, xid, gid],
                               [int64, int64, int64, int32, string],
@@ -267,6 +300,7 @@ demarshal(x_log_data, <<"b", BeginPrepare/bytes>>) ->
     {{begin_prepare, Decoded}, Remainder};
 
 demarshal(x_log_data, <<"P", Prepare/bytes>>) ->
+    ?LOG_DEBUG(#{prepare => Prepare}),
     {Decoded, Remainder} = ?FUNCTION_NAME(
                               [flags, lsn, end_lsn, timestamp, xid, gid],
                               [int8, int64, int64, int64, int32, string],
@@ -274,6 +308,7 @@ demarshal(x_log_data, <<"P", Prepare/bytes>>) ->
     {{prepare, Decoded}, Remainder};
 
 demarshal(x_log_data, <<"K", CommitPrepared/bytes>>) ->
+    ?LOG_DEBUG(#{commit_prepared => CommitPrepared}),
     {Decoded, Remainder} = ?FUNCTION_NAME(
                               [flags, lsn, end_lsn, timestamp, xid, gid],
                               [int8, int64, int64, int64, int32, string],
@@ -281,6 +316,7 @@ demarshal(x_log_data, <<"K", CommitPrepared/bytes>>) ->
     {{commit_prepared, Decoded}, Remainder};
 
 demarshal(x_log_data, <<"r", RollbackPrepared/bytes>>) ->
+    ?LOG_DEBUG(#{rollback_prepared => RollbackPrepared}),
     {Decoded, Remainder} = ?FUNCTION_NAME(
                               [flags,
                                prepared_end_lsn,
@@ -294,9 +330,11 @@ demarshal(x_log_data, <<"r", RollbackPrepared/bytes>>) ->
     {{rollback_prepared, Decoded}, Remainder};
 
 demarshal(tuple_data, <<Columns:16, TupleData/bytes>>) ->
+    ?LOG_DEBUG(#{columns => Columns, tuple => TupleData}),
     ?FUNCTION_NAME(tuple_data, Columns, TupleData, []);
 
 demarshal(copy_data, <<"w", XLogData/bytes>>) ->
+    ?LOG_DEBUG(#{x_log => XLogData}),
     {Decoded, Stream} = ?FUNCTION_NAME(
                            [start_wal, end_wal, clock],
                            [int64, int64, int64],
@@ -305,6 +343,7 @@ demarshal(copy_data, <<"w", XLogData/bytes>>) ->
     {{x_log_data, Decoded#{stream => WAL}}, Remainder};
 
 demarshal(copy_data, <<"k", PrimaryKeepalive/bytes>>) ->
+    ?LOG_DEBUG(#{primary_keepalive => PrimaryKeepalive}),
     {Decoded, Remainder} = ?FUNCTION_NAME(
                               [end_wal, clock, reply],
                               [int64, int64, {byte, 1}],
@@ -324,10 +363,58 @@ demarshal(copy_data, <<"k", PrimaryKeepalive/bytes>>) ->
         Decoded)},
      Remainder};
 
-demarshal(copy_data, Encoded) ->
+demarshal(copy_data, <<"r", StandbyStatusUpdate/bytes>>) ->
+    ?LOG_DEBUG(#{standby_status_update => StandbyStatusUpdate}),
+    {Decoded, Remainder} = ?FUNCTION_NAME(
+                              [written,
+                               flushed,
+                               applied,
+                               clock,
+                               reply],
+                              [int64,
+                               int64,
+                               int64,
+                               int64,
+                               {byte, 1}],
+                           StandbyStatusUpdate),
+    {{standby_status_update,
+      maps:map(
+        fun
+            (reply, <<0:8>>) ->
+                false;
+
+            (reply, <<1:8>>) ->
+                true;
+
+            (_, V) ->
+                V
+        end,
+        Decoded)},
+     Remainder};
+
+demarshal(copy_data = Tag, Encoded) ->
+    ?LOG_DEBUG(#{Tag => Encoded}),
     {Encoded, <<>>};
 
-demarshal(copy_both_response, Encoded) ->
+demarshal(copy_out_response = Tag, Encoded) ->
+    ?LOG_DEBUG(#{Tag => Encoded}),
+    {[Format, NumOfCols], R0} = ?FUNCTION_NAME([int8, int16], Encoded),
+    {ColFormats, R1} = ?FUNCTION_NAME(
+                          lists:duplicate(NumOfCols, int16),
+                          R0),
+
+    {#{format => text_binary(Format),
+       col_formats => lists:map(
+                        fun text_binary/1,
+                        ColFormats)},
+     R1};
+
+demarshal(copy_done = Tag, Encoded) ->
+    ?LOG_DEBUG(#{Tag => Encoded}),
+    {Encoded, <<>>};
+
+demarshal(copy_both_response = Tag, Encoded) ->
+    ?LOG_DEBUG(#{Tag => Encoded}),
     case ?FUNCTION_NAME([int8, int16], Encoded) of
         {[0, N], <<>>} ->
             {#{format => text, n_of_cols => N}, <<>>};
@@ -336,34 +423,66 @@ demarshal(copy_both_response, Encoded) ->
             {#{format => binary, n_of_cols => N}, <<>>}
     end;
 
-demarshal(parameter_status, Encoded) ->
+demarshal(parameter_status = Tag, Encoded) ->
+    ?LOG_DEBUG(#{Tag => Encoded}),
     {[K, V], R0} = ?FUNCTION_NAME([string, string], Encoded),
     {{K, V}, R0};
 
-demarshal(backend_key_data, Encoded) ->
+demarshal(backend_key_data = Tag, Encoded) ->
+    ?LOG_DEBUG(#{Tag => Encoded}),
     ?FUNCTION_NAME([int32, int32], Encoded);
 
 demarshal(command_complete = Tag, Encoded) ->
+    ?LOG_DEBUG(#{Tag => Encoded}),
     {Decoded, Remainder} = demarshal(string, Encoded),
     ?FUNCTION_NAME(Tag, Decoded, Remainder);
 
 
-demarshal(ready_for_query, <<"I">>) ->
-    {idle, <<>>};
-
-demarshal(ready_for_query, <<"T">>) ->
-    {in_tx_block, <<>>};
-
-demarshal(ready_for_query, <<"E">>) ->
-    {in_failed_tx_block, <<>>};
+demarshal(ready_for_query, TxStatus) ->
+    {tx_status(TxStatus), <<>>};
 
 demarshal(row_description = Type, Encoded) ->
+    ?LOG_DEBUG(#{Type => Encoded}),
     {Columns, Remainder} = demarshal(int16, Encoded),
     ?FUNCTION_NAME(Type, Columns, Remainder, []);
 
 demarshal(data_row = Type, Encoded) ->
+    ?LOG_DEBUG(#{Type => Encoded}),
     {Columns, Remainder} = demarshal(int16, Encoded),
-    ?FUNCTION_NAME(Type, Columns, Remainder, []).
+    ?FUNCTION_NAME(Type, Columns, Remainder, []);
+
+demarshal(startup, Encoded) ->
+    ?LOG_DEBUG(#{startup => Encoded}),
+    {[Major, Minor], R0} = ?FUNCTION_NAME([int16, int16], Encoded),
+    {Parameters, R1} = ?FUNCTION_NAME(pairs, R0),
+    {#{major => Major, minor => Minor, parameters => Parameters}, R1};
+
+demarshal(pairs, Encoded) ->
+    ?LOG_DEBUG(#{pairs => Encoded}),
+    {pgmp_binary:foldl(
+       fun
+           (<<0>>, A) ->
+               {<<>>, A};
+
+           (EncodedPair, A) ->
+               {[Key, Value], Remainder} = ?FUNCTION_NAME(
+                                              [string, string],
+                                              EncodedPair),
+               {Remainder, A#{Key => Value}}
+       end,
+       #{},
+       Encoded),
+     <<>>};
+
+demarshal(password, Encoded) ->
+    ?FUNCTION_NAME(string, Encoded);
+
+demarshal(query, Encoded) ->
+    ?FUNCTION_NAME(string, Encoded);
+
+demarshal(terminate, <<>>) ->
+    {#{}, <<>>}.
+
 
 -type command_complete_operation() :: insert
                                     | delete
@@ -507,20 +626,27 @@ demarshal(row_description, 0, Remainder, A) ->
     {lists:reverse(A), Remainder};
 
 demarshal(row_description = Type, Columns, D0, A) ->
-    Keys = [field_name, table_oid, column_number, type_oid, type_size, type_modifier, format],
-    Types = [string, int32, int16, int32, int16, int32, int16],
+    Keys = [field_name,
+            table_oid,
+            column_number,
+            type_oid,
+            type_size,
+            type_modifier,
+            format],
 
-    {KV, D1} = ?FUNCTION_NAME(Keys, Types, D0),
+    Types = [string,
+             int32,
+             int16,
+             int32,
+             int16,
+             int32,
+             int16],
+
+    {#{format := Format} = KV, D1} = ?FUNCTION_NAME(Keys, Types, D0),
     ?FUNCTION_NAME(Type,
                    Columns - 1,
                    D1,
-                   [case KV of
-                        #{format := 0} ->
-                            KV#{format := text};
-
-                        #{format := 1} ->
-                            KV#{format := binary}
-                    end | A]);
+                   [KV#{format := text_binary(Format)} | A]);
 
 demarshal(data_row, 0, Remainder, A) ->
     {lists:reverse(A), Remainder};
@@ -578,6 +704,17 @@ size_inclusive(Data) ->
 size_exclusive(Data) ->
     [marshal(int32, iolist_size(Data)), Data].
 
+
+marshal(Names, Types, Bindings) ->
+    ?LOG_DEBUG(#{names => Names, types => Types, bindings => Bindings}),
+    lists:map(
+      fun
+          ({Name, Type}) ->
+              ?FUNCTION_NAME(Type, maps:get(Name, Bindings))
+      end,
+      lists:zip(Names, Types)).
+
+
 -spec marshal(string, iodata()) -> iolist();
              (byte, <<_:8>>) -> iodata();
              (int8, pgmp:int8()) -> nonempty_binary();
@@ -587,12 +724,25 @@ size_exclusive(Data) ->
              ({int, 8}, pgmp:int8()) -> nonempty_binary();
              ({int, 16}, pgmp:int16()) -> nonempty_binary();
              ({int, 32}, pgmp:int32()) -> nonempty_binary();
-             ({int, 64}, pgmp:int64()) -> nonempty_binary().
+             ({int, 64}, pgmp:int64()) -> nonempty_binary();
+             (x_log_data, x_log_data()) -> iodata();
+             (authentication, ok) -> iodata();
+             (ready_for_query, tx_status()) -> iodata();
+             (row_description, [row_description()]) -> iodata();
+             (data_row, iodata()) -> iodata();
+             (command_complete, {iodata() | atom(), integer()} | iodata() | atom()) -> iodata();
+             (copy_data, iodata()) -> iodata();
+             (copy_both_response, copy_both_response()) -> iodata();
+             (copy_out_response, copy_out_response()) -> iodata();
+             (tuple_data, tuple_data()) -> iodata().
 
 marshal(string, Value) ->
     [Value, <<0:8>>];
 
 marshal(byte, Value) ->
+    Value;
+
+marshal({byte, N}, Value) when byte_size(Value) == N ->
     Value;
 
 marshal(int8, Value) ->
@@ -610,5 +760,265 @@ marshal(int64, Value) ->
 marshal({int, Size}, Value) when is_integer(Value)->
     <<Value:Size>>;
 
+marshal(authentication, ok) ->
+    ["R", size_inclusive([<<0:32>>])];
+
+marshal(ready_for_query, TxStatus) ->
+    ["Z", size_inclusive(tx_status(TxStatus))];
+
+marshal(command_complete = Tag, {Command, Rows}) when is_atom(Command),
+                                                      is_integer(Rows) ->
+    ?FUNCTION_NAME(
+       Tag,
+       [string:uppercase(atom_to_list(Command)),
+        " ",
+        integer_to_list(Rows)]);
+
+marshal(command_complete = Tag, Command) when is_atom(Command) ->
+    ?FUNCTION_NAME(Tag, string:uppercase(atom_to_list(Command)));
+
+marshal(command_complete, Description) ->
+    ["C", size_inclusive(marshal(string, Description))];
+
+marshal(row_description, FieldDescriptions) ->
+    ["T",
+     size_inclusive(
+       [marshal(int16, length(FieldDescriptions)),
+        lists:map(
+          fun
+              (#{field_name := FieldName,
+                 table_oid := TableOID,
+                 column_number := ColumnNumber,
+                 type_oid := TypeOID,
+                 type_size := TypeSize,
+                 type_modifier := TypeModifier,
+                 format := Format}) ->
+                  [marshal(string, FieldName),
+                   marshal(int32, TableOID),
+                   marshal(int16, ColumnNumber),
+                   marshal(int32, TypeOID),
+                   marshal(int16, TypeSize),
+                   marshal(int32, TypeModifier),
+                   marshal(int16, text_binary(Format))]
+          end,
+          FieldDescriptions)])];
+
+marshal(data_row, Columns) ->
+    ["D",
+     size_inclusive(
+       [marshal(int16, length(Columns)),
+        lists:map(
+          fun
+              (<<-1:32/signed>> = Column) ->
+                  Column;
+
+              (Column) ->
+                  size_exclusive(Column)
+          end,
+          Columns)])];
+
+marshal(copy_data, {standby_status_update, StandbyStatusUpdate}) ->
+    ["d",
+     size_inclusive(
+       ["r",
+        ?FUNCTION_NAME(
+           [written,
+            flushed,
+            applied,
+            clock,
+            reply],
+           [int64,
+            int64,
+            int64,
+            int64,
+            {byte, 1}],
+          maps:map(
+            fun
+                (reply, false) ->
+                    <<0:8>>;
+
+                (reply, true) ->
+
+                    <<1:8>>;
+
+                (_, V) ->
+                    V
+            end,
+            StandbyStatusUpdate))])];
+
+marshal(copy_data, {keepalive, PrimaryKeepalive}) ->
+    ["d",
+     size_inclusive(
+       ["k",
+        ?FUNCTION_NAME(
+          [end_wal, clock, reply],
+          [int64, int64, {byte, 1}],
+          maps:map(
+            fun
+                (reply, false) ->
+                    <<0:8>>;
+
+                (reply, true) ->
+
+                    <<1:8>>;
+
+                (_, V) ->
+                    V
+            end,
+            PrimaryKeepalive))])];
+
+marshal(copy_data, {x_log_data, #{stream := Stream} = XLogData}) ->
+    ["d",
+     size_inclusive(
+       ["w",
+        ?FUNCTION_NAME(
+           [start_wal, end_wal, clock],
+           [int64, int64, int64],
+           XLogData),
+        ?FUNCTION_NAME(x_log_data, Stream)])];
+
+marshal(x_log_data, {begin_transaction, BeginTransaction}) ->
+    ["B",
+     ?FUNCTION_NAME(
+        [final_lsn, commit_timestamp, xid],
+        [int64, int64, int32],
+        BeginTransaction)];
+
+marshal(x_log_data, {relation, #{columns := Columns} = Relation}) ->
+    ["R",
+     ?FUNCTION_NAME(
+        [id, namespace, name, replica_identity, ncols],
+        [int32, string, string, int8, int16],
+        maps:merge(
+          #{ncols => length(Columns)},
+          Relation)),
+     lists:map(
+       fun
+           (Column) ->
+               ?FUNCTION_NAME(
+                  [flags, name, type, modifier],
+                  [int8, string, int32, int32],
+                  Column)
+       end,
+       Columns)];
+
+marshal(x_log_data,
+        {insert,
+         #{relation := Relation, tuple := Tuple}}) ->
+    ["I",
+     ?FUNCTION_NAME(int32, Relation),
+     "N",
+     ?FUNCTION_NAME(tuple_data, Tuple)];
+
+marshal(x_log_data,
+        {update, #{key := Key, relation := Relation, new := New}}) ->
+    ["U",
+     ?FUNCTION_NAME(int32, Relation),
+     "K",
+     ?FUNCTION_NAME(tuple_data, Key),
+     "N",
+     ?FUNCTION_NAME(tuple_data, New)];
+
+marshal(x_log_data,
+        {update, #{relation := Relation, new := New}}) ->
+    ["U",
+     ?FUNCTION_NAME(int32, Relation),
+     "N",
+     ?FUNCTION_NAME(tuple_data, New)];
+
+marshal(x_log_data,
+        {delete, #{key := Key, relation := Relation}}) ->
+    ["D",
+     ?FUNCTION_NAME(int32, Relation),
+     "K",
+     ?FUNCTION_NAME(tuple_data, Key)];
+
+marshal(x_log_data,
+        {truncate, #{options := Options, relations := Relations}}) ->
+    ["T",
+     ?FUNCTION_NAME(int32, length(Relations)),
+     ?FUNCTION_NAME(int8, Options),
+     [?FUNCTION_NAME(int32, Relation) || Relation <- Relations]];
+
+marshal(tuple_data, Columns) ->
+    [?FUNCTION_NAME(int16, length(Columns)),
+     lists:map(
+       fun
+           (null) ->
+               "n";
+
+           (#{format := Format, value := Value}) ->
+               [case Format of
+                    binary ->
+                        "b";
+
+                    text ->
+                        "t"
+                end,
+                ?FUNCTION_NAME(int32, byte_size(Value)), Value]
+       end,
+       Columns)];
+
+marshal(x_log_data, {commit, Commit}) ->
+    ["C",
+     ?FUNCTION_NAME(
+        [flags, commit_lsn, end_lsn, commit_timestamp],
+        [int8, int64, int64, int64],
+        Commit)];
+
+marshal(copy_both_response, #{format := Format, n_of_cols := N}) ->
+    ["W",
+     size_inclusive(
+       [?FUNCTION_NAME(int8, text_binary(Format)),
+        ?FUNCTION_NAME(int16, N)])];
+
+marshal(copy_out_response, #{format := Format, col_formats := ColFormats}) ->
+    ["H",
+     size_inclusive(
+       [?FUNCTION_NAME(int8, text_binary(Format)),
+        ?FUNCTION_NAME(int16, length(ColFormats)),
+        lists:map(
+          fun
+              (ColFormat) ->
+                  ?FUNCTION_NAME(int16, text_binary(ColFormat))
+          end,
+          ColFormats)])];
+
+marshal(copy_data, Encoded) ->
+    ["d", size_inclusive(Encoded)];
+
+marshal(copy_done, <<>> = Encoded) ->
+    ["c", size_inclusive(Encoded)];
+
+marshal(parameter_status, {Key, Value}) ->
+    ["S",
+     size_inclusive(
+       [?FUNCTION_NAME(string, Key),
+        ?FUNCTION_NAME(string, Value)])];
+
 marshal(Type, Value) ->
     error(badarg, [Type, Value]).
+
+
+-type tx_status() :: idle
+                   | in_tx_block
+                   | in_failed_tx_block.
+
+tx_status(idle) ->
+    <<"I">>;
+tx_status(in_tx_block) ->
+    <<"T">>;
+tx_status(in_failed_tx_block) ->
+    <<"E">>;
+tx_status(<<"I">>) ->
+    idle;
+tx_status(<<"T">>) ->
+    in_tx_block;
+tx_status(<<"E">>) ->
+    in_failed_tx_block.
+
+
+text_binary(text) -> 0;
+text_binary(binary) -> 1;
+text_binary(0) -> text;
+text_binary(1) -> binary.

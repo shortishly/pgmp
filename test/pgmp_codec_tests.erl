@@ -21,14 +21,27 @@
 
 demarshal_test_() ->
     lists:map(
-      t(fun pgmp_codec:demarshal/1),
+      demarshal_t(fun pgmp_codec:demarshal/1),
       phrase_file:consult("test/codec-demarshal.terms")).
 
-
-t(F) ->
+demarshal_t(F) ->
     fun
         ({Expected, Input} = Test) ->
             {nm(Test), ?_assertEqual(Expected, F(Input))}
+    end.
+
+
+marshal_test_() ->
+    lists:map(
+      marshal_t(fun pgmp_codec:marshal/2),
+      phrase_file:consult("test/codec-marshal.terms")).
+
+
+marshal_t(F) ->
+    fun
+        ({{Value, <<>>}, {Type, Expected}} = Test) ->
+            <<_:8, _:32, Actual/bytes>> = iolist_to_binary(F(Type, Value)),
+            {nm(Test), ?_assertEqual(Expected, Actual)}
     end.
 
 

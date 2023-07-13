@@ -36,4 +36,4 @@ decode(Upper, Lower) ->
 encode(LSN) when is_integer(LSN) ->
     <<Upper:32, Lower:32>> = <<LSN:64>>,
     iolist_to_binary(
-      io_lib:format("~8.16B/~8.16B", [Upper, Lower])).
+      io_lib:format("~.16B/~.16B", [Upper, Lower])).

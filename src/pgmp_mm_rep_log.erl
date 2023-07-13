@@ -36,11 +36,16 @@ terminate(Reason, State, Data) ->
     pgmp_mm_common:terminate(Reason, State, Data).
 
 
-handle_event(internal, {recv, {copy_both_response, _}}, _, _) ->
+handle_event(internal,
+             {recv, {copy_both_response, CopyBothRespone}},
+             _,
+             _) ->
+    ?LOG_DEBUG(#{copy_both_response => CopyBothRespone}),
     keep_state_and_data;
 
 handle_event(internal, {recv, {copy_data, {Tag, _} = TM}}, _, _)
   when Tag == keepalive; Tag == x_log_data ->
+    ?LOG_DEBUG(#{copy_data => TM}),
     {keep_state_and_data,
      [nei(TM),
       generic_timeout(replication_ping),
@@ -224,6 +229,7 @@ handle_event(internal,
              {relation, #{id := Id} = Relation},
              _,
              #{relations := Relations} = Data) ->
+    ?LOG_DEBUG(#{relation => Relation}),
     {keep_state,
      Data#{relations := Relations#{Id => maps:without([id], Relation)}}};
 
@@ -373,6 +379,7 @@ handle_event(internal,
              {recv, {ready_for_query, idle}},
              identify_system,
              Data) ->
+    %% logger:set_module_level([pgmp_mm_rep_log, pgmp_codec], debug),
     {next_state, replication_slot, Data, nei(create_replication_slot)};
 
 handle_event(
@@ -451,6 +458,7 @@ handle_event(internal,
               ")"]])})};
 
 handle_event(internal, {recv, {row_description, Columns}}, _, Data) ->
+    ?LOG_DEBUG(#{row_description => Columns}),
     {keep_state, Data#{columns => Columns}};
 
 handle_event(internal,
@@ -459,6 +467,7 @@ handle_event(internal,
              #{parameters := Parameters,
                config := Config,
                columns := Columns} = Data) ->
+    ?LOG_DEBUG(#{data_row => Values}),
     {keep_state,
      maps:put(State,
               lists:foldl(
@@ -475,6 +484,7 @@ handle_event(internal,
               Data)};
 
 handle_event(internal, {query, SQL}, _, _) ->
+    ?LOG_DEBUG(#{query => SQL}),
     {keep_state_and_data,
      nei({send, ["Q", size_inclusive([marshal(string, SQL)])]})};
 
@@ -617,7 +627,6 @@ pgoutput_options(ProtoVersion, PublicationNames) ->
       #{proto_version => ProtoVersion,
         publication_names => PublicationNames},
       pgoutput_options(ProtoVersion)).
-
 
 
 protocol_version(#{major := Major}) when Major >= 16 ->
