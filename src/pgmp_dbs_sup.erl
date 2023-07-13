@@ -53,7 +53,7 @@ init([]) ->
 
 
 children() ->
-    [child_spec(DB) || DB <- dbs()].
+    [child_spec(DB) || DB <- dbs(), pgmp_config:enabled(connect)].
 
 
 child_spec(#{application_name := ApplicationName} = DB) ->
