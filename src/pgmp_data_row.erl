@@ -387,6 +387,7 @@ decode(#{<<"client_encoding">> := <<"UTF8">>},
        _,
        #{<<"typname">> := Type},
        <<Encoded/bytes>>) when Type == <<"varchar">>;
+                               Type == <<"char">>;
                                Type == <<"name">>;
                                Type == <<"regtype">>;
                                Type == <<"text">> ->
@@ -397,6 +398,7 @@ decode(#{<<"client_encoding">> := <<"SQL_ASCII">>},
        _,
        #{<<"typname">> := Type},
        <<Encoded/bytes>>) when Type == <<"varchar">>;
+                               Type == <<"char">>;
                                Type == <<"name">>;
                                Type == <<"regtype">>;
                                Type == <<"text">> ->
@@ -969,6 +971,7 @@ encode(_, binary, _, #{<<"typname">> := Name}, Value)
 
 encode(_, _, _, #{<<"typname">> := Type}, Value)
   when Type == <<"varchar">>;
+       Type == <<"char">>;
        Type == <<"name">>;
        Type == <<"bytea">>;
        Type == <<"macaddr8">>;
