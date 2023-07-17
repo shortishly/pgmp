@@ -75,7 +75,7 @@ jobs:
           PGMP_DATABASE_USER: postgres
           PGMP_DATABASE_NAME: postgres
           PGMP_DATABASE_PASSWORD: postgres
-      - run: cp -r logs _site
+      - run: make edoc
       - run: make cover-report
       - run: bin/coverdata --output _site/cover/coverage.json --precision 3
       - uses: actions/upload-pages-artifact@v1

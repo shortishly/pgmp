@@ -18,7 +18,9 @@ PROJECT_DESCRIPTION = PostgreSQL Message Protocol
 PROJECT_VERSION = ${shell git describe --tags}
 
 COVER = 1
+
 COVER_REPORT_DIR = _site/cover
+CT_LOGS_DIR = _site/ct
 
 DEPS = \
 	backoff \
@@ -59,6 +61,8 @@ PLT_APPS = \
 	syntax_tools \
 	tools \
 	xmerl
+
+EDOC_OPTS = {preprocess, true}, {dir, "_site/edoc"}
 
 dep_beaming = git https://github.com/shortishly/beaming.git
 dep_envy = git https://github.com/shortishly/envy.git
