@@ -1,4 +1,14 @@
-# PostgreSQL Message Protocol (PGMP)
+<br>
+
+<p align="center">
+    <a href="https://shortishly.github.io/pgmp/cover/">
+      <img alt="Test Coverage" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fshortishly.github.io%2Fpgmp%2Fcover%2Fcoverage.json&query=%24.total&suffix=%25&style=flat-square&label=Test%20Coverage&color=green">
+    </a>
+    <img alt="Erlang/OTP 25+" src="https://img.shields.io/badge/Erlang%2FOTP-25%2B-green?style=flat-square">
+    <img alt="Apache-2.0" src="https://img.shields.io/github/license/shortishly/pgmp?style=flat-square">
+</p>
+
+# What is PGMP?
 
 An implementation of the [PostgreSQL Message
 Protocol][postgresql-org-protocol] for [Erlang/OTP 25+][erlang-org].

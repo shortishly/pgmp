@@ -9,7 +9,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        otp: ['25', '26']
+        otp:
+          - 25
+          - 26
         pg:
           - 'postgres:14'
           - 'postgres:15'
