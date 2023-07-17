@@ -17,6 +17,9 @@ PROJECT = pgmp
 PROJECT_DESCRIPTION = PostgreSQL Message Protocol
 PROJECT_VERSION = ${shell git describe --tags}
 
+COVER = 1
+COVER_REPORT_DIR = _site/cover
+
 DEPS = \
 	backoff \
 	envy \

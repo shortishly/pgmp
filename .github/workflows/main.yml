@@ -45,3 +45,47 @@ jobs:
         with:
           name: ${{env.ARTIFACT_NAME}}
           path: logs
+  site:
+    needs: build
+    strategy:
+      matrix:
+        otp:
+          - 26
+        pg:
+          - 'postgres:15'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: >-
+          docker-compose
+          --file etc/github-ci/compose.yaml
+          --project-directory etc/github-ci
+          up
+          --detach
+        env:
+          POSTGRES_IMAGE: ${{matrix.pg}}
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{matrix.otp}}
+      - run: make eunit ct cover-report
+        env:
+          PGMP_PGMP_REPLICATION_ENABLED: false
+          PGMP_DATABASE_USER: postgres
+          PGMP_DATABASE_NAME: postgres
+          PGMP_DATABASE_PASSWORD: postgres
+      - run: bin/coverdata --output _site/cover/coverage.json --precision 3
+      - uses: actions/upload-pages-artifact@v1
+        with:
+          path: _site
+  deploy:
+    needs: site
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{steps.deployment.outputs.page_url}}
+    runs-on: ubuntu-latest
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v2
