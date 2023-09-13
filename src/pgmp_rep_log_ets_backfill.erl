@@ -199,8 +199,7 @@ handle_event(internal,
                             name := Name}},
                 reply := [{row_description, Columns}]}},
              describe,
-             #{config := #{scope := Scope,
-                           publication := Publication},
+             #{config := #{publication := Publication},
                metadata := Metadata} = Data) ->
     {next_state,
      unready,
@@ -214,23 +213,8 @@ handle_event(internal,
                            [OID || #{type_oid := OID} <- Columns],
                            Metadata))},
      nei({notify,
-          pg:get_members(Scope, [pgmp_rep_log_ets, Publication, notifications]),
-          #{action => add, relation => table_name(Publication, Namespace, Name)}})};
-
-handle_event(internal, {notify, [], _}, _, _) ->
-    keep_state_and_data;
-
-handle_event(internal,
-             {notify, [Recipient | Recipients], Arg},
-             _,
-             #{requests := Requests} = Data) ->
-    {keep_state,
-     Data#{requests := gen_statem:send_request(
-                         Recipient,
-                         {notify, Arg},
-                         #{notify => Recipient},
-                         Requests)},
-     nei({notify, Recipients, Arg})};
+          #{action => add,
+            relation => table_name(Publication, Namespace, Name)}})};
 
 handle_event(internal, {Action, _}, _, _)
   when Action == query;
@@ -256,7 +240,10 @@ handle_event(info, Msg, _, #{requests := Existing} = Data) ->
                    server_ref => ServerRef,
                    label => Label},
                  Data#{requests := UpdatedRequests}}
-    end.
+    end;
+
+handle_event(Type, Content, State, Data) ->
+    pgmp_rep_log_ets_common:handle_event(Type, Content, State, Data).
 
 
 pub_fetch_sql(#{<<"schemaname">> := Schema,

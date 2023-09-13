@@ -17,6 +17,7 @@
 
 
 -export([delete/6]).
+-export([handle_event/4]).
 -export([insert_new/6]).
 -export([insert_or_update_tuple/2]).
 -export([metadata/4]).
@@ -24,6 +25,7 @@
 -export([table_name/3]).
 -export([truncate/3]).
 -export([update/6]).
+-import(pgmp_statem, [nei/1]).
 
 
 new_table(Publication, Namespace, Name, Keys) ->
@@ -200,3 +202,32 @@ table_name(Publication, Schema, Table) ->
          [binary_to_list(Schema) || pgmp_config:enabled(
                                       rep_log_ets_schema_in_table_name)],
          binary_to_list(Table)])).
+
+handle_event(internal,
+             {notify, Notification},
+             _,
+             #{config := #{scope := Scope,
+                           publication := Publication}}) ->
+    {keep_state_and_data,
+     nei({notify,
+          pg:get_members(
+            Scope,
+            [pgmp_rep_log_ets,
+             Publication,
+             notifications]),
+          Notification})};
+
+handle_event(internal, {notify, [], _}, _, _) ->
+    keep_state_and_data;
+
+handle_event(internal,
+             {notify, [Recipient | Recipients], Arg},
+             _,
+             #{requests := Requests} = Data) ->
+    {keep_state,
+     Data#{requests := gen_statem:send_request(
+                         Recipient,
+                         {notify, Arg},
+                         #{notify => Recipient},
+                         Requests)},
+     nei({notify, Recipients, Arg})}.

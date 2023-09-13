@@ -46,7 +46,11 @@ handle_event(internal,
      ready,
      maps:without([stream], Data),
      [pop_callback_module,
-      {reply, Stream, ok}]};
+      {reply, Stream, ok},
+      nei({notify,
+           #{action => progress,
+             status => completed,
+             activity => ?MODULE}})]};
 
 handle_event(internal,
              {response,
@@ -354,7 +358,10 @@ handle_event(info, Msg, _, #{requests := Existing} = Data) ->
                    server_ref => ServerRef,
                    label => Label},
                  Data#{requests := UpdatedRequests}}
-    end.
+    end;
+
+handle_event(Type, Content, State, Data) ->
+    pgmp_rep_log_ets_common:handle_event(Type, Content, State, Data).
 
 
 pub_fetch_sql(#{<<"schemaname">> := Schema,
