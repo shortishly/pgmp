@@ -108,6 +108,18 @@ handle_event(internal,
      nei({telemetry, EventName, #{message => Message}})};
 
 handle_event(internal,
+             {upgrade = EventName, Config},
+             _,
+             #{requests := Requests, socket := Socket} = Data) ->
+    {keep_state,
+     Data#{requests := pgmp_socket:upgrade(
+                         #{server_ref => Socket,
+                           config => Config,
+                           label => EventName,
+                           requests => Requests})},
+     nei({telemetry, EventName, #{config => Config}})};
+
+handle_event(internal,
              {recv, {parameter_status, {K, V}}},
              _,
              #{parameters := Parameters} = Data) ->

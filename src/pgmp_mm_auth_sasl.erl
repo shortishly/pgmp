@@ -55,6 +55,12 @@ handle_event(internal,
               [marshal(string, Mechanism), marshal(int32, -1)])]})]};
 
 handle_event(internal,
+             {sasl = EventName, [<<"SCRAM-SHA-256-PLUS">> | Mechanisms]},
+             _,
+             _) ->
+    {keep_state_and_data, nei({EventName, Mechanisms})};
+
+handle_event(internal,
              {recv = EventName, {authentication = Tag, {Action, Encoded}}},
              _,
              #{sasl := #{mechanism := <<"SCRAM-SHA-256">>}})

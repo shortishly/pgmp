@@ -62,6 +62,8 @@ PLT_APPS = \
 	tools \
 	xmerl
 
+LOCAL_DEPS += ssl
+
 EDOC_OPTS = {preprocess, true}, {dir, "_site/edoc"}
 
 dep_beaming = git https://github.com/shortishly/beaming.git

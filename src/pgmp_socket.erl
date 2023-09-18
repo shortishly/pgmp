@@ -22,6 +22,7 @@
 -export([send/1]).
 -export([start_link/1]).
 -export([terminate/3]).
+-export([upgrade/1]).
 -import(pgmp_statem, [nei/1]).
 -include_lib("kernel/include/inet.hrl").
 -include_lib("kernel/include/logger.hrl").
@@ -31,11 +32,67 @@ start_link(Arg) ->
     gen_statem:start_link(?MODULE, [Arg], envy_gen:options(?MODULE)).
 
 
-send(#{data := Data} = Arg) ->
+send(Arg) ->
+    send_request(Arg, ?FUNCTION_NAME).
+
+
+upgrade(Arg) ->
+    send_request(Arg, ?FUNCTION_NAME).
+
+
+send_request(Arg, Action) ->
+    ?FUNCTION_NAME(Arg, Action, config(Action)).
+
+
+send_request(Arg, Action, Config) ->
     send_request(
       maps:without(
-        [data],
-        Arg#{request => {?FUNCTION_NAME, Data}})).
+        keys(Config),
+        maybe_label(
+          Arg#{request => {request, args(Action, Arg, Config)}}))).
+
+
+maybe_label(#{requests := _, label := _} = Arg) ->
+    Arg;
+
+maybe_label(#{requests := _} = Arg) ->
+    Arg#{label => ?MODULE};
+
+maybe_label(Arg) ->
+    Arg.
+
+
+config(send) ->
+    [data];
+
+config(upgrade) ->
+    [config].
+
+
+keys(Config) ->
+    lists:map(
+      fun
+          ({Key, _}) ->
+              Key;
+
+          (Key) ->
+              Key
+      end,
+      Config).
+
+
+args(Action, Arg, Config) ->
+    lists:foldl(
+      fun
+          ({Parameter, Default}, A) ->
+              A#{Parameter => maps:get(Parameter, Arg, Default)};
+
+          (Parameter, A) ->
+              A#{Parameter => maps:get(Parameter, Arg)}
+      end,
+      #{action => Action},
+      Config).
+
 
 send_request(#{label := _} = Arg) ->
     pgmp_statem:send_request(Arg);
@@ -58,16 +115,31 @@ callback_mode() ->
 
 
 handle_event({call, {Peer, _} = From},
-             {send, Message},
+             {request, #{action := send, data := Message}},
              connected,
              #{peer := Peer}) ->
     {keep_state_and_data,
      [nei({send, Message}), {reply, From, ok}]};
 
-handle_event({call, {Peer, _}}, {send, _}, _, Data) ->
+handle_event({call, {Peer, _} = From},
+             {request, #{action := upgrade}},
+             connected,
+             #{socket := Socket, peer := Peer} = Data) ->
+    case ssl:connect(
+           Socket,
+           [{verify, verify_none}]) of
+
+        {ok, TLS} ->
+            {keep_state, Data#{tls => TLS}, {reply, From, ok}};
+
+        {error, Reason} = Error ->
+            {stop_and_reply, Reason, {reply, From, Error}}
+    end;
+
+handle_event({call, {Peer, _}}, {request, _}, _, Data) ->
     {keep_state,
      Data#{peer => Peer},
-     [postpone, nei(open)]};
+     [postpone, nei(connect)]};
 
 handle_event(internal,
              {telemetry, EventName, Measurements},
@@ -106,21 +178,8 @@ handle_event(internal,
            pgmp_config:backoff(rand_increment))),
        {backoff, #{action => EventName, reason => Reason}}}]};
 
-handle_event(internal, open = EventName, _, Data) ->
-    case socket:open(inet, stream, default) of
-        {ok, Socket} ->
-            {keep_state,
-             Data#{socket => Socket},
-             [nei({telemetry, EventName, #{count => 1}}),
-              nei(connect)]};
-
-        {error, Reason} ->
-            {keep_state_and_data,
-             nei({error, #{reason => Reason, event => EventName}})}
-    end;
-
-handle_event(internal, {send = EventName, Data}, _, #{socket := Socket}) ->
-    case socket:send(Socket, Data) of
+handle_event(internal, {send = EventName, Data}, _, #{tls := TLS}) ->
+    case ssl:send(TLS, Data) of
         ok ->
             {keep_state_and_data,
              nei({telemetry,
@@ -132,20 +191,13 @@ handle_event(internal, {send = EventName, Data}, _, #{socket := Socket}) ->
              nei({error, #{reason => Reason, event => EventName}})}
     end;
 
-handle_event(internal,
-             recv = EventName,
-             _,
-             #{socket := Socket, partial := Partial} = Data) ->
-    case socket:recv(Socket, 0, nowait) of
-        {ok, Received} ->
-            {keep_state,
-             Data#{partial := <<>>},
-             [nei({telemetry, EventName, #{bytes => iolist_size(Received)}}),
-              nei({recv, iolist_to_binary([Partial, Received])}),
-              nei(recv)]};
-
-        {select, {select_info, _, _}} ->
-            keep_state_and_data;
+handle_event(internal, {send = EventName, Data}, _, #{socket := Socket}) ->
+    case gen_tcp:send(Socket, Data) of
+        ok ->
+            {keep_state_and_data,
+             nei({telemetry,
+                  EventName,
+                  #{bytes => iolist_size(Data)}})};
 
         {error, Reason} ->
             {keep_state_and_data,
@@ -153,27 +205,46 @@ handle_event(internal,
     end;
 
 handle_event(info,
-             {'$socket', Socket, select, Handle},
+             {tcp_closed, Socket},
+             _,
+             #{socket := Socket}) ->
+    stop;
+
+handle_event(info,
+             {tcp, Socket, Received},
              _,
              #{socket := Socket, partial := Partial} = Data) ->
-    case socket:recv(Socket, 0, Handle) of
-        {ok, Received} ->
-            {keep_state,
-             Data#{partial := <<>>},
-             [nei({telemetry,
-                   recv,
-                   #{bytes => iolist_size(Received)},
-                   #{handle => Handle}}),
-              nei({recv, iolist_to_binary([Partial, Received])}),
-              nei(recv)]};
+    {keep_state,
+     Data#{partial := <<>>},
+     [nei({telemetry,
+           recv,
+           #{bytes => iolist_size(Received)},
+           #{}}),
+      nei({recv, iolist_to_binary([Partial, Received])})]};
 
-        {select, {select_info, _, _}} ->
-            keep_state_and_data;
+handle_event(info,
+             {ssl_error, TLS, {tls_alert, _} = Reason},
+             _,
+             #{tls := TLS}) ->
+    {stop, Reason};
 
-        {error, Reason} ->
-            {keep_state_and_data,
-             nei({error, #{reason => Reason, event => recv}})}
-    end;
+handle_event(info,
+             {ssl_closed, TLS},
+             _,
+             #{tls := TLS}) ->
+    stop;
+
+handle_event(info,
+             {ssl, TLS, Received},
+             _,
+             #{tls := TLS, partial := Partial} = Data) ->
+    {keep_state,
+     Data#{partial := <<>>},
+     [nei({telemetry,
+           recv,
+           #{bytes => iolist_size(Received)},
+           #{}}),
+      nei({recv, iolist_to_binary([Partial, Received])})]};
 
 handle_event(info, {'DOWN', _, process, Peer, noproc}, _, #{peer := Peer}) ->
     stop;
@@ -202,11 +273,28 @@ handle_event(internal,
     {keep_state_and_data,
      [nei({tag_msg, Tag, Message}), nei({recv, Remainder})]};
 
+handle_event(internal,
+             {recv, Message},
+             _,
+             #{peer := Peer, requests := Requests} = Data)
+  when Message == <<"S">>;
+       Message == <<"N">> ->
+    {keep_state,
+     Data#{requests := pgmp_mm:recv(
+                         #{server_ref => Peer,
+                           tag => ssl,
+                           message => Message,
+                           requests => Requests})},
+     nei({telemetry,
+          ssl,
+          #{count => 1, bytes => iolist_size(Message)},
+          #{tag => ssl}})};
+
 handle_event(internal, {recv, <<>>}, _, _) ->
     keep_state_and_data;
 
 handle_event(internal, {recv, Partial}, _, #{partial := <<>>} = Data) ->
-    {keep_state, Data#{partial := Partial}, nei(recv)};
+    {keep_state, Data#{partial := Partial}};
 
 handle_event(internal,
              {tag_msg = EventName, Tag, Message},
@@ -237,19 +325,19 @@ handle_event(internal,
              {connect = EventName,
               #{family := Family, port := Port, addr := Addr} = SockAddr},
              _,
-             #{socket := Socket, telemetry := Telemetry} = Data) ->
+             #{telemetry := Telemetry} = Data) ->
 
-    case socket:connect(Socket, SockAddr) of
-        ok ->
+    case gen_tcp:connect(SockAddr, [{mode, binary}]) of
+        {ok, Socket} ->
             {next_state,
              connected,
              Data#{partial => <<>>,
+                   socket => Socket,
                    telemetry :=
                        Telemetry#{net => #{peer => #{name => Addr,
                                                      port => Port},
                                            sock => #{family => Family}}}},
-             [nei({telemetry, EventName, #{count => 1}}),
-              nei(recv)]};
+             nei({telemetry, EventName, #{count => 1}})};
 
         {error, Reason} ->
             {keep_state_and_data,
@@ -261,7 +349,7 @@ handle_event(state_timeout, {backoff, _}, limbo, _) ->
 
 
 terminate(_Reason, _State, #{socket := Socket}) ->
-    _ = socket:close(Socket);
+    _ = gen_tcp:close(Socket);
 
 terminate(_Reason, _State, _Data) ->
     ok.

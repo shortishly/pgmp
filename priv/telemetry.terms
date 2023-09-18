@@ -28,6 +28,7 @@
 [pgmp, socket, recv].
 [pgmp, socket, send].
 [pgmp, socket, tag_msg].
+[pgmp, socket, upgrade].
 
 [pgmp, mm, execute].
 [pgmp, mm, join],

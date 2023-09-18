@@ -13,10 +13,13 @@ jobs:
           - 25
           - 26
         pg:
-          - 'postgres:14'
-          - 'postgres:15'
-          - 'postgres:16beta2'
-          - 'postgis/postgis:15-3.3'
+          - postgres:14
+          - postgres:15
+          - postgres:16beta2
+          - postgis/postgis:15-3.3
+        ssl:
+          - on
+          - off
     steps:
       - uses: actions/checkout@v4
       - run: >-
@@ -27,6 +30,7 @@ jobs:
           --detach
         env:
           POSTGRES_IMAGE: ${{matrix.pg}}
+          POSTGRES_SSL: ${{matrix.ssl}}
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{matrix.otp}}
@@ -42,7 +46,9 @@ jobs:
       - run: |
           echo MATRIX_PG="${{matrix.pg}}" >> $GITHUB_ENV
       - run: |
-          echo ARTIFACT_NAME="ct-logs-otp-${MATRIX_OTP}-pg-${MATRIX_PG//[:\/]/-}" >> $GITHUB_ENV
+          echo MATRIX_SSL="${{matrix.ssl}}" >> $GITHUB_ENV
+      - run: |
+          echo ARTIFACT_NAME="ct-logs-otp-${MATRIX_OTP}-ssl-${MATRIX_SSL}-pg-${MATRIX_PG//[:\/]/-}" >> $GITHUB_ENV
       - uses: actions/upload-artifact@v3
         with:
           name: ${{env.ARTIFACT_NAME}}
@@ -54,7 +60,7 @@ jobs:
         otp:
           - 26
         pg:
-          - 'postgres:15'
+          - postgres:15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

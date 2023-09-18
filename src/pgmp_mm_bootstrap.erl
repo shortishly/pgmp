@@ -101,6 +101,16 @@ handle_event(internal,
     {keep_state_and_data, nei(startup)};
 
 handle_event(internal, startup, _, _) ->
+    {keep_state_and_data,
+     nei({send, size_inclusive([marshal(int32, 80877103)])})};
+
+handle_event(internal, {recv, {ssl, false}}, _, _) ->
+    {keep_state_and_data, nei({startup, #{}})};
+
+handle_event(internal, {recv, {ssl, true}}, _, _) ->
+    {keep_state_and_data, nei({upgrade, #{}})};
+
+handle_event(internal, {response, #{label := upgrade, reply := ok}}, _, _) ->
     {keep_state_and_data, nei({startup, #{}})};
 
 handle_event(internal,

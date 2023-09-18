@@ -151,7 +151,8 @@ demarshal({Type, Encoded}) ->
                (pairs, binary()) -> {#{}, binary()};
                (copy_out_response, binary()) -> {copy_out_response(), binary()};
                (copy_both_response, binary()) -> {copy_both_response(), binary()};
-               (copy_data, binary()) -> {{x_log_data, x_log_data()}, binary()}.
+               (copy_data, binary()) -> {{x_log_data, x_log_data()}, binary()};
+               (ssl, binary()) -> {ssl, boolean()}.
 
 demarshal(Types, Encoded) when is_list(Types) ->
     ?LOG_DEBUG(#{types => Types, encoded => Encoded}),
@@ -479,6 +480,11 @@ demarshal(password, Encoded) ->
 
 demarshal(query, Encoded) ->
     ?FUNCTION_NAME(string, Encoded);
+
+demarshal(ssl, <<"N">>) ->
+    {false, <<>>};
+demarshal(ssl, <<"S">>) ->
+    {true, <<>>};
 
 demarshal(terminate, <<>>) ->
     {#{}, <<>>}.

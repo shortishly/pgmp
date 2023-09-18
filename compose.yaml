@@ -8,6 +8,9 @@ services:
       POSTGRES_PASSWORD: postgres
     command:
       -c wal_level=logical
+      -c ssl=${POSTGRES_SSL:-on}
+      -c ssl_cert_file=${POSTGRES_SSL_CERT_FILE:-/etc/ssl/certs/ssl-cert-snakeoil.pem}
+      -c ssl_key_file=${POSTGRES_SSL_KEY_FILE:-/etc/ssl/private/ssl-cert-snakeoil.key}
     ports:
       - 5432:5432
     volumes:
