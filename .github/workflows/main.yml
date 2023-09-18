@@ -15,7 +15,7 @@ jobs:
         pg:
           - postgres:14
           - postgres:15
-          - postgres:16beta2
+          - postgres:16
           - postgis/postgis:15-3.3
         ssl:
           - on
@@ -52,7 +52,7 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: ${{env.ARTIFACT_NAME}}
-          path: logs
+          path: _site/ct
   site:
     needs: build
     strategy:
