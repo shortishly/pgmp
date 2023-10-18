@@ -263,6 +263,9 @@ handle_event({call, Stream}, {snapshot, #{id := Id}}, _, Data) ->
       nei({set_transaction_snapshot, Id}),
       nei(sync_publication_tables)]};
 
+handle_event(info, {'DOWN', _, process, _, shutdown = Reason}, _, _) ->
+    {stop, Reason};
+
 handle_event(info, Msg, _, #{requests := Existing} = Data) ->
     case gen_statem:check_response(Msg, Existing, true) of
         {{reply, Reply}, Label, Updated} ->
