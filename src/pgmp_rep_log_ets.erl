@@ -24,6 +24,7 @@
 -export([handle_event/4]).
 -export([init/1]).
 -export([insert/1]).
+-export([lsn/1]).
 -export([metadata/1]).
 -export([snapshot/1]).
 -export([start_link/1]).
@@ -46,6 +47,10 @@ start_link(Arg) ->
 
 snapshot(Arg) ->
     send_request(?FUNCTION_NAME, [id], Arg).
+
+
+lsn(Arg) ->
+    send_request(?FUNCTION_NAME, [], Arg).
 
 
 begin_transaction(Arg) ->
@@ -262,6 +267,9 @@ handle_event({call, Stream}, {snapshot, #{id := Id}}, _, Data) ->
       nei(begin_transaction),
       nei({set_transaction_snapshot, Id}),
       nei(sync_publication_tables)]};
+
+handle_event({call, Stream}, {lsn, #{}}, _, _) ->
+    {keep_state_and_data, {reply, Stream, <<"0/0">>}};
 
 handle_event(info, {'DOWN', _, process, _, shutdown = Reason}, _, _) ->
     {stop, Reason};

@@ -16,6 +16,9 @@
 -module(pgmp_rep_log).
 
 
+-export([slot_name/1]).
+
+
 -optional_callbacks([begin_transaction/1]).
 -optional_callbacks([commit/1]).
 
@@ -40,6 +43,10 @@
                                      id := snapshot_id(),
                                      requests := request_id_collection()}.
 
+-type lsn_collection_req() :: #{server_ref := server_ref(),
+                                label := any(),
+                                requests := request_id_collection()}.
+
 -type truncate_collection_req() :: #{server_ref := server_ref(),
                                      label := any(),
                                      relations := [relation()],
@@ -61,10 +68,17 @@
                         requests := request_id_collection()}.
 
 
+-callback begin_transaction(begin_transaction_req()) -> request_id_collection().
+-callback commit(commit_req()) -> request_id_collection().
 -callback delete(crud_collection_req()) -> request_id_collection().
 -callback insert(crud_collection_req()) -> request_id_collection().
+-callback lsn(lsn_collection_req()) -> request_id_collection().
 -callback snapshot(snapshot_collection_req()) -> request_id_collection().
 -callback truncate(truncate_collection_req()) -> request_id_collection().
 -callback update(crud_collection_req()) -> request_id_collection().
--callback begin_transaction(begin_transaction_req()) -> request_id_collection().
--callback commit(commit_req()) -> request_id_collection().
+
+
+slot_name(Publication) ->
+    lists:join(
+      "_",
+      [pgmp_config:replication(logical, slot_prefix), Publication]).

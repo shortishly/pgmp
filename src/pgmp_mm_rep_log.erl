@@ -289,6 +289,17 @@ handle_event(internal,
     {stop, Reason};
 
 handle_event(internal,
+             {lsn, LSN},
+             _,
+             Data) when is_integer(LSN) ->
+    {keep_state,
+     Data#{lsn => pgmp_lsn:encode(LSN),
+           wal => #{received => LSN,
+                    clock => 0,
+                    flushed => LSN,
+                    applied => LSN}}};
+
+handle_event(internal,
              {response,
               #{label := snapshot,
                 reply :=  ok}},
@@ -296,11 +307,34 @@ handle_event(internal,
              Data) ->
     {next_state,
      replication,
-     Data#{wal => #{received => 0,
-                    clock => 0,
-                    flushed => 0,
-                    applied => 0}},
-     [nei(start_replication), generic_timeout(replication_ping)]};
+     Data,
+     [nei({lsn, 0}),
+      nei(start_replication),
+      generic_timeout(replication_ping)]};
+
+handle_event(
+  internal,
+  {response, #{label := lsn, reply := {ok, LSN}}},
+  waiting_for_lsn,
+  Data) when is_integer(LSN) ->
+    {next_state,
+     replication,
+     Data,
+     [nei({lsn, LSN}),
+      nei(start_replication),
+      generic_timeout(replication_ping)]};
+
+handle_event(
+  internal,
+  {response, #{label := lsn, reply := not_found}},
+  waiting_for_lsn,
+  Data) ->
+    {next_state,
+     replication,
+     Data,
+     [nei({lsn, 0}),
+      nei(start_replication),
+      generic_timeout(replication_ping)]};
 
 handle_event(internal,
              {response, #{label := pgmp_types, reply := ready}},
@@ -392,15 +426,50 @@ handle_event(
      Data,
      nei({callback, snapshot, #{id => Snapshot}})};
 
+handle_event(
+  internal,
+  {recv, {ready_for_query, idle}},
+  replication_slot,
+  Data) ->
+    {next_state,
+     waiting_for_lsn,
+     Data,
+     nei({callback, lsn, #{}})};
+
+handle_event(
+  internal,
+  {recv, {error_response, _} = TM},
+  replication_slot,
+  Data) ->
+    case pgmp_error_notice_fields:map(TM) of
+        {error_response, #{code := <<"42710">>}} ->
+            keep_state_and_data;
+
+        {Tag, Message} ->
+            {next_state,
+             limbo,
+             Data,
+             [nei({telemetry,
+                   error,
+                   #{count => 1},
+                   maps:merge(
+                     #{event => Tag},
+                     maps:with(
+                       [code, message, severity],
+                       Message))}),
+              {state_timeout,
+               timer:seconds(
+                 backoff:rand_increment(
+                   pgmp_config:backoff(rand_increment))),
+               {backoff, #{action => Tag, reason => Message}}}]}
+    end;
+
 handle_event(internal,
              create_replication_slot = Command,
              _,
              #{config := #{publication := Publication}}) ->
     {keep_state_and_data,
-     nei({Command,
-          lists:join(
-            "_",
-            [pgmp_config:replication(logical, slot_prefix), Publication])})};
+     nei({Command, pgmp_rep_log:slot_name(Publication)})};
 
 handle_event(internal,
              {create_replication_slot, SlotName},
@@ -412,7 +481,9 @@ handle_event(internal,
             " ",
             ["CREATE_REPLICATION_SLOT",
              ["\"", SlotName, "\""],
-             "TEMPORARY LOGICAL pgoutput",
+             ["TEMPORARY" || pgmp_config:replication(logical, temporary)],
+             "LOGICAL",
+             "pgoutput",
              create_slot_options(
                protocol_version(ServerVersion))])})};
 
@@ -430,17 +501,17 @@ handle_event(internal,
 handle_event(internal,
              {start_replication, Options},
              _,
-             #{identify_system := #{<<"xlogpos">> := _Location},
-               replication_slot := #{<<"slot_name">> := SlotName}} = Data) ->
+             #{lsn := LSN,
+               config := #{publication := Publication}} = Data) ->
     {keep_state,
      Data#{relations => #{}},
      nei({query,
           lists:join(
             " ",
             ["START_REPLICATION SLOT",
-             SlotName,
+             pgmp_rep_log:slot_name(Publication),
              "LOGICAL",
-             "0/0",
+             LSN,
              ["(",
               maps:fold(
                 fun

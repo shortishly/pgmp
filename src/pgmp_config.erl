@@ -127,6 +127,11 @@ replication(logical = Type, max_rows = Name) ->
            names => [?FUNCTION_NAME, Type, Name],
            default => 5_000});
 
+replication(logical = Type, temporary = Name) ->
+    envy(#{caller => ?MODULE,
+           names => [?FUNCTION_NAME, Type, Name],
+           default => true});
+
 replication(logical = Type, two_phase = Name) ->
     envy(#{caller => ?MODULE,
            names => [?FUNCTION_NAME, Type, Name],
