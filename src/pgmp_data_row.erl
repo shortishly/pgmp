@@ -556,6 +556,13 @@ decode(_,
        Enumeration) ->
     Enumeration;
 
+decode(_,
+       binary,
+       _,
+       #{<<"typname">> := <<"void">>},
+       <<>> = VOID) ->
+    VOID;
+
 decode(Parameters, Format, _TypeCache, Type, Value) ->
     ?LOG_WARNING(#{parameters => Parameters,
                    format => Format,
@@ -981,6 +988,9 @@ encode(_, _, _, #{<<"typname">> := Type}, Value)
        Type == <<"macaddr8">>;
        Type == <<"macaddr">>;
        Type == <<"text">> ->
+    Value;
+
+encode(_, _, _, #{<<"typname">> := <<"void">>}, <<>> = Value) ->
     Value;
 
 encode(_, text, _, _, Value) ->
