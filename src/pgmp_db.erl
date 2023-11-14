@@ -23,6 +23,7 @@
 -export([init/1]).
 -export([start_link/1]).
 -export([start_replication_on_publication/2]).
+-export([stop_replication_on_publication/2]).
 -export([types/1]).
 -export([which_groups/1]).
 
@@ -32,6 +33,10 @@ start_link(Arg) ->
 
 
 start_replication_on_publication(Server, Publication) ->
+    gen_statem:call(Server, {?FUNCTION_NAME, Publication}).
+
+
+stop_replication_on_publication(Server, Publication) ->
     gen_statem:call(Server, {?FUNCTION_NAME, Publication}).
 
 
@@ -65,6 +70,18 @@ handle_event({call, From},
       pgmp_rep_sup:start_child(
         pgmp_sup:get_child_pid(Supervisor, rep_sup),
         DB,
+        Publication)}};
+
+
+handle_event({call, From},
+             {stop_replication_on_publication, Publication},
+             _,
+             #{supervisor := Supervisor}) ->
+    {keep_state_and_data,
+     {reply,
+      From,
+      pgmp_rep_sup:terminate_child(
+        pgmp_sup:get_child_pid(Supervisor, rep_sup),
         Publication)}};
 
 handle_event({call, From}, types, _, #{supervisor := Supervisor}) ->
