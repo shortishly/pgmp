@@ -24,7 +24,7 @@
 
 
 start_link() ->
-    gen_statem:start_link(?MODULE, [], []).
+    gen_statem:start_link(?MODULE, [], envy_gen:options(?MODULE)).
 
 
 map({Tag, ErrorNoticeFields}) when Tag == error_response;

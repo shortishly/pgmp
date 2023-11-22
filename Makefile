@@ -67,7 +67,7 @@ dep_telemetry = git https://github.com/beam-telemetry/telemetry.git
 
 dep_backoff_commit = 1.1.6
 dep_beaming_commit = 0.2.0
-dep_envy_commit = 0.8.0
+dep_envy_commit = 0.9.0
 dep_phrase_commit = 0.2.0
 dep_telemetry_commit = v1.1.0
 
