@@ -27,6 +27,12 @@ jobs:
             pg: postgres:15
           - otp: 25
             pg: postgis/postgis:15-3.3
+          - pg: postgres:14
+            ssl: off
+          - pg: postgres:15
+            ssl: off
+          - pg: postgis/postgis:15-3.3
+            ssl: off
     steps:
       - uses: actions/checkout@v4
       - run: >-
