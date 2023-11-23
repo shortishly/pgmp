@@ -20,6 +20,13 @@ jobs:
         ssl:
           - on
           - off
+        exclude:
+          - otp: 25
+            pg: postgres:14
+          - otp: 25
+            pg: postgres:15
+          - otp: 25
+            pg: postgis/postgis:15-3.3
     steps:
       - uses: actions/checkout@v4
       - run: >-
@@ -60,7 +67,7 @@ jobs:
         otp:
           - 26
         pg:
-          - postgres:15
+          - postgres:16
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
