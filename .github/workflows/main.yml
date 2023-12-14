@@ -62,7 +62,7 @@ jobs:
           echo MATRIX_SSL="${{matrix.ssl}}" >> $GITHUB_ENV
       - run: |
           echo ARTIFACT_NAME="ct-logs-otp-${MATRIX_OTP}-ssl-${MATRIX_SSL}-pg-${MATRIX_PG//[:\/]/-}" >> $GITHUB_ENV
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: ${{env.ARTIFACT_NAME}}
           path: _site/ct
